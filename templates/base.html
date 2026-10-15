@@ -1,0 +1,81 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>
+      {% block title %}HCMS - Hospital Clinical Management System{% endblock %}
+    </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{% static 'js/htmx.min.js' %}"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white shadow">
+      <div
+        class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center"
+      >
+        <div class="flex items-center space-x-6">
+          <span class="font-bold text-lg tracking-wider text-teal-400"
+            >HCMS</span
+          >
+          <nav class="hidden md:flex space-x-4 text-sm font-medium">
+            <a
+              href="{% url 'core_patients:registry' %}"
+              class="hover:text-teal-300"
+              >Patients</a
+            >
+            <a href="{% url 'triage_queue:board' %}" class="hover:text-teal-300"
+              >Triage Board</a
+            >
+            <a
+              href="{% url 'pharmacy:nurse_worklist' %}"
+              class="hover:text-teal-300"
+              >Nurse Worklist</a
+            >
+            <a href="{% url 'radiology:worklist' %}" class="hover:text-teal-300"
+              >Radiology</a
+            >
+            <a href="{% url 'wards:bed_grid' %}" class="hover:text-teal-300"
+              >Wards</a
+            >
+            <a
+              href="{% url 'billing:provisional_review' %}"
+              class="hover:text-teal-300"
+              >Billing</a
+            >
+          </nav>
+        </div>
+        <div class="text-sm flex items-center space-x-4">
+          {% if request.user.is_authenticated %}
+          <span class="text-slate-300">{{ request.user.username }}</span>
+          <form action="{% url 'logout' %}" method="post" class="inline">
+            {% csrf_token %}
+            <button
+              type="submit"
+              class="bg-red-600 px-3 py-1 rounded text-xs hover:bg-red-700"
+            >
+              Logout
+            </button>
+          </form>
+          {% else %}
+          <a
+            href="{% url 'login' %}"
+            class="bg-teal-600 px-3 py-1 rounded text-xs hover:bg-teal-700"
+            >Login</a
+          >
+          {% endif %}
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-slate-800 text-slate-400 text-center py-4 text-xs">
+      HCMS Modular Monolith &bull; Development Environment
+    </footer>
+  </body>
+</html>

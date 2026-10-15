@@ -1,0 +1,73 @@
+{% extends 'base.html' %} {% block content %}
+<div class="space-y-6">
+  <h1 class="text-2xl font-bold">In-Patient Wards & Bed Grid</h1>
+
+  {% for ward in wards %}
+  <div class="bg-white p-6 rounded shadow space-y-4">
+    <h2 class="text-lg font-bold text-teal-800 border-b pb-2">
+      {{ ward.name }}
+      <span class="text-xs text-slate-500 font-normal"
+        >(&commat; Rate: {{ ward.bed_day_rate }})</span
+      >
+    </h2>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {% for bed in ward.beds.all %}
+      <div
+        class="border rounded p-4 {% if bed.status == 'VACANT' %}bg-green-50 border-green-200{% elif bed.status == 'OCCUPIED' %}bg-amber-50 border-amber-200{% else %}bg-slate-100{% endif %}"
+      >
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-bold text-base">{{ bed.code }}</span>
+          <span
+            class="text-xs px-2 py-0.5 rounded font-semibold {% if bed.status == 'VACANT' %}bg-green-200 text-green-800{% elif bed.status == 'OCCUPIED' %}bg-amber-200 text-amber-800{% else %}bg-slate-200 text-slate-800{% endif %}"
+            >{{ bed.status }}</span
+          >
+        </div>
+
+        {% if bed.status == 'VACANT' %}
+        <form
+          action="{% url 'wards:admit' bed.id %}"
+          method="post"
+          class="mt-3 space-y-2"
+        >
+          {% csrf_token %}
+          <input
+            type="text"
+            name="encounter_id"
+            placeholder="Encounter UUID"
+            class="w-full text-xs border rounded p-1"
+            required
+          />
+          <button
+            type="submit"
+            class="w-full bg-green-600 text-white text-xs py-1 rounded hover:bg-green-700 font-semibold"
+          >
+            Admit Patient
+          </button>
+        </form>
+        {% elif bed.status == 'OCCUPIED' %} {% for admission in
+        bed.admissions.all %} {% if not admission.discharged_at %}
+        <p class="text-xs text-slate-700 mt-1">
+          Patient: <strong>{{ admission.encounter.patient.last_name }}</strong>
+        </p>
+        <form
+          action="{% url 'wards:discharge' admission.id %}"
+          method="post"
+          class="mt-3"
+        >
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="w-full bg-red-600 text-white text-xs py-1 rounded hover:bg-red-700 font-semibold"
+          >
+            Discharge
+          </button>
+        </form>
+        {% endif %} {% endfor %} {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends 'base.html' %} {% block content %}
+<div class="space-y-6">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Patient Registry Search</h1>
+    <a
+      href="{% url 'core_patients:register' %}"
+      class="bg-teal-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-teal-700"
+      >+ Register Patient</a
+    >
+  </div>
+
+  <!-- Live Search Input using htmx -->
+  <div class="bg-white p-4 rounded shadow">
+    <input
+      type="text"
+      name="q"
+      placeholder="Search by name, ID number..."
+      hx-get="{% url 'core_patients:search' %}"
+      hx-target="#search-results"
+      hx-trigger="keyup changed delay:300ms"
+      class="w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+    />
+  </div>
+
+  <!-- Search Results Container -->
+  <div id="search-results">
+    {% include 'core_patients/_registry_results.html' %}
+  </div>
+</div>
+{% endblock %}

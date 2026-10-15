@@ -1,0 +1,50 @@
+<div class="bg-white rounded shadow overflow-hidden">
+  <table class="w-full text-left border-collapse">
+    <thead class="bg-slate-100 text-slate-700 text-xs uppercase">
+      <tr>
+        <th class="p-3">Name</th>
+        <th class="p-3">DOB</th>
+        <th class="p-3">Sex</th>
+        <th class="p-3">ID Number</th>
+        <th class="p-3">Status</th>
+        <th class="p-3">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-200 text-sm">
+      {% for patient in patients %}
+      <tr class="hover:bg-slate-50">
+        <td class="p-3 font-medium">
+          {{ patient.last_name }}, {{ patient.first_name }}
+        </td>
+        <td class="p-3">{{ patient.date_of_birth|default:"Unknown" }}</td>
+        <td class="p-3">{{ patient.get_sex_display }}</td>
+        <td class="p-3">{{ patient.id_number|default:"None" }}</td>
+        <td class="p-3">
+          {% if patient.is_provisional %}
+          <span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded"
+            >Provisional</span
+          >
+          {% else %}
+          <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded"
+            >Verified</span
+          >
+          {% endif %}
+        </td>
+        <td class="p-3">
+          <a
+            href="{% url 'core_patients:detail' patient.id %}"
+            class="text-teal-600 hover:underline font-semibold"
+            >View File</a
+          >
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" class="p-4 text-center text-slate-500">
+          No patients found matching your search.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
