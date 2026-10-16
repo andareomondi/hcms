@@ -1,76 +1,53 @@
-{% extends 'base.html' %} {% block content %}
-<div class="space-y-6">
-  <div class="bg-white p-6 rounded shadow flex justify-between items-center">
-    <div>
-      <h1 class="text-2xl font-bold">Physician Workstation</h1>
-      <p class="text-sm text-slate-600">
-        Patient: {{ encounter.patient.last_name }}, {{
-        encounter.patient.first_name }} &bull; Type: {{
-        encounter.get_encounter_type_display }}
-      </p>
+{% extends "base.html" %}
+{% block content %}
+    <div class="space-y-6">
+        <div class="bg-white p-6 rounded shadow flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Physician Workstation</h1>
+                <p class="text-sm text-slate-600">
+                    Patient: {{ encounter.patient.last_name }}, {{
+                        encounter.patient.first_name }} • Type: {{
+                        encounter.get_encounter_type_display }}
+                </p>
+            </div>
+        </div>
+        <!-- Clinical Note Submission Form -->
+        <div class="bg-white p-6 rounded shadow">
+            <h2 class="text-lg font-bold mb-4">Record Clinical Note</h2>
+            <form action="{% url 'doctors_portal:save_note' encounter.id %}"
+                  method="post"
+                  class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Presenting Complaint</label>
+                    <textarea name="presenting_complaint"
+                              rows="2"
+                              class="w-full border rounded px-3 py-2"
+                              required></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Examination Findings</label>
+                    <textarea name="examination"
+                              rows="2"
+                              class="w-full border rounded px-3 py-2"
+                              required></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Diagnosis</label>
+                    <textarea name="diagnosis"
+                              rows="2"
+                              class="w-full border rounded px-3 py-2"
+                              required></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Plan</label>
+                    <textarea name="plan" rows="2" class="w-full border rounded px-3 py-2" required></textarea>
+                </div>
+                <button type="submit"
+                        class="bg-teal-600 text-white px-6 py-2 rounded font-semibold hover:bg-teal-700">
+                    Save Clinical Note
+                </button>
+            </form>
+        </div>
     </div>
-  </div>
-
-  <!-- Clinical Note Submission Form -->
-  <div class="bg-white p-6 rounded shadow">
-    <h2 class="text-lg font-bold mb-4">Record Clinical Note</h2>
-    <form
-      action="{% url 'doctors_portal:save_note' encounter.id %}"
-      method="post"
-      class="space-y-4"
-    >
-      {% csrf_token %}
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Presenting Complaint</label
-        >
-        <textarea
-          name="presenting_complaint"
-          rows="2"
-          class="w-full border rounded px-3 py-2"
-          required
-        ></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Examination Findings</label
-        >
-        <textarea
-          name="examination"
-          rows="2"
-          class="w-full border rounded px-3 py-2"
-          required
-        ></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Diagnosis</label
-        >
-        <textarea
-          name="diagnosis"
-          rows="2"
-          class="w-full border rounded px-3 py-2"
-          required
-        ></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Plan</label
-        >
-        <textarea
-          name="plan"
-          rows="2"
-          class="w-full border rounded px-3 py-2"
-          required
-        ></textarea>
-      </div>
-      <button
-        type="submit"
-        class="bg-teal-600 text-white px-6 py-2 rounded font-semibold hover:bg-teal-700"
-      >
-        Save Clinical Note
-      </button>
-    </form>
-  </div>
-</div>
 {% endblock %}

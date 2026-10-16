@@ -7,6 +7,7 @@ urlpatterns = [
     path("", views.patient_registry_search, name="registry"),
     path("search/", views.patient_registry_search, name="search"),
     path("register/", views.patient_register_view, name="register"),
+    path("staff/register/", views.staff_register_view, name="staff_register"),
     path("<uuid:patient_id>/", views.patient_detail_view, name="detail"),
     path("<uuid:patient_id>/edit/", views.patient_edit_view, name="edit"),
     path("<uuid:patient_id>/timeline/", views.patient_timeline_view, name="timeline"),

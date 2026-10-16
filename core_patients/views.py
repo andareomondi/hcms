@@ -7,32 +7,100 @@ from django.views.decorators.http import require_POST
 
 from .models import Patient, PatientAllergy, Allergen
 
+from django.contrib.auth.models import User
+from django.contrib.auth import login
+from .models import Department, StaffProfile
+
+def staff_register_view(request):
+    """Handles staff account creation, linking a User to a StaffProfile."""
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip()
+        password = request.POST.get("password", "").strip()
+        first_name = request.POST.get("first_name", "").strip()
+        last_name = request.POST.get("last_name", "").strip()
+        employee_id = request.POST.get("employee_id", "").strip()
+        role = request.POST.get("role", "RECEPTION")
+        department_id = request.POST.get("department_id")
+
+        # Basic validation
+        if not username or not password or not employee_id:
+            departments = Department.objects.all()
+            return render(request, "core_patients/staff_register.html", {
+                "error": "Username, password, and employee ID are required.",
+                "departments": departments,
+                "roles": StaffProfile.ROLE_CHOICES
+            })
+
+        if User.objects.filter(username=username).exists():
+            departments = Department.objects.all()
+            return render(request, "core_patients/staff_register.html", {
+                "error": "Username already exists.",
+                "departments": departments,
+                "roles": StaffProfile.ROLE_CHOICES
+            })
+
+        # Create User (automatically hashed with Argon2id via Django settings)
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+
+        # Create StaffProfile
+        department = get_object_or_404(Department, pk=department_id)
+        StaffProfile.objects.create(
+            user=user,
+            employee_id=employee_id,
+            role=role,
+            department=department,
+            is_active=True
+        )
+
+        # Log the user in immediately after registration
+        login(request, user)
+        return redirect("triage_queue:board")
+
+    departments = Department.objects.all()
+    context = {
+        "departments": departments,
+        "roles": StaffProfile.ROLE_CHOICES
+    }
+    return render(request, "core_patients/staff_register.html", context)
 
 @login_required
 def patient_registry_search(request):
     """
     Live search endpoint triggered via htmx. 
-    Requires a minimum query length of 2 characters[cite: 1].
+    Shows recent patients by default when query is empty, 
+    and filters dynamically as the user types.
     """
     query = request.GET.get("q", "").strip()
-    
-    if not query or len(query) < 2:
-        if request.headers.get("HX-Request"):
-            return render(request, "core_patients/_registry_results.html", {"patients": []})
-        return render(request, "core_patients/registry.html")
 
-    patients = Patient.objects.filter(
-        Q(last_name__icontains=query) |
-        Q(first_name__icontains=query) |
-        Q(id_number__icontains=query)
-    ).select_related("created_by").order_by("-created_at")[:25]
+    # Start with all patients, ordered by newest first
+    patients = Patient.objects.select_related("created_by").order_by("-created_at")
+
+    # Apply filters only if a search query is provided
+    if query:
+        patients = patients.filter(
+            Q(last_name__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(id_number__icontains=query)
+        )
+
+    # Cap results to prevent heavy DOM rendering loads
+    patients = patients[:50]
 
     context = {"patients": patients, "query": query}
 
+    # If requested via htmx, return only the table fragment
     if request.headers.get("HX-Request"):
         return render(request, "core_patients/_registry_results.html", context)
+        
+    # Otherwise, render the full registry page with the initial/filtered records
     return render(request, "core_patients/registry.html", context)
-
 
 @login_required
 def patient_register_view(request):

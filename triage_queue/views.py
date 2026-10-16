@@ -24,8 +24,7 @@ def triage_board_fragment(request):
     """htmx poll endpoint returning just the board card container fragment."""
     if not request.headers.get("HX-Request"):
         return HttpResponseBadRequest("Direct access not permitted.")
-    return render(request, "triage_queue/board.html", _get_board_context())
-
+    return render(request, "triage_queue/board_fragment_content.html", _get_board_context())
 
 @login_required
 @user_passes_test(is_triage_staff)

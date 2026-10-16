@@ -1,0 +1,88 @@
+{% extends "base.html" %} {% block title %}Staff Registration - HCMS{% endblock %} {% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded shadow mt-6">
+    <h1 class="text-2xl font-bold mb-6 text-slate-800">Hospital Staff Registration</h1>
+    {% if error %}
+        <div class="bg-red-100 text-red-700 p-3 rounded mb-4 text-xs font-semibold">{{ error }}</div>
+    {% endif %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
+                <input type="text"
+                       name="first_name"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name</label>
+                <input type="text"
+                       name="last_name"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
+                <input type="text"
+                       name="username"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email Address</label>
+                <input type="email"
+                       name="email"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Employee ID</label>
+                <input type="text"
+                       name="employee_id"
+                       placeholder="e.g. EMP-DOC-02"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Staff Role</label>
+                <select name="role"
+                        class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500">
+                    {% for code, label in roles %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Department</label>
+            <select name="department_id"
+                    class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500">
+                {% for dept in departments %}
+                    <option value="{{ dept.id }}">{{ dept.name }} ({{ dept.get_kind_display }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
+            <input type="password"
+                   name="password"
+                   required
+                   class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+            <p class="text-xs text-slate-500 mt-1">Must contain at least 12 characters.</p>
+        </div>
+        <button type="submit"
+                class="w-full bg-teal-600 text-white py-2 rounded font-semibold hover:bg-teal-700 transition">
+            Register Staff Account
+        </button>
+    </form>
+    <div class="mt-4 text-center text-sm text-slate-600">
+        Already have an account?
+        <a href="{% url 'login' %}"
+           class="text-teal-600 font-semibold hover:underline">Log in</a>
+    </div>
+</div>
+{% endblock %}

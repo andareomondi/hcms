@@ -1,76 +1,52 @@
-{% extends 'base.html' %} {% block content %}
-<div class="max-w-xl mx-auto bg-white p-6 rounded shadow">
-  <h1 class="text-xl font-bold mb-4">Patient Registration</h1>
-  {% if error %}
-  <div class="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">
-    {{ error }}
-  </div>
-  {% endif %}
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >First Name</label
-        >
-        <input
-          type="text"
-          name="first_name"
-          class="w-full border rounded px-3 py-2"
-        />
-      </div>
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Last Name *</label
-        >
-        <input
-          type="text"
-          name="last_name"
-          class="w-full border rounded px-3 py-2"
-        />
-      </div>
+{% extends "base.html" %}
+{% block content %}
+    <div class="max-w-xl mx-auto bg-white p-6 rounded shadow">
+        <h1 class="text-xl font-bold mb-4">Patient Registration</h1>
+        {% if error %}
+            <div class="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">{{ error }}</div>
+        {% endif %}
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
+                    <input type="text" name="first_name" class="w-full border rounded px-3 py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name *</label>
+                    <input type="text" name="last_name" class="w-full border rounded px-3 py-2" />
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Date of Birth</label>
+                    <input type="date"
+                           name="date_of_birth"
+                           class="w-full border rounded px-3 py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Sex</label>
+                    <select name="sex" class="w-full border rounded px-3 py-2">
+                        <option value="U">Unknown</option>
+                        <option value="M">Male</option>
+                        <option value="F">Female</option>
+                        <option value="X">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Phone Number</label>
+                <input type="text" name="phone" class="w-full border rounded px-3 py-2" />
+            </div>
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" name="is_provisional" value="true" id="prov" />
+                <label for="prov"
+                       class="text-sm font-medium">Emergency / Provisional Registration (Unidentified)</label>
+            </div>
+            <button type="submit"
+                    class="w-full bg-teal-600 text-white py-2 rounded font-semibold hover:bg-teal-700">
+                Save Patient Record
+            </button>
+        </form>
     </div>
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Date of Birth</label
-        >
-        <input
-          type="date"
-          name="date_of_birth"
-          class="w-full border rounded px-3 py-2"
-        />
-      </div>
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-          >Sex</label
-        >
-        <select name="sex" class="w-full border rounded px-3 py-2">
-          <option value="U">Unknown</option>
-          <option value="M">Male</option>
-          <option value="F">Female</option>
-          <option value="X">Other</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <label class="block text-xs font-semibold uppercase text-slate-600 mb-1"
-        >Phone Number</label
-      >
-      <input type="text" name="phone" class="w-full border rounded px-3 py-2" />
-    </div>
-    <div class="flex items-center space-x-2">
-      <input type="checkbox" name="is_provisional" value="true" id="prov" />
-      <label for="prov" class="text-sm font-medium"
-        >Emergency / Provisional Registration (Unidentified)</label
-      >
-    </div>
-    <button
-      type="submit"
-      class="w-full bg-teal-600 text-white py-2 rounded font-semibold hover:bg-teal-700"
-    >
-      Save Patient Record
-    </button>
-  </form>
-</div>
 {% endblock %}
