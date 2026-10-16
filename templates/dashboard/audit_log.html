@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}System Audit Logs - HCMS{% endblock %}
+{% block content %}
+    <div class="space-y-6">
+        <!-- Top Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">System Audit Trail & Security Logs</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Comprehensive chronological record of all signups, database mutations, and user actions.</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Live Polling Active (Every 30s)</span>
+                </span>
+            </div>
+        </div>
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Recorded Events</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-slate-900">{{ total_logs }}</h3>
+                    <span class="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Historical</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">All stored system activities.</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Events Today</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-teal-600">{{ today_logs }}</h3>
+                    <span class="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-full">Last 24 Hours</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">Recorded actions logged today.</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Active Actors</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-indigo-600">{{ unique_actors_count }}</h3>
+                    <span class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full">Unique Users</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">Staff & administrators with logged activity.</p>
+            </div>
+        </div>
+        <!-- Search & Filter Controls -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden space-y-4">
+            <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Event Log Stream</h2>
+                <form method="get"
+                      class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <input type="text"
+                           name="q"
+                           value="{{ query }}"
+                           placeholder="Search description, user, IP..."
+                           class="border border-slate-300 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500 w-full sm:w-64">
+                    <select name="action"
+                            class="border border-slate-300 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-teal-500 bg-white">
+                        <option value="">All Action Types</option>
+                        {% for act in action_types %}
+                            <option value="{{ act }}"
+                                    {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit"
+                            class="bg-slate-900 text-white px-4 py-1.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition">Filter</button>
+                    {% if query or action_filter %}
+                        <a href="{% url 'dashboard:audit_logs' %}"
+                           class="text-xs text-slate-500 hover:underline">Clear</a>
+                    {% endif %}
+                </form>
+            </div>
+            <!-- Render Polling Feed Partial -->
+            {% include "dashboard/audit_log_feed.html" %}
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %} {% block title %}Staff Profile - HCMS{% endblock %} {% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Staff Account Profile</h1>
+        <p class="text-sm text-slate-500">Manage your credentials, employee badge, and personal info.</p>
+    </div>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
+                <input type="text"
+                       name="first_name"
+                       value="{{ request.user.first_name }}"
+                       required
+                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name</label>
+                <input type="text"
+                       name="last_name"
+                       value="{{ request.user.last_name }}"
+                       required
+                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email Address</label>
+            <input type="email"
+                   name="email"
+                   value="{{ request.user.email }}"
+                   required
+                   class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
+        </div>
+        {% if staff %}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Employee ID</label>
+                    <input type="text"
+                           name="employee_id"
+                           value="{{ staff.employee_id }}"
+                           class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Medical License Number</label>
+                    <input type="text"
+                           name="license_number"
+                           value="{{ staff.license_number|default:'' }}"
+                           class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Role / Department</label>
+                <input type="text"
+                       disabled
+                       value="{{ staff.get_role_display }} • {{ staff.department.name }}"
+                       class="w-full bg-slate-100 border rounded-xl px-3 py-2 text-sm text-slate-600 cursor-not-allowed" />
+            </div>
+        {% endif %}
+        <button type="submit"
+                class="w-full bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 transition shadow-sm">
+            Save Profile Changes
+        </button>
+    </form>
+</div>
+{% endblock %}

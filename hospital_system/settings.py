@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "radiology",
     "wards",
     "billing",
+    "dashboard",
 ]
 
 MIDDLEWARE = [

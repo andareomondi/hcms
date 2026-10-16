@@ -1,101 +1,94 @@
-{% extends "base.html" %} {% block title %}Physician Dashboard - HCMS{% endblock %} {% block content %}
-<div class="space-y-6">
-    <div class="flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-800">Physician Portal Dashboard</h1>
-            <p class="text-sm text-slate-600">
-                Welcome, Dr. {{ request.user.get_full_name|default:request.user.username
-                }}
-            </p>
-        </div>
-        <div>
-            <form action="{% url 'doctors_portal:call_next' %}" method="post">
-                {% csrf_token %}
-                <button type="submit"
-                        class="bg-teal-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-teal-700 shadow transition flex items-center space-x-2">
-                    <span>📢 Call Next Patient</span>
-                </button>
-            </form>
-        </div>
-    </div>
-    <!-- Active Consultation Banner -->
-    <div class="bg-white p-6 rounded-xl shadow border border-slate-200">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Current Active Consultation</h2>
-        {% if current_consultation %}
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h3 class="text-xl font-bold text-slate-900">
-                        {{ current_consultation.encounter.patient.last_name }}, {{
-                            current_consultation.encounter.patient.first_name }}
-                    </h3>
-                    <p class="text-sm text-slate-600 mt-1">
-                        Encounter Type:
-                        <span class="font-semibold text-teal-700">{{ current_consultation.encounter.get_encounter_type_display
-                        }}</span>
-                        • Priority:
-                        <span class="font-semibold {% if current_consultation.priority == 3 %}text-red-600{% elif current_consultation.priority == 2 %}text-amber-600{% else %}text-blue-600{% endif %}">Priority {{ current_consultation.priority }}</span>
-                    </p>
-                </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'core_patients:detail' current_consultation.encounter.patient.id %}"
-                       class="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-200">Patient File</a>
-                    <a href="{% url 'doctors_portal:workstation' current_consultation.encounter.id %}"
-                       class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow">Open Workstation</a>
-                </div>
+{% extends "base.html" %}
+{% block title %}Physician Dashboard - HCMS{% endblock %}
+{% block content %}
+    <div class="space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Physician Portal Dashboard</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Welcome, Dr. {% firstof request.user.get_full_name request.user.username %}</p>
             </div>
-        {% else %}
-            <p class="text-sm text-slate-500 italic">
-                No active consultation in progress. Click "Call Next Patient" to pull from
-                your waiting queue.
-            </p>
-        {% endif %}
-    </div>
-    <!-- Waiting Queue Table -->
-    <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
-        <div class="p-4 bg-slate-50 border-b border-slate-200">
-            <h2 class="font-bold text-slate-800 text-sm uppercase">Assigned Waiting Queue ({{ waiting_entries|length }})</h2>
+            <div>
+                <form action="{% url 'doctors_portal:call_next' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="bg-teal-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-teal-700 shadow-sm transition flex items-center space-x-2">
+                        <span>📢 Call Next Patient</span>
+                    </button>
+                </form>
+            </div>
         </div>
-        <table class="w-full text-left border-collapse">
-            <thead class="bg-slate-100/70 text-slate-700 text-xs uppercase">
-                <tr>
-                    <th class="p-3">Priority</th>
-                    <th class="p-3">Patient Name</th>
-                    <th class="p-3">Encounter Type</th>
-                    <th class="p-3">Wait Duration</th>
-                    <th class="p-3">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 text-sm">
-                {% for entry in waiting_entries %}
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-3">
-                            {% if entry.priority == 3 %}
-                                <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">Resuscitation</span>
-                            {% elif entry.priority == 2 %}
-                                <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Urgent</span>
-                            {% else %}
-                                <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-semibold">Routine</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-3 font-medium text-slate-900">
-                            {{ entry.encounter.patient.last_name }}, {{
-                                entry.encounter.patient.first_name }}
-                        </td>
-                        <td class="p-3 text-slate-600">{{ entry.encounter.get_encounter_type_display }}</td>
-                        <td class="p-3 text-slate-600 font-medium">{{ entry.wait_duration_minutes }} mins</td>
-                        <td class="p-3">
-                            <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
-                               class="text-teal-600 hover:underline text-xs font-semibold">View Record</a>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="5"
-                            class="p-6 text-center text-slate-500">No patients currently waiting in your queue. Great job!</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <!-- Active Consultation Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Current Active Consultation</p>
+            {% if current_consultation %}
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-slate-900">
+                            {{ current_consultation.encounter.patient.last_name }}, {{ current_consultation.encounter.patient.first_name }}
+                        </h2>
+                        <p class="text-sm text-slate-600 mt-1">
+                            Encounter Type: <span class="font-semibold text-teal-700">{{ current_consultation.encounter.get_encounter_type_display }}</span> •
+                            Priority: <span class="font-semibold {% if current_consultation.priority == 3 %}text-red-600{% elif current_consultation.priority == 2 %}text-amber-600{% else %}text-blue-600{% endif %}">Priority {{ current_consultation.priority }}</span>
+                        </p>
+                    </div>
+                    <div class="flex space-x-3">
+                        <a href="{% url 'core_patients:detail' current_consultation.encounter.patient.id %}"
+                           class="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">Patient File</a>
+                        <a href="{% url 'doctors_portal:workstation' current_consultation.encounter.id %}"
+                           class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm transition">Open Workstation</a>
+                    </div>
+                </div>
+            {% else %}
+                <p class="text-sm text-slate-500 italic py-2">No active consultation in progress. Click "Call Next Patient" to pull from your waiting queue.</p>
+            {% endif %}
+        </div>
+        <!-- Waiting Queue Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50/50 border-b border-slate-200">
+                <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Assigned Waiting Queue ({{ waiting_entries|length }})</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3.5">Priority</th>
+                            <th class="p-3.5">Patient Name</th>
+                            <th class="p-3.5">Encounter Type</th>
+                            <th class="p-3.5">Wait Duration</th>
+                            <th class="p-3.5">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for entry in waiting_entries %}
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <td class="p-3.5">
+                                    {% if entry.priority == 3 %}
+                                        <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">Resuscitation</span>
+                                    {% elif entry.priority == 2 %}
+                                        <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Urgent</span>
+                                    {% else %}
+                                        <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-semibold">Routine</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3.5 font-bold text-slate-900">
+                                    {{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}
+                                </td>
+                                <td class="p-3.5 text-slate-600">{{ entry.encounter.get_encounter_type_display }}</td>
+                                <td class="p-3.5 text-slate-600 font-medium">{{ entry.wait_duration_minutes }} mins</td>
+                                <td class="p-3.5">
+                                    <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                                       class="text-teal-600 hover:underline text-xs font-bold">View Record</a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5"
+                                    class="p-6 text-center text-slate-500">No patients currently waiting in your queue. Great job!</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-</div>
 {% endblock %}

@@ -1,45 +1,59 @@
 {% extends "base.html" %}
+{% block title %}Nurse Medication Worklist - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-6">
-        <h1 class="text-2xl font-bold">Nurse Medication Worklist</h1>
-        <div class="bg-white rounded shadow overflow-hidden">
-            <table class="w-full text-left border-collapse">
-                <thead class="bg-slate-100 text-slate-700 text-xs uppercase">
-                    <tr>
-                        <th class="p-3">Patient</th>
-                        <th class="p-3">Medication</th>
-                        <th class="p-3">Dose & Route</th>
-                        <th class="p-3">Instructions</th>
-                        <th class="p-3">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 text-sm">
-                    {% for order in orders %}
-                        <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium">
-                                {{ order.encounter.patient.last_name }}, {{
-                                    order.encounter.patient.first_name }}
-                            </td>
-                            <td class="p-3">{{ order.medication.brand_name }}</td>
-                            <td class="p-3">{{ order.dose_text }} • {{ order.get_route_display }}</td>
-                            <td class="p-3 text-slate-600">{{ order.instructions|default:"None" }}</td>
-                            <td class="p-3">
-                                <form action="{% url 'pharmacy:administer' order.id %}" method="post">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                            class="bg-teal-600 text-white px-3 py-1 rounded text-xs hover:bg-teal-700 font-semibold">
-                                        Mark Administered
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    {% empty %}
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Nurse Medication Worklist</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Active medication prescriptions waiting for administration or dispensing.</p>
+            </div>
+            <a href="{% url 'pharmacy:dashboard' %}"
+               class="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">
+                ← Pharmacy Inventory
+            </a>
+        </div>
+        <!-- Worklist Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
                         <tr>
-                            <td colspan="5" class="p-4 text-center text-slate-500">No pending medication administrations.</td>
+                            <th class="p-3.5">Patient</th>
+                            <th class="p-3.5">Prescribed Medication</th>
+                            <th class="p-3.5">Dosage / Frequency</th>
+                            <th class="p-3.5">Instructions</th>
+                            <th class="p-3.5">Action</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for order in orders %}
+                            <tr class="hover:bg-slate-50/80 transition">
+                                <td class="p-3.5 font-bold text-slate-900">
+                                    {{ order.encounter.patient.last_name }}, {{ order.encounter.patient.first_name }}
+                                </td>
+                                <td class="p-3.5 text-slate-800 font-semibold">{{ order.medication.brand_name }} ({{ order.medication.strength }})</td>
+                                <td class="p-3.5 text-slate-600">{{ order.dose_text }} • {{ order.frequency_text }}</td>
+                                <td class="p-3.5 text-slate-600 text-xs">{{ order.instructions|default:"Take as directed." }}</td>
+                                <td class="p-3.5">
+                                    <form action="{% url 'pharmacy:mark_administered' order.id %}"
+                                          method="post">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="bg-teal-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold hover:bg-teal-700 shadow-sm transition">
+                                            Mark Administered
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5"
+                                    class="p-6 text-center text-slate-500">No pending medication orders to administer.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 {% endblock %}

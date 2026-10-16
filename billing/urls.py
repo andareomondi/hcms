@@ -4,7 +4,8 @@ from . import views
 app_name = "billing"
 
 urlpatterns = [
-    path("provisional/", views.provisional_review_view, name="provisional_review"),
+    path("", views.billing_dashboard_view, name="dashboard"),
+    path("provisional-review/", views.billing_dashboard_view, name="provisional_review"), # alias for navbar
     path("charge/<uuid:charge_id>/post/", views.post_charge_action, name="post_charge"),
-    path("invoice/<uuid:encounter_id>/", views.invoice_detail_view, name="invoice"),
+    path("charge/<uuid:charge_id>/pay/", views.mark_charge_paid_action, name="mark_paid"),
 ]

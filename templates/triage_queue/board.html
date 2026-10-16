@@ -1,7 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Triage Board - HCMS{% endblock %}
 {% block content %}
-    <div class="space-y-6"
-         hx-get="{% url 'triage_queue:board_fragment' %}"
-         hx-trigger="every 10s"
-         hx-swap="outerHTML">{% include "triage_queue/board_fragment_content.html" %}</div>
+    {% include "triage_queue/_board_fragment.html" %}
 {% endblock %}

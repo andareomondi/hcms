@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Ward & Bed Management - HCMS{% endblock %}
+{% block content %}
+    <div class="space-y-8"
+         x-data="{ showModal: false, selectedBedId: '', selectedBedCode: '' }">
+        <!-- Top Header & Actions -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Inpatient Wards & Bed Management</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Monitor ward occupancy, assign patient encounters to vacant beds, and manage discharges.</p>
+            </div>
+        </div>
+        <!-- Occupancy Metrics Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Overall Occupancy Rate</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-slate-900">{{ occupancy_rate }}%</h3>
+                    <span class="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-full">Inpatient Live</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-teal-600 h-full rounded-full"
+                         style="width: {{ occupancy_rate }}%"></div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Occupied Beds</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-blue-600">{{ occupied_beds }}</h3>
+                    <span class="text-xs text-slate-500">of {{ total_beds }} total</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">Currently admitted patients.</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Vacant Beds</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-emerald-600">{{ vacant_beds }}</h3>
+                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">Ready</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">Available for immediate assignment.</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Cleaning & Maintenance</span>
+                <div class="mt-4 flex items-baseline justify-between">
+                    <h3 class="text-3xl font-extrabold text-amber-600">{{ cleaning_beds }}</h3>
+                    <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">Turnover</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-3">Beds undergoing sanitation.</p>
+            </div>
+        </div>
+        <!-- Wards and Bed Grids -->
+        <div class="space-y-6">
+            {% for ward in wards %}
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                        <div>
+                            <h2 class="font-bold text-slate-900 text-lg">{{ ward.name }}</h2>
+                            <p class="text-xs text-slate-500">Department: {{ ward.department.name }} • Bed-Day Rate: KES {{ ward.bed_day_rate }}</p>
+                        </div>
+                        <span class="text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl">
+                            {{ ward.beds.all|length }} Beds Total
+                        </span>
+                    </div>
+                    <!-- Bed Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {% for bed in ward.beds.all %}
+                            <div class="p-4 rounded-xl border flex flex-col justify-between space-y-3 transition {% if bed.status == 'OCCUPIED' %}bg-blue-50/50 border-blue-200{% elif bed.status == 'VACANT' %}bg-emerald-50/40 border-emerald-200{% else %}bg-amber-50/50 border-amber-200{% endif %}">
+                                <div class="flex justify-between items-start">
+                                    <span class="font-bold text-slate-900 text-sm">{{ bed.code }}</span>
+                                    {% if bed.status == "OCCUPIED" %}
+                                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Occupied</span>
+                                    {% elif bed.status == "VACANT" %}
+                                        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Vacant</span>
+                                    {% else %}
+                                        <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Cleaning</span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if bed.active_admission %}
+                                        <p class="text-xs font-bold text-slate-800">{{ bed.active_admission.encounter.patient.last_name }}, {{ bed.active_admission.encounter.patient.first_name }}</p>
+                                        <p class="text-[10px] text-slate-500 mt-0.5">Admitted: {{ bed.active_admission.admitted_at|date:"M d, H:i" }}</p>
+                                    {% else %}
+                                        <p class="text-xs text-slate-500 italic">Bed ready for assignment</p>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {% if bed.status == "VACANT" %}
+                                        <button @click="showModal = true; selectedBedId = '{{ bed.id }}'; selectedBedCode = '{{ bed.code }}'"
+                                                class="w-full bg-emerald-600 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm">
+                                            Assign Bed
+                                        </button>
+                                    {% elif bed.active_admission %}
+                                        <form action="{% url 'wards:discharge_patient' bed.active_admission.id %}"
+                                              method="post">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="w-full bg-slate-900 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition">
+                                                Discharge
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <button disabled
+                                                class="w-full bg-slate-200 text-slate-500 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">
+                                            Maintenance
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% empty %}
+                <p class="text-sm text-slate-500 text-center py-8">No wards configured in the system.</p>
+            {% endfor %}
+            <!-- Pagination Controls -->
+            {% if page_obj.has_other_pages %}
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center text-sm">
+                    <span class="text-slate-500 text-xs">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    <div class="flex space-x-2">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}"
+                               class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100">Previous</a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}"
+                               class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <!-- Bed Assignment Modal -->
+        <div x-show="showModal"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+             style="display: none">
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6"
+                 @click.away="showModal = false">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-lg">Assign Bed <span x-text="selectedBedCode"
+       class="text-teal-600"></span></h3>
+                        <p class="text-xs text-slate-500">Select an active patient encounter for admission.</p>
+                    </div>
+                    <button @click="showModal = false"
+                            class="text-slate-400 hover:text-slate-600 font-bold">×</button>
+                </div>
+                <form :action="'/wards/bed/' + selectedBedId + '/assign/'"
+                      method="post"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Select Encounter / Patient</label>
+                        <select name="encounter_id"
+                                required
+                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 bg-white">
+                            <option value="">-- Choose active encounter --</option>
+                            {% for enc in available_encounters %}
+                                <option value="{{ enc.id }}">
+                                    {{ enc.patient.last_name }}, {{ enc.patient.first_name }} ({{ enc.get_encounter_type_display }} • ID: {{ enc.patient.id_number }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="button"
+                                @click="showModal = false"
+                                class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 shadow-sm transition">Confirm Admission</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

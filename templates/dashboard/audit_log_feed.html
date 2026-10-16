@@ -1,0 +1,75 @@
+<div id="audit-feed" hx-get="{% url 'dashboard:audit_logs' %}{% if query %}?q={{ query }}{% endif %}{% if action_filter %}{% if query %}&{% else %}?{% endif %}action={{ action_filter }}{% endif %}{% if page_obj.number > 1 %}{% if query or action_filter %}&{% else %}?{% endif %}page={{ page_obj.number }}{% endif %}" hx-trigger="every 30s" hx-swap="outerHTML">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3.5">Timestamp</th>
+                    <th class="p-3.5">Actor / User</th>
+                    <th class="p-3.5">Action Type</th>
+                    <th class="p-3.5">Event Description & Changes</th>
+                    <th class="p-3.5">IP Address</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for log in logs %}
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="p-3.5 text-xs text-slate-500 font-medium whitespace-nowrap">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                        <td class="p-3.5 font-bold text-slate-900">
+                            {% if log.actor %} {{ log.actor.username }}
+                                <span class="block text-[11px] font-normal text-slate-500">@{{ log.actor.username }}</span>
+                            {% else %}
+                                <span class="text-slate-400 italic">System / Anonymous</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3.5">
+                            {% if log.action_type == "SIGNUP" %}
+                                <span class="bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-bold">SIGNUP</span>
+                            {% elif log.action_type == "CREATE" %}
+                                <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">CREATE</span>
+                            {% elif log.action_type == "UPDATE" %}
+                                <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">UPDATE</span>
+                            {% elif log.action_type == "DELETE" %}
+                                <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-bold">DELETE</span>
+                            {% elif log.action_type == "LOGIN" or log.action_type == "LOGOUT" %}
+                                <span class="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-bold">{{ log.action_type }}</span>
+                            {% else %}
+                                <span class="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded-full font-semibold">{{ log.action_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3.5 text-slate-700 text-xs max-w-md leading-relaxed">{{ log.description }}</td>
+                        <td class="p-3.5 text-xs text-slate-500 font-mono">{{ log.ip_address|default:"N/A" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5"
+                            class="p-8 text-center text-slate-500">No audit logs recorded matching your filter criteria.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- Pagination Controls with htmx -->
+    {% if page_obj.has_other_pages %}
+        <div class="p-4 bg-slate-50/50 border-t border-slate-200 flex justify-between items-center text-sm">
+            <span class="text-slate-500 text-xs">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <div class="flex space-x-2">
+                {% if page_obj.has_previous %}
+                    <button hx-get="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+                            hx-target="#audit-feed"
+                            hx-swap="outerHTML"
+                            class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100 cursor-pointer">
+                        Previous
+                    </button>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <button hx-get="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
+                            hx-target="#audit-feed"
+                            hx-swap="outerHTML"
+                            class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100 cursor-pointer">
+                        Next
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>

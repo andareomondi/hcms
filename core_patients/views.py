@@ -1,15 +1,16 @@
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.db.models import Q
-from django.http import HttpResponseBadRequest, HttpResponseForbidden
+from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Patient, PatientAllergy, Allergen
+from dashboard.audit_actions import AuditAction
+from dashboard.utils import log_action
 
-from django.contrib.auth.models import User
-from django.contrib.auth import login
-from .models import Department, StaffProfile
+from .models import Allergen, Department, Patient, PatientAllergy, StaffProfile
+
 
 def staff_register_view(request):
     """Handles staff account creation, linking a User to a StaffProfile."""
@@ -59,6 +60,13 @@ def staff_register_view(request):
             is_active=True
         )
 
+        log_action(
+            request,
+            AuditAction.STAFF_REGISTERED,
+            f"Registered staff account '{username}' ({role}, {department}).",
+            actor=user,
+        )
+
         # Log the user in immediately after registration
         login(request, user)
         return redirect("triage_queue:board")
@@ -70,11 +78,12 @@ def staff_register_view(request):
     }
     return render(request, "core_patients/staff_register.html", context)
 
+
 @login_required
 def patient_registry_search(request):
     """
-    Live search endpoint triggered via htmx. 
-    Shows recent patients by default when query is empty, 
+    Live search endpoint triggered via htmx.
+    Shows recent patients by default when query is empty,
     and filters dynamically as the user types.
     """
     query = request.GET.get("q", "").strip()
@@ -98,9 +107,10 @@ def patient_registry_search(request):
     # If requested via htmx, return only the table fragment
     if request.headers.get("HX-Request"):
         return render(request, "core_patients/_registry_results.html", context)
-        
+
     # Otherwise, render the full registry page with the initial/filtered records
     return render(request, "core_patients/registry.html", context)
+
 
 @login_required
 def patient_register_view(request):
@@ -108,7 +118,7 @@ def patient_register_view(request):
     if request.method == "POST":
         is_provisional = request.POST.get("is_provisional") == "true"
         last_name = request.POST.get("last_name", "").strip()
-        
+
         if not is_provisional and not last_name:
             return render(request, "core_patients/register.html", {"error": "Last name is required."})
 
@@ -124,6 +134,13 @@ def patient_register_view(request):
             phone=request.POST.get("phone", "").strip(),
             created_by=request.staff_profile,
         )
+
+        status = "provisional" if is_provisional else "registered"
+        log_action(
+            request,
+            AuditAction.PATIENT_REGISTERED,
+            f"Registered {status} patient #{patient.id}: {patient}.",
+        )
         return redirect("core_patients:detail", patient_id=patient.id)
 
     return render(request, "core_patients/register.html")
@@ -132,7 +149,13 @@ def patient_register_view(request):
 @login_required
 def patient_detail_view(request, patient_id):
     patient = get_object_or_404(Patient.objects.select_related("created_by"), pk=patient_id)
-    
+
+    log_action(
+        request,
+        AuditAction.PATIENT_VIEWED,
+        f"Viewed record of patient #{patient.id}: {patient}.",
+    )
+
     patient_allergies = PatientAllergy.objects.filter(
         patient=patient, status="ACTIVE"
     ).select_related("allergen", "allergen__allergen_class")
@@ -154,6 +177,7 @@ def patient_detail_view(request, patient_id):
     context = {"patient": patient, "patient_allergies": patient_allergies, "timeline_items": timeline_items}
     return render(request, "core_patients/patient_detail.html", context)
 
+
 @login_required
 def patient_edit_view(request, patient_id):
     """Renders and processes patient demographic edits."""
@@ -163,13 +187,19 @@ def patient_edit_view(request, patient_id):
         patient.last_name = request.POST.get("last_name", "").strip()
         patient.phone = request.POST.get("phone", "").strip()
         patient.save()
+
+        log_action(
+            request,
+            AuditAction.PATIENT_UPDATED,
+            f"Updated demographics of patient #{patient.id}: {patient}.",
+        )
         return redirect("core_patients:detail", patient_id=patient.id)
     return render(request, "core_patients/edit.html", {"patient": patient})
 
 
 @login_required
 def patient_timeline_view(request, patient_id):
-    """htmx endpoint for infinite scrolling or refreshing timeline items[cite: 1]."""
+    """htmx endpoint for infinite scrolling or refreshing timeline items."""
     patient = get_object_or_404(Patient, pk=patient_id)
     # Renders timeline fragment
     return render(request, "core_patients/_timeline_items.html", {"patient": patient})
@@ -177,8 +207,15 @@ def patient_timeline_view(request, patient_id):
 
 @login_required
 def allergy_panel_view(request, patient_id):
-    """Renders the allergy management modal or panel[cite: 1]."""
+    """Renders the allergy management modal or panel."""
     patient = get_object_or_404(Patient, pk=patient_id)
+
+    log_action(
+        request,
+        AuditAction.PATIENT_ALLERGIES_VIEWED,
+        f"Viewed allergy panel for patient #{patient.id}: {patient}.",
+    )
+
     allergies = patient.allergies.select_related("allergen").all()
     all_allergens = Allergen.objects.filter(is_active=True)
     context = {"patient": patient, "allergies": allergies, "all_allergens": all_allergens}
@@ -191,11 +228,17 @@ def confirm_identity_view(request, patient_id):
     """Clears provisional status after identity verification."""
     if not request.user.staff_profile.role in ("RECEPTION", "ADMIN", "DOCTOR"):
         return HttpResponseForbidden("Not authorized to confirm patient identities.")
-    
+
     patient = get_object_or_404(Patient, pk=patient_id)
     patient.is_provisional = False
     patient.provisional_label = ""
     patient.id_type = request.POST.get("id_type", patient.id_type)
     patient.id_number = request.POST.get("id_number", patient.id_number)
     patient.save()
+
+    log_action(
+        request,
+        AuditAction.PATIENT_IDENTITY_CONFIRMED,
+        f"Confirmed identity of patient #{patient.id}: {patient} ({patient.id_type}).",
+    )
     return redirect("core_patients:detail", patient_id=patient.id)

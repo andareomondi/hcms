@@ -4,7 +4,8 @@ from . import views
 app_name = "wards"
 
 urlpatterns = [
-    path("beds/", views.bed_grid_view, name="bed_grid"),
-    path("bed/<uuid:bed_id>/admit/", views.admit_patient_view, name="admit"),
-    path("admission/<uuid:admission_id>/discharge/", views.discharge_patient_view, name="discharge"),
+    path("", views.ward_dashboard_view, name="dashboard"),
+    path("bed-grid/", views.ward_dashboard_view, name="bed_grid"), # alias for existing nav links
+    path("bed/<uuid:bed_id>/assign/", views.assign_bed_action, name="assign_bed"),
+    path("admission/<uuid:admission_id>/discharge/", views.discharge_patient_action, name="discharge_patient"),
 ]
