@@ -1,5 +1,7 @@
 import uuid
+
 from django.db import models
+
 from core_patients.models import StaffProfile
 from triage_queue.models import Encounter
 

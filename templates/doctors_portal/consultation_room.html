@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}Consultation Room - {{ patient.first_name }} {{ patient.last_name }}{% endblock %}
+{% block content %}
+    <div class="space-y-6"
+         x-data="{ activeTab: 'notes', showPrescribeModal: false, showAdmitModal: false, showRadiologyModal: false }">
+        <!-- Patient Context Banner -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="flex items-center space-x-4">
+                <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-700 font-extrabold text-2xl flex items-center justify-center border border-teal-100 shadow-inner">
+                    {{ patient.first_name|slice:":1" }}{{ patient.last_name|slice:":1" }}
+                </div>
+                <div>
+                    <div class="flex items-center space-x-3">
+                        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ patient.last_name }}, {{ patient.first_name }}</h1>
+                        <span class="bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full font-bold">Active Encounter</span>
+                    </div>
+                    <p class="text-sm text-slate-500 mt-1">
+                        Sex: <span class="font-semibold text-slate-700">{{ patient.get_sex_display|default:patient.sex }}</span> •
+                        DOB: <span class="font-semibold text-slate-700">{{ patient.date_of_birth|default:"N/A" }}</span> •
+                        Phone: <span class="font-semibold text-slate-700">{{ patient.phone|default:"N/A" }}</span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button @click="showPrescribeModal = true"
+                        class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition shadow-sm">+ Prescribe Medication</button>
+                <button @click="showRadiologyModal = true"
+                        class="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-700 transition shadow-sm">+ Request Imaging</button>
+                {% if active_admission %}
+                    <button disabled
+                            title="Patient is already admitted to a ward"
+                            class="bg-slate-300 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold cursor-not-allowed shadow-sm">+ Already Admitted</button>
+                {% else %}
+                    <button @click="showAdmitModal = true"
+                            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm">+ Admit to Ward</button>
+                {% endif %}
+                <form action="{% url 'doctors_portal:complete' encounter.id %}"
+                      method="post"
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition shadow-sm">Complete & Discharge</button>
+                </form>
+            </div>
+        </div>
+        <!-- Active Ward Status Alert (if admitted) -->
+        {% if active_admission %}
+            <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-2xl flex justify-between items-center text-sm">
+                <div class="flex items-center space-x-2">
+                    <span class="font-bold">Ward Admission Status:</span>
+                    <span>Admitted to <strong>{{ active_admission.bed.ward.name }}</strong> (Bed: {{ active_admission.bed.code }}) since {{ active_admission.admitted_at|date:'Y-m-d H:i' }}</span>
+                </div>
+                <span class="text-xs font-semibold bg-blue-100 px-3 py-1 rounded-full">Inpatient Care</span>
+            </div>
+        {% endif %}
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-200 space-x-6">
+            <button @click="activeTab = 'notes'"
+                    :class="activeTab === 'notes' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition">📝 Clinical Notes & Diagnosis</button>
+            <button @click="activeTab = 'prescriptions'"
+                    :class="activeTab === 'prescriptions' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition">
+                💊 Prescribed Medications ({{ medication_orders|length }})
+            </button>
+        </div>
+        <!-- TAB 1: CLINICAL NOTES & NEW NOTE FORM -->
+        <div x-show="activeTab === 'notes'"
+             class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Form to Add Note -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-1 space-y-4">
+                <h2 class="font-bold text-slate-900 text-base">Record Consultation Note</h2>
+                <form action="{% url 'doctors_portal:add_note' encounter.id %}"
+                      method="post"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Presenting Complaint *</label>
+                        <textarea name="presenting_complaint"
+                                  rows="2"
+                                  required
+                                  placeholder="e.g. Acute headache, fever..."
+                                  class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Examination Notes</label>
+                        <textarea name="examination_notes"
+                                  rows="2"
+                                  placeholder="Physical examination findings..."
+                                  class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Diagnosis *</label>
+                        <input type="text"
+                               name="diagnosis"
+                               required
+                               placeholder="e.g. Malaria / Mild Hypertension"
+                               class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Treatment Plan</label>
+                        <textarea name="treatment_plan"
+                                  rows="2"
+                                  placeholder="Next steps, rest, follow up..."
+                                  class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+                    <button type="submit"
+                            class="w-full bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 shadow-sm transition">Save Clinical Note</button>
+                </form>
+            </div>
+            <!-- Right: History of Clinical Notes -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2 space-y-4">
+                <h2 class="font-bold text-slate-900 text-base">Chronological Clinical History</h2>
+                <div class="space-y-4">
+                    {% for note in clinical_notes %}
+                        <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                            <div class="flex justify-between items-center text-xs text-slate-500">
+                                <span class="font-bold text-slate-800">Doctor: {{ note.author.user.get_full_name|default:note.author.user.username }}</span>
+                                <span class="font-mono">{{ note.created_at|date:"Y-m-d H:i" }}</span>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase">Complaint:</span>
+                                <p class="text-sm text-slate-800">{{ note.presenting_complaint }}</p>
+                            </div>
+                            {% if note.examination %}
+                                <div>
+                                    <span class="text-xs font-bold text-slate-400 uppercase">Examination:</span>
+                                    <p class="text-sm text-slate-800">{{ note.examination }}</p>
+                                </div>
+                            {% endif %}
+                            <div>
+                                <span class="text-xs font-bold text-teal-600 uppercase">Diagnosis:</span>
+                                <p class="text-sm font-bold text-slate-900">{{ note.diagnosis }}</p>
+                            </div>
+                            {% if note.plan %}
+                                <div>
+                                    <span class="text-xs font-bold text-indigo-600 uppercase">Treatment Plan:</span>
+                                    <p class="text-sm text-slate-800">{{ note.plan }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <p class="text-sm text-slate-500 italic text-center py-8">No clinical notes recorded for this encounter yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <!-- TAB 2: PRESCRIBED MEDICATIONS -->
+        <div x-show="activeTab === 'prescriptions'"
+             class="space-y-6"
+             style="display: none">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center">
+                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Prescription Orders</h2>
+                    <button @click="showPrescribeModal = true"
+                            class="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition">+ Add Prescription</button>
+                </div>
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3.5">Timestamp</th>
+                            <th class="p-3.5">Medication</th>
+                            <th class="p-3.5">Dosage Details</th>
+                            <th class="p-3.5">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        {% for order in medication_orders %}
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="p-3.5 text-xs text-slate-500 font-mono">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
+                                <td class="p-3.5 font-bold text-slate-900">{{ order.medication.brand_name }} <span class="text-xs font-normal text-slate-500">({{ order.medication.generic_name }})</span></td>
+                                <td class="p-3.5 text-slate-700">{{ order.dose_text }}</td>
+                                <td class="p-3.5"><span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">{{ order.status }}</span></td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4"
+                                    class="p-8 text-center text-slate-500 italic">No prescriptions ordered for this encounter.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- MODAL: PRESCRIBE MEDICATION -->
+        <div x-show="showPrescribeModal"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+             style="display: none">
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6"
+                 @click.away="showPrescribeModal = false">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                    <h3 class="font-bold text-slate-900 text-lg">Prescribe Medication</h3>
+                    <button @click="showPrescribeModal = false"
+                            class="text-slate-400 hover:text-slate-600 font-bold">×</button>
+                </div>
+                <form action="{% url 'doctors_portal:prescribe' encounter.id %}"
+                      method="post"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Select Medication *</label>
+                        <select name="medication_id"
+                                required
+                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 bg-white">
+                            <option value="">-- Choose Formulary Item --</option>
+                            {% for med in medications %}
+                                <option value="{{ med.id }}">
+                                    {{ med.brand_name }} {% if med.strength %}({{ med.strength }}){% endif %}
+                                    {% if med.unit_price %}- KES {{ med.unit_price }}{% elif med.price %}- KES {{ med.price }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity / Dose Specification</label>
+                        <input type="text"
+                               name="dose_text"
+                               placeholder="e.g. 2 tablets, 500mg"
+                               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Route</label>
+                            <select name="route"
+                                    class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+                                <option value="ORAL">Oral</option>
+                                <option value="IV">Intravenous (IV)</option>
+                                <option value="IM">Intramuscular (IM)</option>
+                                <option value="TOPICAL">Topical</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Frequency</label>
+                            <select name="frequency"
+                                    class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+                                <option value="OD">Once daily (OD)</option>
+                                <option value="BID">Twice daily (BID)</option>
+                                <option value="TID">Three times daily (TID)</option>
+                                <option value="QID">Four times daily (QID)</option>
+                                <option value="STAT">Immediately (STAT)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Duration</label>
+                        <input type="text"
+                               name="duration"
+                               value="5 days"
+                               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="button"
+                                @click="showPrescribeModal = false"
+                                class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow-sm">Issue Prescription</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- MODAL: REQUEST RADIOLOGY -->
+        <div x-show="showRadiologyModal"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+             style="display: none">
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6"
+                 @click.away="showRadiologyModal = false">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                    <h3 class="font-bold text-slate-900 text-lg">Request Radiology Scan</h3>
+                    <button @click="showRadiologyModal = false"
+                            class="text-slate-400 hover:text-slate-600 font-bold">×</button>
+                </div>
+                <form action="{% url 'doctors_portal:request_radiology' encounter.id %}"
+                      method="post"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Imaging Modality *</label>
+                        <select name="imaging_type"
+                                required
+                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
+                            <option value="X_RAY">X-Ray</option>
+                            <option value="CT_SCAN">CT Scan</option>
+                            <option value="MRI">MRI</option>
+                            <option value="ULTRASOUND">Ultrasound</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Clinical Indication / Notes *</label>
+                        <textarea name="clinical_indication"
+                                  rows="3"
+                                  required
+                                  placeholder="Reason for scan, suspected pathology..."
+                                  class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="button"
+                                @click="showRadiologyModal = false"
+                                class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 bg-cyan-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-cyan-700 shadow-sm">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- MODAL: ADMIT TO WARD -->
+        {% if not active_admission %}
+            <div x-show="showAdmitModal"
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+                 style="display: none">
+                <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6"
+                     @click.away="showAdmitModal = false">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                        <h3 class="font-bold text-slate-900 text-lg">Admit Patient to Ward</h3>
+                        <button @click="showAdmitModal = false"
+                                class="text-slate-400 hover:text-slate-600 font-bold">×</button>
+                    </div>
+                    <form action="{% url 'doctors_portal:admit' encounter.id %}"
+                          method="post"
+                          class="space-y-4">
+                        {% csrf_token %}
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Select Ward & Vacant Bed *</label>
+                            <select name="bed_id"
+                                    required
+                                    class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 bg-white">
+                                <option value="">-- Choose Vacant Bed --</option>
+                                {% for ward in wards %}
+                                    <optgroup label="{{ ward.name }}">
+                                        {% for bed in ward.beds.all %}
+                                            {% if bed.status == "VACANT" %}
+                                                <option value="{{ bed.id }}">Bed {{ bed.code }} ({{ ward.name }})</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="flex space-x-3 pt-2">
+                            <button type="button"
+                                    @click="showAdmitModal = false"
+                                    class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200">Cancel</button>
+                            <button type="submit"
+                                    class="flex-1 bg-slate-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 shadow-sm">Confirm Admission</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,15 +1,17 @@
+from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from billing.models import Charge
 from core_patients.models import Patient, StaffProfile
-from pharmacy.models import MedicationOrder
+from pharmacy.models import Medication, MedicationOrder
 from triage_queue.models import QueueEntry
-from wards.models import Bed
+from wards.models import Bed, Ward
 
 from .audit_actions import AuditAction
 from .models import AuditLog
@@ -17,6 +19,82 @@ from .utils import log_action
 
 User = get_user_model()
 
+def is_system_admin(user):
+    return user.is_authenticated and user.is_superuser
+
+@user_passes_test(is_system_admin, login_url='/accounts/login/')
+@login_required
+def admin_master_dashboard_view(request):
+    """Unified System Administrator Master Dashboard for hospital-wide CRUD and device management."""
+    tab = request.GET.get("tab", "wards")
+    
+    wards = Ward.objects.prefetch_related("beds").all()
+    beds = Bed.objects.select_related("ward").all()
+    medications = Medication.objects.all().order_by("brand_name")
+    staff_members = StaffProfile.objects.select_related("user").all()
+    
+    # Audit logs for the admin panel tab
+    audit_logs = AuditLog.objects.select_related("actor").filter(
+        actor__isnull=False
+    ).exclude(actor__username="").order_by("-timestamp")[:50]
+
+    context = {
+        "active_tab": tab,
+        "wards": wards,
+        "beds": beds,
+        "medications": medications,
+        "staff_members": staff_members,
+        "audit_logs": audit_logs,
+    }
+    return render(request, "dashboard/admin_master.html", context)
+
+
+@user_passes_test(is_system_admin, login_url='/accounts/login/')
+@login_required
+@require_POST
+def admin_create_ward_action(request):
+    """Admin action to create a new ward."""
+    name = request.POST.get("name", "").strip()
+    bed_day_rate = request.POST.get("bed_day_rate", 1000)
+    
+    if name:
+        ward = Ward.objects.create(name=name, bed_day_rate=bed_day_rate)
+        log_action(request, AuditAction.CREATE, f"System Admin created new Ward: {ward.name}")
+        messages.success(request, f"Ward '{name}' created successfully.")
+    else:
+        messages.error(request, "Ward name cannot be empty.")
+    return redirect("/dashboard/admin-master/?tab=wards")
+
+
+@user_passes_test(is_system_admin, login_url='/accounts/login/')
+@login_required
+@require_POST
+def admin_create_bed_action(request):
+    """Admin action to create a new bed in a ward."""
+    ward_id = request.POST.get("ward_id")
+    code = request.POST.get("code", "").strip()
+    
+    ward = get_object_or_404(Ward, pk=ward_id)
+    if code:
+        bed = Bed.objects.create(ward=ward, code=code, status="VACANT")
+        log_action(request, AuditAction.CREATE, f"System Admin created Bed {bed.code} in {ward.name}")
+        messages.success(request, f"Bed '{code}' added to {ward.name}.")
+    else:
+        messages.error(request, "Bed code cannot be empty.")
+    return redirect("/dashboard/admin-master/?tab=wards")
+
+
+@user_passes_test(is_system_admin, login_url='/accounts/login/')
+@login_required
+@require_POST
+def admin_delete_bed_action(request, bed_id):
+    """Admin action to delete/remove a bed."""
+    bed = get_object_or_404(Bed, pk=bed_id)
+    code = bed.code
+    bed.delete()
+    log_action(request, AuditAction.DELETE, f"System Admin deleted Bed {code}")
+    messages.success(request, f"Bed '{code}' deleted.")
+    return redirect("/dashboard/admin-master/?tab=wards")
 @login_required
 def audit_log_view(request):
     """Comprehensive system audit log showing all signups, database mutations, and user actions."""

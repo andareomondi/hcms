@@ -1,0 +1,224 @@
+<div id="worklist-container" class="space-y-6">
+  <!-- TAB 1: PENDING ORDERS -->
+  <div
+    x-show="activeTab === 'pending'"
+    x-cloak
+    class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+  >
+    <div
+      class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center"
+    >
+      <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+        Incoming Imaging Requests
+      </h3>
+      <span class="text-xs text-slate-500"
+        >Page {{ pending_orders.number }} of {{
+        pending_orders.paginator.num_pages }}</span
+      >
+    </div>
+    <table class="w-full text-left border-collapse">
+      <thead
+        class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider"
+      >
+        <tr>
+          <th class="p-3.5">Ordered At</th>
+          <th class="p-3.5">Patient</th>
+          <th class="p-3.5">Modality &amp; Body Part</th>
+          <th class="p-3.5">Clinical Indication</th>
+          <th class="p-3.5 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 text-sm">
+        {% for order in pending_orders %}
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-3.5 text-xs text-slate-500 font-mono">
+            {{ order.ordered_at|date:"Y-m-d H:i" }}
+          </td>
+          <td class="p-3.5 font-bold text-slate-900">
+            <a
+              href="{% url 'core_patients:detail' order.encounter.patient.id %}"
+              class="text-teal-600 hover:underline"
+            >
+              {{ order.encounter.patient }}
+            </a>
+          </td>
+          <td class="p-3.5 font-semibold text-slate-700">
+            {{ order.modality }}
+            <span class="text-xs font-normal text-slate-500"
+              >({{ order.body_part }})</span
+            >
+          </td>
+          <td class="p-3.5 text-xs text-slate-600">
+            {{ order.clinical_indication }}
+          </td>
+          <td class="p-3.5 text-right">
+            <button
+              @click="showReportModal = true; selectedOrderId = '{{ order.id }}'; selectedPatientName = '{{ order.encounter.patient|escapejs }} ({{ order.modality }})'"
+              class="bg-cyan-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-cyan-700 transition shadow-sm"
+            >
+              Upload Report &rarr;
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="p-8 text-center text-slate-500 italic">
+            No pending radiology scan orders found matching your search.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pending Pagination Controls -->
+    {% if pending_orders.has_other_pages %}
+    <div
+      class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs"
+    >
+      {% if pending_orders.has_previous %}
+      <button
+        hx-get="{% url 'radiology:dashboard' %}?page={{ pending_orders.previous_page_number }}&q={{ query }}"
+        hx-target="#worklist-container"
+        hx-swap="outerHTML"
+        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 font-bold cursor-pointer"
+      >
+        &larr; Previous Page
+      </button>
+      {% else %}
+      <span class="px-3 py-1.5 text-slate-300 border border-transparent"
+        >&larr; Previous Page</span
+      >
+      {% endif %}
+
+      <span class="font-medium text-slate-600"
+        >Showing {{ pending_orders.start_index }} - {{ pending_orders.end_index
+        }} of {{ pending_orders.paginator.count }} items</span
+      >
+
+      {% if pending_orders.has_next %}
+      <button
+        hx-get="{% url 'radiology:dashboard' %}?page={{ pending_orders.next_page_number }}&q={{ query }}"
+        hx-target="#worklist-container"
+        hx-swap="outerHTML"
+        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 font-bold cursor-pointer"
+      >
+        Next Page &rarr;
+      </button>
+      {% else %}
+      <span class="px-3 py-1.5 text-slate-300 border border-transparent"
+        >Next Page &rarr;</span
+      >
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- TAB 2: COMPLETED STUDIES -->
+  <div
+    x-show="activeTab === 'completed'"
+    x-cloak
+    class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+  >
+    <div
+      class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center"
+    >
+      <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+        Recently Reported Studies
+      </h3>
+      <span class="text-xs text-slate-500"
+        >Page {{ completed_studies.number }} of {{
+        completed_studies.paginator.num_pages }}</span
+      >
+    </div>
+    <table class="w-full text-left border-collapse">
+      <thead
+        class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider"
+      >
+        <tr>
+          <th class="p-3.5">Reported At</th>
+          <th class="p-3.5">Patient</th>
+          <th class="p-3.5">Modality</th>
+          <th class="p-3.5">Report Findings</th>
+          <th class="p-3.5 text-right">Scan File</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 text-sm">
+        {% for study in completed_studies %}
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-3.5 text-xs text-slate-500 font-mono">
+            {{ study.reported_at|date:"Y-m-d H:i" }}
+          </td>
+          <td class="p-3.5 font-bold text-slate-900">
+            {{ study.order.encounter.patient }}
+          </td>
+          <td class="p-3.5 font-semibold text-slate-700">
+            {{ study.order.modality }} ({{ study.order.body_part }})
+          </td>
+          <td class="p-3.5 text-xs text-slate-800">{{ study.report }}</td>
+          <td class="p-3.5 text-right">
+            {% if study.file %}
+            <a
+              href="{{ study.file.url }}"
+              target="_blank"
+              class="text-cyan-600 hover:text-cyan-800 text-xs font-bold bg-cyan-50 px-3 py-1.5 rounded-xl transition"
+              >View File &rarr;</a
+            >
+            {% else %}
+            <span class="text-slate-400 text-xs italic">No file</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="p-8 text-center text-slate-500 italic">
+            No completed imaging studies found matching your search.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Completed Pagination Controls -->
+    {% if completed_studies.has_other_pages %}
+    <div
+      class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs"
+    >
+      {% if completed_studies.has_previous %}
+      <button
+        hx-get="{% url 'radiology:dashboard' %}?page={{ completed_studies.previous_page_number }}&q={{ query }}"
+        hx-target="#worklist-container"
+        hx-swap="outerHTML"
+        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 font-bold cursor-pointer"
+      >
+        &larr; Previous Page
+      </button>
+      {% else %}
+      <span class="px-3 py-1.5 text-slate-300 border border-transparent"
+        >&larr; Previous Page</span
+      >
+      {% endif %}
+
+      <span class="font-medium text-slate-600"
+        >Showing {{ completed_studies.start_index }} - {{
+        completed_studies.end_index }} of {{ completed_studies.paginator.count
+        }} items</span
+      >
+
+      {% if completed_studies.has_next %}
+      <button
+        hx-get="{% url 'radiology:dashboard' %}?page={{ completed_studies.next_page_number }}&q={{ query }}"
+        hx-target="#worklist-container"
+        hx-swap="outerHTML"
+        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 font-bold cursor-pointer"
+      >
+        Next Page &rarr;
+      </button>
+      {% else %}
+      <span class="px-3 py-1.5 text-slate-300 border border-transparent"
+        >Next Page &rarr;</span
+      >
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>

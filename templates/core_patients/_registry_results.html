@@ -7,7 +7,7 @@
                 <th class="p-3">Sex</th>
                 <th class="p-3">ID Number</th>
                 <th class="p-3">Status</th>
-                <th class="p-3">Actions</th>
+                <th class="p-3 text-right">Actions</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-200 text-sm">
@@ -19,14 +19,18 @@
                     <td class="p-3">{{ patient.id_number|default:"None" }}</td>
                     <td class="p-3">
                         {% if patient.is_provisional %}
-                            <span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">Provisional</span>
+                            <span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">Provisional</span>
                         {% else %}
-                            <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Verified</span>
+                            <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold">Verified</span>
                         {% endif %}
                     </td>
-                    <td class="p-3">
+                    <td class="p-3 text-right space-x-2">
                         <a href="{% url 'core_patients:detail' patient.id %}"
-                           class="text-teal-600 hover:underline font-semibold">View File</a>
+                           class="text-slate-600 hover:text-slate-900 text-xs font-bold bg-slate-100 px-3 py-1.5 rounded-xl transition">View File</a>
+                        <a href="{% url 'triage_queue:encounter_create' patient.id %}"
+                           class="inline-block text-teal-600 hover:text-teal-800 text-xs font-bold bg-teal-50 px-3 py-1.5 rounded-xl transition shadow-sm">
+                            + Triage &amp; Visit →
+                        </a>
                     </td>
                 </tr>
             {% empty %}

@@ -13,6 +13,30 @@ from .models import Admission, Bed, Ward
 
 
 @login_required
+@require_POST
+def update_bed_status_action(request, bed_id):
+    """Updates a bed's operational status (e.g. from CLEANING to VACANT/Ready)."""
+    bed = get_object_or_404(Bed, pk=bed_id)
+    new_status = request.POST.get("status", "VACANT")
+    
+    valid_statuses = ["VACANT", "CLEANING", "MAINTENANCE", "OCCUPIED"]
+    if new_status in valid_statuses:
+        bed.status = new_status
+        bed.save(update_fields=["status"])
+        
+        log_action(
+            request, 
+            AuditAction.BED_ASSIGNED, 
+            f"Updated status of Bed {bed.code} ({bed.ward.name}) to {new_status}."
+        )
+        messages.success(request, f"Bed {bed.code} is now marked as {new_status}.")
+    else:
+        messages.error(request, "Invalid bed status selected.")
+        
+    return redirect(request.META.get("HTTP_REFERER", "wards:dashboard"))
+
+
+@login_required
 def ward_dashboard_view(request):
     """Ward & bed management dashboard with occupancy metrics, active admissions, and pagination."""
     ward_qs = Ward.objects.prefetch_related("beds", "department").order_by("name")
@@ -88,24 +112,20 @@ def assign_bed_action(request, bed_id):
 @login_required
 @require_POST
 def discharge_patient_action(request, admission_id):
-    """Discharge a patient from an occupied bed and free the bed."""
-    admission = get_object_or_404(
-        Admission.objects.select_related("bed", "encounter__patient"),
-        pk=admission_id,
-        discharged_at__isnull=True,
-    )
+    """Discharges a patient from their ward bed and marks the bed as CLEANING."""
+    admission = get_object_or_404(Admission, pk=admission_id, discharged_at__isnull=True)
     admission.discharged_at = timezone.now()
     admission.save(update_fields=["discharged_at"])
-
+    
+    # Transition bed status to CLEANING
     bed = admission.bed
-    bed.status = "VACANT"
+    bed.status = "CLEANING"
     bed.save(update_fields=["status"])
-
+    
     log_action(
         request,
         AuditAction.PATIENT_DISCHARGED,
-        f"Discharged patient {admission.encounter.patient} from bed {bed.code} (admission #{admission.id}).",
+        f"Discharged patient {admission.encounter.patient} from Bed {bed.code} ({bed.ward.name}). Bed status set to CLEANING."
     )
-
-    messages.success(request, f"Patient discharged from Bed {bed.code}. Bed is now vacant.")
-    return redirect("wards:dashboard")
+    messages.success(request, f"Patient successfully discharged. Bed {bed.code} is now marked for cleaning.")
+    return redirect(request.META.get("HTTP_REFERER", "wards:dashboard"))

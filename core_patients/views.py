@@ -6,8 +6,10 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from billing.models import Charge
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
+from wards.models import Admission
 
 from .models import Allergen, Department, Patient, PatientAllergy, StaffProfile
 
@@ -148,6 +150,7 @@ def patient_register_view(request):
 
 @login_required
 def patient_detail_view(request, patient_id):
+    """Comprehensive patient detail view showing demographics, ward admissions, duration, and financial ledgers."""
     patient = get_object_or_404(Patient.objects.select_related("created_by"), pk=patient_id)
 
     log_action(
@@ -160,6 +163,22 @@ def patient_detail_view(request, patient_id):
         patient=patient, status="ACTIVE"
     ).select_related("allergen", "allergen__allergen_class")
 
+    # Ward Admissions & Bed Allocations
+    admissions = Admission.objects.filter(encounter__patient=patient).select_related("bed__ward", "admitted_by").order_by("-admitted_at")
+
+    # Financial & Billing Data
+    billing_account = getattr(patient, "billing_account", None)
+    charges = Charge.objects.filter(
+        Q(treated_patient=patient) | Q(encounter__patient=patient)
+    ).order_by("-created_at")
+    
+    # Financial Metrics
+    total_billed = sum(c.amount for c in charges)
+    total_paid = sum(c.amount for c in charges.filter(status="PAID"))
+    total_posted = sum(c.amount for c in charges.filter(status="POSTED"))
+    total_provisional = sum(c.amount for c in charges.filter(status="PROVISIONAL"))
+
+    # Clinical Timeline Items
     timeline_items = []
     for encounter in patient.encounters.all():
         for note in encounter.clinical_notes.all():
@@ -174,7 +193,19 @@ def patient_detail_view(request, patient_id):
             })
 
     timeline_items.sort(key=lambda x: x["timestamp"], reverse=True)
-    context = {"patient": patient, "patient_allergies": patient_allergies, "timeline_items": timeline_items}
+
+    context = {
+        "patient": patient,
+        "patient_allergies": patient_allergies,
+        "admissions": admissions,
+        "billing_account": billing_account,
+        "charges": charges,
+        "total_billed": total_billed,
+        "total_paid": total_paid,
+        "total_posted": total_posted,
+        "total_provisional": total_provisional,
+        "timeline_items": timeline_items,
+    }
     return render(request, "core_patients/patient_detail.html", context)
 
 
@@ -201,7 +232,6 @@ def patient_edit_view(request, patient_id):
 def patient_timeline_view(request, patient_id):
     """htmx endpoint for infinite scrolling or refreshing timeline items."""
     patient = get_object_or_404(Patient, pk=patient_id)
-    # Renders timeline fragment
     return render(request, "core_patients/_timeline_items.html", {"patient": patient})
 
 
