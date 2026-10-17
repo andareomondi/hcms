@@ -1,0 +1,52 @@
+{% extends "base.html" %} {% block title %}Doctors on duty - HCMS{% endblock %}
+{% block content %}
+    <div class="space-y-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">Doctors on duty</h1>
+                <p class="text-sm text-slate-500">
+                    Where each doctor is right now. Only these doctors can be assigned new
+                    patients.
+                </p>
+            </div>
+            {% if my_session %}
+                <form action="{% url 'duty:clock_out' %}" method="post">
+                    {% csrf_token %}
+                    <button class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">Clock out</button>
+                </form>
+            {% else %}
+                <a href="{% url 'duty:clock_in' %}"
+                   class="bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Clock in</a>
+            {% endif %}
+        </div>
+        {% if my_session and my_session.room %}
+            <form action="{% url 'duty:change_room' %}"
+                  method="post"
+                  class="bg-white p-4 rounded-2xl border border-slate-200 flex gap-3 items-center">
+                {% csrf_token %}
+                <span class="text-sm">You are in <strong>{{ my_session.room.name }}</strong>. Move to:</span>
+                <select name="room_id" class="border rounded-xl px-3 py-1.5 text-sm bg-white">
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.code }} · {{ room.name }}</option>
+                    {% endfor %}
+                </select>
+                <button class="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Move</button>
+            </form>
+        {% endif %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for doctor in doctors %}
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="font-bold text-slate-900">Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}</p>
+                    <p class="text-xs text-slate-500">{{ doctor.department.name }}</p>
+                    <p class="mt-3 text-sm font-semibold text-teal-700">
+                        {% if doctor.open_sessions and doctor.open_sessions.0.room %} {{
+                            doctor.open_sessions.0.room.code }} · {{
+                                doctor.open_sessions.0.room.name }} {% else %} Room not set {% endif %}
+                    </p>
+                </div>
+            {% empty %}
+                <p class="text-sm text-slate-500 italic col-span-3">No doctors are on duty right now.</p>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

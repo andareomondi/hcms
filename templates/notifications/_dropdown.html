@@ -1,0 +1,23 @@
+<div class="p-3 border-b border-slate-100 flex justify-between items-center">
+    <span class="font-bold text-sm text-slate-900">Notifications</span>
+    <form action="{% url 'notifications:mark_all_read' %}" method="post">
+        {% csrf_token %}
+        <button class="text-xs text-teal-600 font-semibold hover:underline">Mark all read</button>
+    </form>
+</div>
+<ul class="max-h-96 overflow-y-auto divide-y divide-slate-100">
+    {% for n in recent_notifications %}
+        <li class="p-3 hover:bg-slate-50">
+            <form action="{% url 'notifications:mark_read' n.id %}" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ n.link|default:'/' }}" />
+                <button class="text-left w-full">
+                    <p class="text-sm text-slate-800">{{ n.message }}</p>
+                    <p class="text-[10px] text-slate-400 mt-1">{{ n.created_at|timesince }} ago</p>
+                </button>
+            </form>
+        </li>
+    {% empty %}
+        <li class="p-6 text-center text-sm text-slate-500">You're all caught up.</li>
+    {% endfor %}
+</ul>

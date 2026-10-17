@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import views
 
 app_name = "core_patients"
@@ -13,4 +14,7 @@ urlpatterns = [
     path("<uuid:patient_id>/timeline/", views.patient_timeline_view, name="timeline"),
     path("<uuid:patient_id>/allergies/", views.allergy_panel_view, name="allergy_panel"),
     path("<uuid:patient_id>/confirm-identity/", views.confirm_identity_view, name="confirm_identity"),
+    path("staff/requests/", views.staff_requests_view, name="staff_requests"),
+    path("staff/requests/<uuid:request_id>/approve/", views.staff_request_approve_view, name="staff_request_approve"),
+    path("staff/requests/<uuid:request_id>/decline/", views.staff_request_decline_view, name="staff_request_decline"),
 ]

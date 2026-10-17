@@ -1,84 +1,195 @@
-from django.contrib.auth import login
-from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from billing.models import Charge
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
+from dashboard.views import is_system_admin
 from wards.models import Admission
 
-from .models import Allergen, Department, Patient, PatientAllergy, StaffProfile
+from .models import (
+    Allergen,
+    Department,
+    Patient,
+    PatientAllergy,
+    StaffProfile,
+    StaffRegistrationRequest,
+)
 
 
 def staff_register_view(request):
-    """Handles staff account creation, linking a User to a StaffProfile."""
-    if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        email = request.POST.get("email", "").strip()
-        password = request.POST.get("password", "").strip()
-        first_name = request.POST.get("first_name", "").strip()
-        last_name = request.POST.get("last_name", "").strip()
-        employee_id = request.POST.get("employee_id", "").strip()
-        role = request.POST.get("role", "RECEPTION")
-        department_id = request.POST.get("department_id")
+    """
+    PUBLIC. Submits a staff account request for administrator review.
+    Creates no User and does not log anyone in.
+    """
+    departments = Department.objects.all()
+    role_choices = [r for r in StaffProfile.ROLE_CHOICES
+                    if r[0] in StaffRegistrationRequest.REQUESTABLE_ROLES]
+    context = {"departments": departments, "roles": role_choices}
 
-        # Basic validation
-        if not username or not password or not employee_id:
-            departments = Department.objects.all()
-            return render(request, "core_patients/staff_register.html", {
-                "error": "Username, password, and employee ID are required.",
-                "departments": departments,
-                "roles": StaffProfile.ROLE_CHOICES
-            })
+    if request.method == "GET":
+        return render(request, "core_patients/staff_register.html", context)
 
-        if User.objects.filter(username=username).exists():
-            departments = Department.objects.all()
-            return render(request, "core_patients/staff_register.html", {
-                "error": "Username already exists.",
-                "departments": departments,
-                "roles": StaffProfile.ROLE_CHOICES
-            })
+    fields = {k: request.POST.get(k, "").strip()
+              for k in ["username", "email", "first_name", "last_name",
+                        "employee_id", "role", "department_id"]}
+    password = request.POST.get("password", "")
+    error = None
 
-        # Create User (automatically hashed with Argon2id via Django settings)
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name
+    if not all([fields["username"], fields["email"], fields["employee_id"],
+                fields["role"], fields["department_id"], password]):
+        error = "All fields are required."
+    elif fields["role"] not in StaffRegistrationRequest.REQUESTABLE_ROLES:
+        error = "That role cannot be requested. Contact an administrator."
+    elif User.objects.filter(username=fields["username"]).exists() or \
+            StaffRegistrationRequest.objects.filter(username=fields["username"], status="PENDING").exists():
+        error = "That username is taken or already awaiting approval."
+    elif StaffProfile.objects.filter(employee_id=fields["employee_id"]).exists() or \
+            StaffRegistrationRequest.objects.filter(employee_id=fields["employee_id"], status="PENDING").exists():
+        error = "That employee ID is already in use or awaiting approval."
+    else:
+        department = Department.objects.filter(pk=fields["department_id"]).first() \
+            if _is_uuid(fields["department_id"]) else None
+        if department is None:
+            error = "Select a valid department."
+        else:
+            try:
+                validate_password(password)
+            except ValidationError as exc:
+                error = " ".join(exc.messages)
+
+    if error:
+        context.update({"error": error, "form_values": fields})
+        return render(request, "core_patients/staff_register.html", context)
+
+    try:
+        with transaction.atomic():
+            StaffRegistrationRequest.objects.create(
+                username=fields["username"],
+                email=fields["email"],
+                first_name=fields["first_name"],
+                last_name=fields["last_name"],
+                employee_id=fields["employee_id"],
+                requested_role=fields["role"],
+                department=department,
+                password_hash=make_password(password),
+                submitted_ip=request.META.get("REMOTE_ADDR"),
+            )
+    except IntegrityError:
+        context.update({"error": "A request with these details was just submitted. Try different values."})
+        return render(request, "core_patients/staff_register.html", context)
+
+    return render(request, "core_patients/staff_register_submitted.html",
+                  {"username": fields["username"]})
+
+
+def _is_uuid(value):
+    import uuid
+    try:
+        uuid.UUID(str(value))
+        return True
+    except ValueError:
+        return False
+
+@login_required
+@user_passes_test(is_system_admin, login_url="/accounts/login/")
+def staff_requests_view(request):
+    """Administrator queue of staff account requests, filterable by status."""
+    status = request.GET.get("status", "PENDING")
+    if status not in ("PENDING", "APPROVED", "DECLINED"):
+        status = "PENDING"
+    requests_qs = StaffRegistrationRequest.objects.select_related("department").filter(status=status)[:200]
+    counts = {
+        s: StaffRegistrationRequest.objects.filter(status=s).count()
+        for s in ("PENDING", "APPROVED", "DECLINED")
+    }
+    return render(request, "core_patients/staff_requests.html", {
+        "requests": requests_qs, "status": status, "counts": counts,
+    })
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url="/accounts/login/")
+@require_POST
+def staff_request_approve_view(request, request_id):
+    with transaction.atomic():
+        # Lock the request row so two administrators cannot approve it twice
+        req = StaffRegistrationRequest.objects.select_for_update().get(pk=request_id)
+        if req.status != "PENDING":
+            messages.error(request, "This request has already been reviewed.")
+            return redirect("core_patients:staff_requests")
+
+        user = User(
+            username=req.username,
+            email=req.email,
+            first_name=req.first_name,
+            last_name=req.last_name,
+            is_active=True,
         )
+        user.password = req.password_hash  # already hashed at submission time
+        user.save()
 
-        # Create StaffProfile
-        department = get_object_or_404(Department, pk=department_id)
         StaffProfile.objects.create(
             user=user,
-            employee_id=employee_id,
-            role=role,
-            department=department,
-            is_active=True
+            employee_id=req.employee_id,
+            role=req.requested_role,
+            department=req.department,
+            is_active=True,
         )
 
-        log_action(
-            request,
-            AuditAction.STAFF_REGISTERED,
-            f"Registered staff account '{username}' ({role}, {department}).",
-            actor=user,
-        )
+        req.status = "APPROVED"
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+        req.created_user = user
+        req.password_hash = ""  # no longer needed
+        req.save()
 
-        # Log the user in immediately after registration
-        login(request, user)
-        return redirect("triage_queue:board")
+        log_action(request, AuditAction.STAFF_REQUEST_APPROVED,
+                   f"Approved staff request '{req.username}' as {req.get_requested_role_display()} "
+                   f"in {req.department}.")
 
-    departments = Department.objects.all()
-    context = {
-        "departments": departments,
-        "roles": StaffProfile.ROLE_CHOICES
-    }
-    return render(request, "core_patients/staff_register.html", context)
+    messages.success(request, f"Approved {req.username}. They can now log in.")
+    return redirect("core_patients:staff_requests")
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url="/accounts/login/")
+@require_POST
+def staff_request_decline_view(request, request_id):
+    reason = request.POST.get("reason", "").strip()
+    if not reason:
+        messages.error(request, "A reason is required to decline a request.")
+        return redirect("core_patients:staff_requests")
+
+    with transaction.atomic():
+        req = StaffRegistrationRequest.objects.select_for_update().get(pk=request_id)
+        if req.status != "PENDING":
+            messages.error(request, "This request has already been reviewed.")
+            return redirect("core_patients:staff_requests")
+
+        req.status = "DECLINED"
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+        req.decline_reason = reason
+        req.password_hash = ""
+        req.save()
+
+        log_action(request, AuditAction.STAFF_REQUEST_DECLINED,
+                   f"Declined staff request '{req.username}': {reason}")
+
+    messages.success(request, f"Declined {req.username}.")
+    return redirect("core_patients:staff_requests")
+
 
 
 @login_required

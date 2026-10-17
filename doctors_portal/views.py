@@ -1,12 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from billing.models import BillingAccount, Charge
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
+from duty.services import current_session
+from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder
 from triage_queue.models import Encounter, QueueEntry
 from wards.models import Admission, Bed, Ward
@@ -207,42 +210,47 @@ def doctor_dashboard_view(request):
 def call_next_patient_action(request):
     """Calls the highest priority waiting patient into consultation."""
     doctor_profile = request.staff_profile
+    session = current_session(doctor_profile)
+    if session is None:
+        messages.error(request, "Clock in before calling patients.")
+        return redirect("doctors_portal:dashboard")
 
     current = QueueEntry.objects.filter(
-        assigned_doctor=doctor_profile,
-        status="IN_CONSULTATION"
+        assigned_doctor=doctor_profile, status="IN_CONSULTATION"
     ).select_related("encounter__patient").first()
 
     if current:
         current.status = "DISCHARGED"
         current.save(update_fields=["status"])
-        if current.encounter:
-            current.encounter.status = "CLOSED"
-            current.encounter.save(update_fields=["status"])
-            log_action(
-                request,
-                AuditAction.CONSULTATION_COMPLETED,
-                f"Completed consultation for encounter #{current.encounter_id} "
-                f"(patient {current.encounter.patient}).",
-            )
+        current.encounter.status = "CLOSED"
+        current.encounter.save(update_fields=["status"])
+        log_action(request, AuditAction.CONSULTATION_COMPLETED,
+                   f"Completed consultation for encounter #{current.encounter_id} "
+                   f"(patient {current.encounter.patient}).")
 
     next_entry = QueueEntry.objects.filter(
-        assigned_doctor=doctor_profile,
-        status="WAITING"
+        assigned_doctor=doctor_profile, status="WAITING"
     ).select_related("encounter__patient").order_by("-priority", "joined_at").first()
 
     if next_entry:
         next_entry.status = "IN_CONSULTATION"
         next_entry.save(update_fields=["status"])
-        log_action(
-            request,
-            AuditAction.QUEUE_NEXT_PATIENT_CALLED,
-            f"Called encounter #{next_entry.encounter_id} "
-            f"(patient {next_entry.encounter.patient}, priority {next_entry.priority}).",
+        patient = next_entry.encounter.patient
+        room_label = session.room.name if session.room else "a room"
+        notify_on_duty(
+            role="RECEPTION",
+            kind="DOCTOR_CALLED_PATIENT",
+            message=f"Dr. {doctor_profile.user.get_full_name() or doctor_profile.user.username} "
+                    f"called {patient.last_name}, {patient.first_name} to {room_label}.",
+            link=reverse("triage_queue:board"),
         )
+        log_action(request, AuditAction.QUEUE_NEXT_PATIENT_CALLED,
+                   f"Called encounter #{next_entry.encounter_id} "
+                   f"(patient {patient}, priority {next_entry.priority}).")
+    else:
+        messages.info(request, "No patients are waiting for you.")
 
     return redirect("doctors_portal:dashboard")
-
 @login_required
 @user_passes_test(is_physician)
 @require_POST

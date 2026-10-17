@@ -1,4 +1,5 @@
 import uuid
+
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
@@ -166,3 +167,48 @@ class AllergyObservation(models.Model):
     observed_at = models.DateTimeField()
     recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     recorded_at = models.DateTimeField(auto_now_add=True)
+
+class StaffRegistrationRequest(models.Model):
+    """
+    A pending request to create a staff account. No User exists until an
+    administrator approves it. The password is stored only as a hash and the
+    hash is cleared once the request is reviewed.
+    """
+    STATUS = [("PENDING", "Pending"), ("APPROVED", "Approved"), ("DECLINED", "Declined")]
+
+    # ADMIN is deliberately absent. Administrator accounts are created by a superuser only.
+    REQUESTABLE_ROLES = ["RECEPTION", "TRIAGE_NURSE", "DOCTOR", "NURSE",
+                         "PHARMACIST", "RADIOLOGIST", "BILLING"]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    username = models.CharField(max_length=150)
+    email = models.EmailField()
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    employee_id = models.CharField(max_length=50)
+    requested_role = models.CharField(max_length=20, choices=StaffProfile.ROLE_CHOICES)
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="staff_requests")
+    password_hash = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="PENDING", db_index=True)
+    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    submitted_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name="+")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    decline_reason = models.TextField(blank=True)
+    created_user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                        null=True, blank=True, related_name="staff_request")
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        constraints = [
+            # Only one pending request may claim a username or employee ID at a time
+            models.UniqueConstraint(fields=["username"], condition=Q(status="PENDING"),
+                                    name="one_pending_request_per_username"),
+            models.UniqueConstraint(fields=["employee_id"], condition=Q(status="PENDING"),
+                                    name="one_pending_request_per_employee_id"),
+        ]
+
+    def __str__(self):
+        return f"{self.username} ({self.get_requested_role_display()}, {self.status})"

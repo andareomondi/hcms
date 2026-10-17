@@ -1,6 +1,6 @@
 from django.contrib import admin
-from django.urls import path, include
 from django.contrib.auth import views as auth_views
+from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -15,6 +15,8 @@ urlpatterns = [
     path("radiology/", include("radiology.urls")),
     path("wards/", include("wards.urls")),
     path("billing/", include("billing.urls")),
+    path("duty/", include("duty.urls")),
+    path("notifications/", include("notifications.urls")),
     
     # Root dashboard app
     path("", include("dashboard.urls")),

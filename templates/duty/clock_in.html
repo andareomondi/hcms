@@ -1,0 +1,31 @@
+{% extends "base.html" %} {% block title %}Clock in - HCMS{% endblock %} {% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Start your shift</h1>
+        <p class="text-sm text-slate-500">
+            Choose the room you will work in. Only clocked-in doctors can receive
+            patients.
+        </p>
+    </div>
+    <form action="{% url 'duty:clock_in_submit' %}"
+          method="post"
+          class="space-y-4">
+        {% csrf_token %}
+        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Room</label>
+        <select name="room_id"
+                class="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                {% if profile.role == "DOCTOR" %}required{% endif %}>
+            <option value="">-- No room (non-clinical) --</option>
+            {% for room in rooms %}
+                <option value="{{ room.id }}">
+                    {{ room.code }} · {{ room.name }}{% if room.floor %} (Floor {{
+                        room.floor }}){% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="" disabled>No free rooms in your department</option>
+                    {% endfor %}
+                </select>
+                <button class="w-full bg-teal-600 text-white py-2.5 rounded-xl font-semibold hover:bg-teal-700">Clock in</button>
+            </form>
+        </div>
+    {% endblock %}
