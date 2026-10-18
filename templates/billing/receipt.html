@@ -1,0 +1,54 @@
+{% extends "base.html" %} {% block title %}Receipt {{ payment.receipt_number }}{% endblock %} {% block content %}
+<style>
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    main {
+      padding: 0 !important;
+    }
+  }
+</style>
+<div class="max-w-md mx-auto bg-white p-8 rounded-2xl border border-slate-200 space-y-5 text-sm">
+    <div class="no-print flex justify-between">
+        <a href="{% url 'billing:encounter' encounter.id %}"
+           class="text-xs text-slate-500 hover:underline">← Bill</a>
+        <button onclick="window.print()"
+                class="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Print</button>
+    </div>
+    <div class="text-center border-b pb-3">
+        <p class="text-xs uppercase tracking-widest text-slate-500">Payment receipt</p>
+        <p class="text-lg font-extrabold">{{ payment.receipt_number }}</p>
+        <p class="text-xs text-slate-500">{{ payment.recorded_at|date:"Y-m-d H:i" }}</p>
+    </div>
+    <table class="w-full text-sm">
+        <tr>
+            <td class="py-1 text-slate-500">Patient</td>
+            <td class="text-right font-semibold">{{ encounter.patient.last_name }}, {{ encounter.patient.first_name }}</td>
+        </tr>
+        <tr>
+            <td class="py-1 text-slate-500">Method</td>
+            <td class="text-right font-semibold">{{ payment.get_method_display }}</td>
+        </tr>
+        {% if payment.reference %}
+            <tr>
+                <td class="py-1 text-slate-500">Reference</td>
+                <td class="text-right font-mono">{{ payment.reference }}</td>
+            </tr>
+        {% endif %}
+        <tr>
+            <td class="py-1 text-slate-500">Amount paid</td>
+            <td class="text-right font-extrabold">KES {{ payment.amount|floatformat:2 }}</td>
+        </tr>
+        <tr>
+            <td class="py-1 text-slate-500">Balance after this payment</td>
+            <td class="text-right font-semibold">KES {{ tally.outstanding|floatformat:2 }}</td>
+        </tr>
+    </table>
+    <p class="text-xs text-slate-500 border-t pt-3">
+        Taken by {{
+            payment.recorded_by.user.get_full_name|default:payment.recorded_by.user.username
+        }}.
+    </p>
+</div>
+{% endblock %}

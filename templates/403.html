@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+    <div class="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center space-y-3 mt-10">
+        <p class="text-4xl">🔒</p>
+        <h1 class="text-xl font-bold text-slate-900">Not permitted for your role</h1>
+        <p class="text-sm text-slate-600">
+            Your role does not include this page. See the
+            <a href="{% url 'dashboard:role_guide' %}"
+               class="text-teal-600 font-semibold hover:underline">role guide</a>
+            for what each role can use.
+        </p>
+        <a href="{% url 'dashboard:overview' %}"
+           class="inline-block bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">Back to overview</a>
+    </div>
+{% endblock %}

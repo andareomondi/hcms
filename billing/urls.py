@@ -12,4 +12,6 @@ urlpatterns = [
     path("bills-ready/", views.bills_ready_view, name="bills_ready"),
     path("encounter/<uuid:encounter_id>/", views.encounter_bill_view, name="encounter"),
     path("encounter/<uuid:encounter_id>/post/", views.post_encounter_bill_action, name="post_encounter"),
+    path("encounter/<uuid:encounter_id>/pay/", views.take_payment_action, name="take_payment"),
+    path("payments/<uuid:payment_id>/receipt/", views.payment_receipt_view, name="payment_receipt"),
 ]

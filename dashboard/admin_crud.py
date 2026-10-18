@@ -47,6 +47,7 @@ MANAGED = {
     "wards.Admission": {},
     "billing.BillingAccount": {},
     "billing.Charge": {"editable": False, "deletable": False},
+    "billing.Payment": {"editable": False, "deletable": False},
     "duty.Room": {},
     "duty.DutySession": {"editable": False, "deletable": False},
     "notifications.Notification": {"editable": False, "deletable": True},

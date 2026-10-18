@@ -28,3 +28,8 @@ class ImagingStudy(models.Model):
     report = models.TextField(blank=True)
     reported_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     reported_at = models.DateTimeField(null=True, blank=True)
+    IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+    @property
+    def is_image(self):
+        return bool(self.file) and self.file.name.lower().endswith(self.IMAGE_EXTENSIONS)

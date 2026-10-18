@@ -1,0 +1,35 @@
+{% extends "base.html" %} {% block title %}Role guide - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Who can do what</h1>
+        <p class="text-sm text-slate-500">
+            Each role sees only the pages it needs. If a menu item is missing from
+            your sidebar, your role does not include it.
+        </p>
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+        <strong>Radiology pages</strong> (worklist, scan images, reports) are open
+        only to radiologists and doctors. Other roles see a "not permitted" page if
+        they try.
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for row in guide %}
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+                <p class="font-bold text-slate-900">
+                    {{ row.role }}
+                    <span class="text-xs font-normal text-slate-500">· {{ row.who }}</span>
+                </p>
+                <p class="text-sm">
+                    <span class="font-semibold text-teal-700">Does:</span> {{ row.does }}
+                </p>
+                <p class="text-sm">
+                    <span class="font-semibold text-blue-700">Sees:</span> {{ row.sees }}
+                </p>
+                <p class="text-sm">
+                    <span class="font-semibold text-red-700">Cannot:</span> {{ row.cannot }}
+                </p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

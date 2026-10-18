@@ -23,6 +23,8 @@
             <div class="flex items-center space-x-2">
                 <a href="{% url 'core_patients:registry' %}"
                    class="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 transition">← Back to Patients</a>
+                <a href="{% url 'core_patients:record' patient.id %}"
+                   class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800">Open full record &amp; print</a>
             </div>
         </div>
         <!-- Financial & Operational Metrics Grid -->

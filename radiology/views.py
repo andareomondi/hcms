@@ -1,15 +1,18 @@
 import hashlib
+import os
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
+from hospital_system.permissions import Cap, requires
 
 from .models import ImagingStudy, ScanOrder
 
@@ -17,6 +20,16 @@ from .models import ImagingStudy, ScanOrder
 def is_radiologist(user):
     return hasattr(user, "staff_profile") and user.staff_profile.role in ("RADIOLOGIST", "DOCTOR", "ADMIN")
 
+
+@requires(Cap.VIEW_RADIOLOGY)
+def study_file_view(request, study_id):
+    """Serves a scan file only to radiology-authorised users. Every view is logged."""
+    study = get_object_or_404(ImagingStudy.objects.select_related("order__encounter__patient"), pk=study_id)
+    if not study.file:
+        raise Http404("No file attached.")
+    log_action(request, AuditAction.RADIOLOGY_REPORT_SAVED,
+               f"Viewed scan file for {study.order.encounter.patient} ({study.order.modality}).")
+    return FileResponse(study.file.open("rb"), filename=os.path.basename(study.file.name))
 
 @login_required
 @user_passes_test(is_radiologist)

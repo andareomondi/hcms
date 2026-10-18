@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import BillingAccount, Charge
+from .models import BillingAccount, Charge, Payment
 
 ZERO = Decimal("0.00")
 CENT = Decimal("0.01")
@@ -72,14 +72,25 @@ def void_or_reverse(charge, staff):
         )
     return None
 
+def patient_totals(patient):
+    charges = Charge.objects.filter(treated_patient=patient).exclude(status="VOIDED")
+    paid = Payment.objects.filter(encounter__patient=patient).aggregate(t=Sum("amount"))["t"] or ZERO
+    total = charges.aggregate(t=Sum("amount"))["t"] or ZERO
+    return {"total": total, "paid": paid, "outstanding": total - paid}
+
 
 def encounter_tally(encounter):
-    qs = Charge.objects.filter(encounter=encounter).exclude(status="VOIDED")
-    provisional = qs.filter(status="PROVISIONAL").aggregate(t=Sum("amount"))["t"] or ZERO
-    posted = qs.filter(status="POSTED").aggregate(t=Sum("amount"))["t"] or ZERO
-    return {"provisional": provisional, "posted": posted, "total": provisional + posted}
-
-
+    charges = Charge.objects.filter(encounter=encounter).exclude(status="VOIDED")
+    provisional = charges.filter(status="PROVISIONAL").aggregate(t=Sum("amount"))["t"] or ZERO
+    posted = charges.filter(status__in=["POSTED", "PAID"]).aggregate(t=Sum("amount"))["t"] or ZERO
+    paid = Payment.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    return {
+        "provisional": provisional,
+        "posted": posted,
+        "paid": paid,
+        "total": provisional + posted,
+        "outstanding": provisional + posted - paid,
+    }
 def post_encounter_charges(encounter, staff):
     """Billing officers post provisional charges. Nobody posts a charge they created (spec 10.5)."""
     return (Charge.objects.filter(encounter=encounter, status="PROVISIONAL")

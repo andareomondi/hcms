@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from billing.models import Charge
 from core_patients.models import Patient, StaffProfile
+from hospital_system.permissions import caps_for
 from pharmacy.models import Medication, MedicationOrder
 from triage_queue.models import QueueEntry
 from wards.models import Bed, Ward
@@ -21,6 +22,49 @@ User = get_user_model()
 
 def is_system_admin(user):
     return user.is_authenticated and user.is_superuser
+
+ROLE_GUIDE = [
+    {"role": "Reception", "who": "Front desk and registry",
+     "does": "Registers patients, searches the registry, opens visits, runs the triage board, reassigns waiting patients.",
+     "sees": "Patient identity, visit dates and types, ward board, who is on duty.",
+     "cannot": "Clinical notes, vitals, scans, prescriptions, payments."},
+    {"role": "Triage nurse", "who": "Triage",
+     "does": "Records vitals and chief complaint, sets priority, assigns an on-duty doctor.",
+     "sees": "Triage and clinical data for the patient.",
+     "cannot": "Finance, payments, consultations."},
+    {"role": "Doctor", "who": "Physicians",
+     "does": "Calls patients, writes notes, prescribes, requests scans, admits to a ward, completes consultations.",
+     "sees": "Full clinical record, pharmacy records, radiology images and reports.",
+     "cannot": "Finance, payments, receipts, reception and triage work."},
+    {"role": "Nurse", "who": "Ward and injection nurses",
+     "does": "Gives injections and IV medicines, runs the nurse worklist, manages ward bed status.",
+     "sees": "Clinical and pharmacy records.",
+     "cannot": "Finance, reports, consultations."},
+    {"role": "Pharmacist", "who": "Pharmacy",
+     "does": "Manages formulary and stock, dispenses oral medicines.",
+     "sees": "Medication orders and dispensing.",
+     "cannot": "Clinical notes, scans, finance."},
+    {"role": "Radiologist", "who": "Radiology department",
+     "does": "Uploads scan images, writes reports.",
+     "sees": "Scan orders, images, reports, the patient's record for the visit.",
+     "cannot": "Finance, consultations, reception work."},
+    {"role": "Billing officer", "who": "Finance",
+     "does": "Posts charges, takes payments (manual or M-Pesa), prints receipts.",
+     "sees": "Charges, payments, demographics, visit dates.",
+     "cannot": "Clinical notes, vitals, scan images, prescriptions."},
+    {"role": "Administrator", "who": "System administrator (superuser)",
+     "does": "Approves staff accounts, manages data and rooms, reviews the audit log.",
+     "sees": "Everything, read-only, including finance and clinical records.",
+     "cannot": "Consultations, reception, triage, pharmacy, nursing or payment actions. The admin account is for management, not for doing clinical work."},
+]
+
+
+@login_required
+def role_guide_view(request):
+    return render(request, "dashboard/role_guide.html", {
+        "guide": ROLE_GUIDE,
+        "caps": caps_for(request.user),
+    })
 
 @user_passes_test(is_system_admin, login_url='/accounts/login/')
 @login_required

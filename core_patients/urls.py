@@ -17,4 +17,5 @@ urlpatterns = [
     path("staff/requests/", views.staff_requests_view, name="staff_requests"),
     path("staff/requests/<uuid:request_id>/approve/", views.staff_request_approve_view, name="staff_request_approve"),
     path("staff/requests/<uuid:request_id>/decline/", views.staff_request_decline_view, name="staff_request_decline"),
+    path("<uuid:patient_id>/record/", views.patient_record_view, name="record"),
 ]

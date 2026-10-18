@@ -1,74 +1,191 @@
-{% extends "base.html" %} {% block title %}Bill - {{ encounter.patient.last_name }}{% endblock %} {% block content %}
-<div class="space-y-6">
-    <div class="flex justify-between items-center">
-        <div>
-            <a href="{% url 'billing:bills_ready' %}"
-               class="text-xs text-slate-500 hover:underline">← Bills ready</a>
-            <h1 class="text-2xl font-bold text-slate-900">
-                {{ encounter.patient.last_name }}, {{ encounter.patient.first_name }}
-            </h1>
-            <p class="text-sm text-slate-500">
-                {{ encounter.get_encounter_type_display }} · {{
-                    encounter.get_status_display }}{% if encounter.closed_at %} · closed {{
-                    encounter.closed_at|date:"Y-m-d H:i" }}{% endif %}
-                    </p>
-                    </div>
-                    {% if encounter.status == "CLOSED" %}
-                        <form action="{% url 'billing:post_encounter' encounter.id %}"
-                              method="post">
-                            {% csrf_token %}
-                            <button class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700">
-                                Post all provisional charges
-                            </button>
-                        </form>
-                    {% endif %}
-                    </div>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
-                            <p class="text-xs uppercase font-bold text-slate-500">Provisional</p>
-                            <p class="text-2xl font-extrabold text-amber-600">KES {{ tally.provisional|floatformat:2 }}</p>
+{% extends "base.html" %}
+{% block title %}Bill - {{ encounter.patient.last_name }}{% endblock %}
+{% block content %}
+    <div class="space-y-6" x-data="{ showPay: false, method: 'MANUAL' }">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <a href="{% url 'billing:bills_ready' %}"
+                   class="text-xs text-slate-500 hover:underline">← Bills</a>
+                <h1 class="text-2xl font-bold text-slate-900">{{ encounter.patient.last_name }}, {{ encounter.patient.first_name }}</h1>
+                <p class="text-sm text-slate-500">{{ encounter.get_encounter_type_display }} · {{ encounter.get_status_display }}{% if encounter.closed_at %} · closed {{ encounter.closed_at|date:"Y-m-d H:i" }}{% endif %}</p>
+            </div>
+            <div class="flex gap-2">
+                {% if tally.outstanding > 0 and "TAKE_PAYMENT" in caps %}
+                    <button @click="showPay = true"
+                            class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700">Take payment</button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                <p class="text-xs uppercase font-bold text-slate-500">Provisional</p>
+                <p class="text-xl font-extrabold text-amber-600">KES {{ tally.provisional|floatformat:2 }}</p>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                <p class="text-xs uppercase font-bold text-slate-500">Billed</p>
+                <p class="text-xl font-extrabold text-slate-900">KES {{ tally.total|floatformat:2 }}</p>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                <p class="text-xs uppercase font-bold text-slate-500">Paid</p>
+                <p class="text-xl font-extrabold text-emerald-600">KES {{ tally.paid|floatformat:2 }}</p>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                <p class="text-xs uppercase font-bold text-slate-500">Outstanding</p>
+                <p class="text-xl font-extrabold text-red-600">KES {{ tally.outstanding|floatformat:2 }}</p>
+            </div>
+        </div>
+        <!-- Charges -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50/50 border-b">
+                <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Charges</h2>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5">Date</th>
+                        <th class="p-3.5">Type</th>
+                        <th class="p-3.5">Description</th>
+                        <th class="p-3.5">Qty</th>
+                        <th class="p-3.5">Unit</th>
+                        <th class="p-3.5">Amount</th>
+                        <th class="p-3.5">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                    {% for c in charges %}
+                        <tr class="{% if c.status == 'VOIDED' %}opacity-50 line-through{% endif %}">
+                            <td class="p-3.5 text-xs font-mono">{{ c.created_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs font-semibold">{{ c.get_source_type_display }}</td>
+                            <td class="p-3.5 text-xs">{{ c.description }}</td>
+                            <td class="p-3.5">{{ c.quantity|floatformat:"-2" }}</td>
+                            <td class="p-3.5">{{ c.unit_price|floatformat:2 }}</td>
+                            <td class="p-3.5 font-bold">{{ c.amount|floatformat:2 }}</td>
+                            <td class="p-3.5 text-xs font-bold">{{ c.get_status_display }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-slate-500 italic">No charges on this visit.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- Payments: who took each one -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50/50 border-b">
+                <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Payments</h2>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5">Receipt</th>
+                        <th class="p-3.5">When</th>
+                        <th class="p-3.5">Method</th>
+                        <th class="p-3.5">Reference</th>
+                        <th class="p-3.5">Amount</th>
+                        <th class="p-3.5">Taken by</th>
+                        <th class="p-3.5 text-right">Receipt</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                    {% for p in payments %}
+                        <tr>
+                            <td class="p-3.5 font-mono text-xs">{{ p.receipt_number }}</td>
+                            <td class="p-3.5 text-xs">{{ p.recorded_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs font-semibold">{{ p.get_method_display }}</td>
+                            <td class="p-3.5 text-xs font-mono">{{ p.reference|default:"—" }}</td>
+                            <td class="p-3.5 font-bold">KES {{ p.amount|floatformat:2 }}</td>
+                            <td class="p-3.5 text-xs">{{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}</td>
+                            <td class="p-3.5 text-right"><a href="{% url 'billing:payment_receipt' p.id %}"
+   class="text-teal-600 text-xs font-bold">Print</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-slate-500 italic">No payments yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- Take payment modal -->
+        <div x-show="showPay"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5"
+                 @click.away="showPay = false">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h3 class="font-bold text-slate-900 text-lg">Take payment</h3>
+                    <button @click="showPay = false"
+                            class="text-slate-400 hover:text-slate-600 font-bold">×</button>
+                </div>
+                <form action="{% url 'billing:take_payment' encounter.id %}"
+                      method="post"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-slate-600 mb-2">How is the patient paying?</p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="border rounded-xl p-3 cursor-pointer"
+                                   :class="method === 'MANUAL' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">
+                                <input type="radio"
+                                       name="method"
+                                       value="MANUAL"
+                                       x-model="method"
+                                       class="mr-2">Manual (cash / other)
+                            </label>
+                            <label class="border rounded-xl p-3 cursor-pointer"
+                                   :class="method === 'MPESA' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">
+                                <input type="radio"
+                                       name="method"
+                                       value="MPESA"
+                                       x-model="method"
+                                       class="mr-2">M-Pesa
+                            </label>
                         </div>
-                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
-                            <p class="text-xs uppercase font-bold text-slate-500">Posted</p>
-                            <p class="text-2xl font-extrabold text-blue-600">KES {{ tally.posted|floatformat:2 }}</p>
-                        </div>
-                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
-                            <p class="text-xs uppercase font-bold text-slate-500">Total</p>
-                            <p class="text-2xl font-extrabold text-slate-900">KES {{ tally.total|floatformat:2 }}</p>
-                        </div>
                     </div>
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                                <tr>
-                                    <th class="p-3.5">Date</th>
-                                    <th class="p-3.5">Type</th>
-                                    <th class="p-3.5">Description</th>
-                                    <th class="p-3.5">Qty</th>
-                                    <th class="p-3.5">Unit (KES)</th>
-                                    <th class="p-3.5">Amount (KES)</th>
-                                    <th class="p-3.5">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100 text-sm">
-                                {% for c in charges %}
-                                    <tr class="hover:bg-slate-50 {% if c.status == 'VOIDED' %}opacity-50 line-through{% endif %}">
-                                        <td class="p-3.5 text-xs font-mono">{{ c.created_at|date:"Y-m-d H:i" }}</td>
-                                        <td class="p-3.5 text-xs font-semibold">{{ c.get_source_type_display }}</td>
-                                        <td class="p-3.5 text-xs">{{ c.description }}</td>
-                                        <td class="p-3.5">{{ c.quantity|floatformat:"-2" }}</td>
-                                        <td class="p-3.5">{{ c.unit_price|floatformat:2 }}</td>
-                                        <td class="p-3.5 font-bold">{{ c.amount|floatformat:2 }}</td>
-                                        <td class="p-3.5 text-xs font-bold">{{ c.get_status_display }}</td>
-                                    </tr>
-                                {% empty %}
-                                    <tr>
-                                        <td colspan="7"
-                                            class="p-8 text-center text-slate-500 italic">No charges for this visit.</td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Amount (KES) *</label>
+                        <input type="number"
+                               step="0.01"
+                               min="0.01"
+                               max="{{ tally.outstanding }}"
+                               name="amount"
+                               value="{{ tally.outstanding }}"
+                               required
+                               class="w-full border rounded-xl px-3 py-2 text-sm">
+                        <p class="text-xs text-slate-500 mt-1">Outstanding: KES {{ tally.outstanding|floatformat:2 }}</p>
                     </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                            <span x-show="method === 'MPESA'">M-Pesa transaction code *</span>
+                            <span x-show="method === 'MANUAL'">Note (optional)</span>
+                        </label>
+                        <input type="text"
+                               name="reference"
+                               :required="method === 'MPESA'"
+                               :placeholder="method === 'MPESA' ? 'e.g. QKL7H3P2X9' : 'e.g. Cash, receipt book no.'"
+                               class="w-full border rounded-xl px-3 py-2 text-sm uppercase">
                     </div>
-                {% endblock %}
+                    <div x-show="method === 'MPESA'">
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Payer phone (optional)</label>
+                        <input type="tel"
+                               name="payer_phone"
+                               class="w-full border rounded-xl px-3 py-2 text-sm">
+                    </div>
+                    <label class="flex items-start gap-2 text-xs text-slate-700">
+                        <input type="checkbox" required class="mt-0.5">
+                        <span>I have received this payment and it matches the amount above.</span>
+                    </label>
+                    <div class="flex gap-3 pt-1">
+                        <button type="button"
+                                @click="showPay = false"
+                                class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700">Record payment</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

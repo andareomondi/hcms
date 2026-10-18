@@ -5,16 +5,19 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from billing.models import Charge
+from billing import services as billing_services
+from billing.models import Charge, Payment
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from dashboard.views import is_system_admin
+from hospital_system.permissions import Cap, caps_for, requires
+from radiology.models import ImagingStudy
 from wards.models import Admission
 
 from .models import (
@@ -27,6 +30,63 @@ from .models import (
 )
 from .ratelimit import too_many_attempts
 
+
+@requires(Cap.PATIENT_FILE)
+def patient_record_view(request, patient_id):
+    """
+    Full printable record. Each section appears only if the viewer's role allows it.
+    """
+    patient = get_object_or_404(Patient.objects.select_related("created_by__user"), pk=patient_id)
+    caps = caps_for(request.user)
+    show = {
+        "clinical": Cap.VIEW_CLINICAL in caps,
+        "pharmacy": Cap.VIEW_PHARMACY in caps,
+        "radiology": Cap.VIEW_RADIOLOGY in caps,
+        "finance": Cap.VIEW_FINANCE in caps,
+    }
+
+    log_action(request, AuditAction.PATIENT_VIEWED,
+               f"Opened full record of patient #{patient.id}: {patient}.")
+
+    visits = []
+    for enc in patient.encounters.order_by("opened_at").select_related("opened_by__user"):
+        item = {"enc": enc}
+        item["admissions"] = enc.admissions.select_related("bed__ward", "admitted_by__user") \
+            .order_by("admitted_at")
+        if show["clinical"]:
+            item["vitals"] = enc.vitals.select_related("recorded_by__user").order_by("recorded_at")
+            item["notes"] = enc.clinical_notes.select_related("author__user") \
+                .prefetch_related("addenda__author__user").order_by("created_at")
+        if show["pharmacy"]:
+            item["orders"] = enc.medication_orders.select_related("medication", "ordered_by__user") \
+                .prefetch_related("administrations__administered_by__user",
+                                  "dispensations__dispensed_by__user") \
+                .order_by("ordered_at")
+        if show["radiology"]:
+            item["scans"] = enc.scan_orders.select_related("ordered_by__user") \
+                .prefetch_related(Prefetch(
+                    "studies",
+                    queryset=ImagingStudy.objects.select_related("uploaded_by__user", "reported_by__user")
+                    .order_by("uploaded_at"))) \
+                .order_by("ordered_at")
+        if show["finance"]:
+            item["charges"] = enc.charges.select_related("created_by__user").order_by("created_at")
+            item["payments"] = Payment.objects.filter(encounter=enc) \
+                .select_related("recorded_by__user").order_by("recorded_at")
+            item["tally"] = billing_services.encounter_tally(enc)
+        visits.append(item)
+
+    allergies = patient.allergies.filter(status="ACTIVE").select_related("allergen")
+    context = {
+        "patient": patient,
+        "allergies": allergies,
+        "visits": visits,
+        "show": show,
+        "printed_by": request.user.get_full_name() or request.user.username,
+        "printed_at": timezone.now(),
+        "finance_totals": billing_services.patient_totals(patient) if show["finance"] else None,
+    }
+    return render(request, "core_patients/patient_record.html", context)
 
 def staff_register_view(request):
     """

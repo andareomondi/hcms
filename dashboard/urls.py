@@ -17,4 +17,5 @@ urlpatterns = [
     path("admin-master/data/<str:app_label>/<str:model_name>/new/", admin_crud.crud_create_view, name="crud_create"),
     path("admin-master/data/<str:app_label>/<str:model_name>/<str:pk>/edit/", admin_crud.crud_edit_view, name="crud_edit"),
     path("admin-master/data/<str:app_label>/<str:model_name>/<str:pk>/delete/", admin_crud.crud_delete_view, name="crud_delete"),
+    path("role-guide/", views.role_guide_view, name="role_guide"),
 ]
