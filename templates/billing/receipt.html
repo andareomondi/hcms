@@ -46,9 +46,7 @@
         </tr>
     </table>
     <p class="text-xs text-slate-500 border-t pt-3">
-        Taken by {{
-            payment.recorded_by.user.get_full_name|default:payment.recorded_by.user.username
-        }}.
+        Taken by {{ payment.recorded_by.user.get_full_name|default:payment.recorded_by.user.username }}.
     </p>
 </div>
 {% endblock %}

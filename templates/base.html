@@ -3,153 +3,217 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}HCMS - Hospital Clinical Management System{% endblock %}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://unpkg.com/htmx.org@1.9.10"></script>
         <script defer
                 src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-        <style>[x-cloak]{display:none !important}</style>
+        <style>
+            [x-cloak] { display: none !important; }
+            @media print {
+                .no-print { display: none !important; }
+                body { background: #fff !important; }
+                main { padding: 0 !important; max-width: none !important; }
+            }
+        </style>
     </head>
-    <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col antialiased">
-        <!-- Top Header Bar -->
-        <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 sticky top-0 z-30">
-            <div class="flex items-center space-x-3">
-                <div class="bg-teal-600 text-white p-2 rounded-xl flex items-center justify-center font-bold text-lg shadow-sm">🏥</div>
-                <div>
-                    <span class="font-bold text-base text-slate-900 tracking-tight">HCMS</span>
-                    <p class="text-xs text-slate-500 leading-none">Hospital clinical system</p>
-                </div>
-            </div>
-            <!-- Header Right Utilities -->
-            <div class="flex items-center space-x-4">
-                <div class="hidden md:flex items-center space-x-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-200">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Trusted device</span>
-                </div>
-                <div class="relative" x-data="{ open: false }">
-                    <button type="button"
-                            @click="open = !open"
-                            class="relative text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100">
-                        🔔
-                        {% include "notifications/_badge.html" with count=unread_notification_count %}
-                    </button>
-                    <div x-show="open"
-                         @click.away="open = false"
-                         x-cloak
-                         style="display:none"
-                         class="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-                        <div id="notif-panel"
-                             hx-get="{% url 'notifications:dropdown' %}"
-                             hx-trigger="load, every 15s"
-                             hx-swap="innerHTML"></div>
+    <body class="bg-slate-50 text-slate-900 min-h-screen antialiased"
+          x-data="{ menuOpen: false }"
+          @keydown.escape.window="menuOpen = false"
+          @resize.window="if (window.innerWidth >= 1024) menuOpen = false"
+          x-effect="document.body.classList.toggle('overflow-hidden', menuOpen)">
+        {% if request.user.is_authenticated %}
+            <!-- Header: always on top, always visible -->
+            <header class="no-print sticky top-0 z-40 bg-white border-b border-slate-200 h-16">
+                <div class="h-full flex items-center justify-between px-4 md:px-6">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <!-- Menu button: small screens only -->
+                        <button type="button"
+                                @click="menuOpen = !menuOpen"
+                                :aria-expanded="menuOpen.toString()"
+                                aria-controls="main-menu"
+                                aria-label="Toggle menu"
+                                class="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl text-slate-700 hover:bg-slate-100">
+                            <svg x-show="!menuOpen"
+                                 xmlns="http://www.w3.org/2000/svg"
+                                 class="h-6 w-6"
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                                 stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                            <svg x-show="menuOpen"
+                                 x-cloak
+                                 xmlns="http://www.w3.org/2000/svg"
+                                 class="h-6 w-6"
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                                 stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <div class="bg-teal-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm shrink-0">🏥</div>
+                        <div class="min-w-0">
+                            <span class="block font-bold text-base text-slate-900 tracking-tight leading-tight">HCMS</span>
+                            <span class="hidden sm:block text-xs text-slate-500 leading-tight truncate">Hospital clinical system</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 md:gap-4">
+                        <div class="hidden md:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-200">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span>Trusted device</span>
+                        </div>
+                        <!-- Notifications -->
+                        <div class="relative" x-data="{ open: false }">
+                            <button type="button"
+                                    @click="open = !open"
+                                    aria-label="Notifications"
+                                    class="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-500 hover:text-slate-800 hover:bg-slate-100">
+                                🔔
+                                {% include "notifications/_badge.html" with count=unread_notification_count %}
+                            </button>
+                            <div x-show="open"
+                                 x-cloak
+                                 @click.away="open = false"
+                                 class="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                                <div id="notif-panel"
+                                     hx-get="{% url 'notifications:dropdown' %}"
+                                     hx-trigger="load, every 15s"
+                                     hx-swap="innerHTML"></div>
+                            </div>
+                        </div>
+                        <a href="{% url 'dashboard:profile' %}"
+                           class="flex items-center gap-2.5 pl-2 md:pl-3 border-l border-slate-200 hover:opacity-80">
+                            <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                                {% if request.user.first_name %}{{ request.user.first_name|slice:":1" }}{% else %}U{% endif %}
+                            </div>
+                            <div class="hidden sm:block text-left">
+                                <p class="text-xs font-bold text-slate-800 leading-tight">{{ request.user.get_full_name|default:request.user.username }}</p>
+                                <p class="text-[10px] text-slate-500 leading-tight">{% if request.user.is_superuser %}System Administrator{% elif request.user.staff_profile %}{{ request.user.staff_profile.get_role_display }}{% else %}Staff{% endif %}</p>
+                            </div>
+                        </a>
                     </div>
                 </div>
-                <a href="{% url 'dashboard:profile' %}"
-                   class="flex items-center space-x-2.5 pl-3 border-l border-slate-200 hover:opacity-80 transition">
-                    <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold text-xs">
-                        {% if request.user.first_name %}{{ request.user.first_name|slice:":1" }}{% else %}U{% endif %}
+            </header>
+            <!-- Backdrop: small screens, below the header so the menu button still works -->
+            <div x-show="menuOpen"
+                 x-cloak
+                 @click="menuOpen = false"
+                 class="no-print fixed inset-x-0 bottom-0 top-16 z-30 bg-slate-900/40 lg:hidden"></div>
+        {% endif %}
+        <div class="flex min-h-[calc(100vh-4rem)]">
+            {% if request.user.is_authenticated %}
+                <!-- Sidebar: slide-in drawer on small screens, fixed column on large screens -->
+                <aside id="main-menu"
+                       class="no-print fixed top-16 bottom-0 left-0 z-30 w-72 max-w-[85vw] bg-white border-r border-slate-200 flex flex-col justify-between p-4 overflow-y-auto transform transition-transform duration-200 ease-out lg:sticky lg:top-16 lg:z-auto lg:w-64 lg:max-w-none lg:translate-x-0 lg:h-[calc(100vh-4rem)] lg:shrink-0"
+                       :class="menuOpen ? 'translate-x-0' : '-translate-x-full'">
+                    <div class="space-y-6">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">Workspace</p>
+                            <nav class="space-y-1 text-sm font-medium" @click="menuOpen = false">
+                                <a href="{% url 'dashboard:overview' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.url_name == 'overview' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                    <span>📊</span><span>Overview</span>
+                                </a>
+                                {% if "TRIAGE_BOARD" in caps %}
+                                    <a href="{% url 'triage_queue:board' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'triage_queue' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>⚡</span><span>Triage board</span>
+                                    </a>
+                                {% endif %}
+                                {% if "PATIENT_SEARCH" in caps %}
+                                    <a href="{% url 'core_patients:search' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'core_patients' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>👥</span><span>Patients</span>
+                                    </a>
+                                {% endif %}
+                                {% if "CLINICAL_ACTIONS" in caps %}
+                                    <a href="{% url 'doctors_portal:dashboard' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'doctors_portal' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>🩺</span><span>My consultations</span>
+                                    </a>
+                                {% endif %}
+                                {% if "VIEW_RADIOLOGY" in caps %}
+                                    <a href="{% url 'radiology:dashboard' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'radiology' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>🩻</span><span>Radiology</span>
+                                    </a>
+                                {% endif %}
+                                {% if "VIEW_PHARMACY" in caps %}
+                                    <a href="{% url 'pharmacy:dashboard' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'pharmacy' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>💊</span><span>Pharmacy</span>
+                                    </a>
+                                {% endif %}
+                                {% if "NURSE_ADMINISTER" in caps %}
+                                    <a href="{% url 'pharmacy:nurse_worklist' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.url_name == 'nurse_worklist' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>💉</span><span>Nurse worklist</span>
+                                    </a>
+                                {% endif %}
+                                {% if "WARD_VIEW" in caps %}
+                                    <a href="{% url 'wards:dashboard' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'wards' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>🛏️</span><span>Wards &amp; beds</span>
+                                    </a>
+                                {% endif %}
+                                {% if "VIEW_FINANCE" in caps %}
+                                    <a href="{% url 'billing:bills_ready' %}"
+                                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'billing' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                        <span>💳</span><span>Billing</span>
+                                    </a>
+                                {% endif %}
+                                <a href="{% url 'duty:board' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.namespace == 'duty' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                    <span>🕒</span><span>Doctors on duty</span>
+                                </a>
+                                <a href="{% url 'dashboard:role_guide' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 {% if request.resolver_match.url_name == 'role_guide' %}bg-teal-50 text-teal-700 font-semibold{% endif %}">
+                                    <span>📘</span><span>Role guide</span>
+                                </a>
+                            </nav>
+                        </div>
+                        {% if request.user.is_superuser %}
+                            <div class="pt-3 border-t border-slate-200 space-y-1"
+                                 @click="menuOpen = false">
+                                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">Administration</p>
+                                <a href="{% url 'dashboard:admin_master' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100">
+                                    <span>🛡️</span><span>Admin panel</span>
+                                </a>
+                                <a href="{% url 'dashboard:crud_index' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100">
+                                    <span>🗂️</span><span>Data manager</span>
+                                </a>
+                                <a href="{% url 'core_patients:staff_requests' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100">
+                                    <span>📝</span><span>Staff requests</span>
+                                </a>
+                                <a href="{% url 'dashboard:audit_logs' %}"
+                                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100">
+                                    <span>📜</span><span>Audit log</span>
+                                </a>
+                            </div>
+                        {% endif %}
                     </div>
-                    <div class="text-left hidden sm:block">
-                        <p class="text-xs font-bold text-slate-800 leading-tight">{{ request.user.get_full_name|default:request.user.username }}</p>
-                        <p class="text-[10px] text-slate-500 leading-tight">{% if request.user.staff_profile %}{{ request.user.staff_profile.get_role_display }}{% else %}Staff{% endif %}</p>
+                    <div class="mt-6 bg-slate-900 text-white p-4 rounded-2xl space-y-2">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                            <span>🛡️</span><span>System protected</span>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-relaxed">All patient access is logged and monitored.</p>
+                        <a href="{% url 'dashboard:audit_logs' %}"
+                           class="text-xs text-teal-300 hover:underline block font-semibold pt-1">View audit log →</a>
                     </div>
-                </a>
-            </div>
-        </header>
-        <div class="flex flex-grow">
-            <!-- Sidebar Workspace Navigation -->
-            <aside class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between hidden lg:flex p-4 sticky top-16 h-[calc(100vh-4rem)]">
-                <div class="space-y-6">
-                    <div>
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-2">Workspace</p>
-                        <nav class="space-y-1 text-sm font-medium">
-                            <a href="{% url 'dashboard:overview' %}"
-                               class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                <span>📊</span><span>Overview</span></a>
-                            {% if "TRIAGE_BOARD" in caps %}
-                                <a href="{% url 'triage_queue:board' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>⚡</span><span>Triage board</span></a>
-                            {% endif %}
-                            {% if "PATIENT_SEARCH" in caps %}
-                                <a href="{% url 'core_patients:search' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>👥</span><span>Patients</span></a>
-                            {% endif %}
-                            {% if "CLINICAL_ACTIONS" in caps %}
-                                <a href="{% url 'doctors_portal:dashboard' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>🩺</span><span>My consultations</span></a>
-                            {% endif %}
-                            {% if "VIEW_RADIOLOGY" in caps %}
-                                <a href="{% url 'radiology:dashboard' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>🩻</span><span>Radiology</span></a>
-                            {% endif %}
-                            {% if "VIEW_PHARMACY" in caps %}
-                                <a href="{% url 'pharmacy:dashboard' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>💊</span><span>Pharmacy</span></a>
-                            {% endif %}
-                            {% if "NURSE_ADMINISTER" in caps %}
-                                <a href="{% url 'pharmacy:nurse_worklist' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>💉</span><span>Nurse worklist</span></a>
-                            {% endif %}
-                            {% if "WARD_VIEW" in caps %}
-                                <a href="{% url 'wards:dashboard' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>🛏️</span><span>Wards &amp; beds</span></a>
-                            {% endif %}
-                            {% if "VIEW_FINANCE" in caps %}
-                                <a href="{% url 'billing:bills_ready' %}"
-                                   class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                    <span>💳</span><span>Billing</span></a>
-                            {% endif %}
-                            <a href="{% url 'duty:board' %}"
-                               class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                <span>🕒</span><span>Doctors on duty</span></a>
-                            <a href="{% url 'dashboard:role_guide' %}"
-                               class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                <span>📘</span><span>Role guide</span></a>
-                            {% if request.user.is_superuser %}
-                                <div class="pt-3 mt-3 border-t border-slate-200 space-y-1">
-                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3">Administration</p>
-                                    <a href="{% url 'dashboard:admin_master' %}"
-                                       class="flex items-center space-x-3 px-3 py-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100">
-                                        <span>🛡️</span><span>Admin panel</span></a>
-                                    <a href="{% url 'dashboard:crud_index' %}"
-                                       class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                        <span>🗂️</span><span>Data manager</span></a>
-                                    <a href="{% url 'core_patients:staff_requests' %}"
-                                       class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                        <span>📝</span><span>Staff requests</span></a>
-                                    <a href="{% url 'dashboard:audit_logs' %}"
-                                       class="flex items-center space-x-3 px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100">
-                                        <span>📜</span><span>Audit log</span></a>
-                                </div>
-                            {% endif %}
-                        </nav>
-                    </div>
-                </div>
-                <!-- Bottom System Protection Widget -->
-                <div class="bg-slate-900 text-white p-4 rounded-2xl space-y-2 shadow-sm">
-                    <div class="flex items-center space-x-2 text-xs font-semibold text-emerald-400">
-                        <span>🛡️</span>
-                        <span>System protected</span>
-                    </div>
-                    <p class="text-[11px] text-slate-300 leading-relaxed">All patient access is logged and monitored.</p>
-                    <a href="{% url 'dashboard:audit_logs' %}"
-                       class="text-xs text-teal-300 hover:underline block font-semibold pt-1">View audit log →</a>
-                </div>
-            </aside>
-            <!-- Main Content Canvas -->
-            <main class="flex-grow p-6 lg:p-8 max-w-7xl mx-auto w-full">
-                <!-- for any messages -->
+                </aside>
+            {% endif %}
+            <main class="flex-1 min-w-0 w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
                 {% if messages %}
-                    <div class="space-y-2 mb-4">
+                    <div class="no-print space-y-2 mb-4">
                         {% for message in messages %}
-                            <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200 {% elif message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200 {% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
+                            <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% elif message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200{% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
                                 {{ message }}
                             </div>
                         {% endfor %}

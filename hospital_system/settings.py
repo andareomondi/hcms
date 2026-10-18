@@ -14,7 +14,13 @@ SECRET_KEY = 'django-insecure-08gll%m@k(=dbp&o6f9mp9^un34kgu1*ogr851u(*z@7f9t00r
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+# ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]", "proton-absurd-portside.ngrok-free.dev"]
+CSRF_TRUSTED_ORIGINS = [
+    "https://proton-absurd-portside.ngrok-free.dev",
+]
+
+LOGIN_URL = "/accounts/login/"
 
 # Application definition
 INSTALLED_APPS = [
@@ -55,6 +61,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
+    "hospital_system.middleware_htmx.HtmxSessionExpiredMiddleware",
 ]
 
 ROOT_URLCONF = "hospital_system.urls"
