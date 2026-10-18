@@ -78,7 +78,7 @@
         </div>
         <!-- TAB 1: ADMISSIONS, ENCOUNTERS & RADIOLOGY -->
         <div x-show="activeTab === 'overview'" class="space-y-6">
-            <!-- Clinical Encounters Record -->
+            <!-- Clinical Encounters & Visits (with triage data) -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Clinical Encounters &amp; Visits</h3>
@@ -86,34 +86,43 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
                         <tr>
-                            <th class="p-3.5">Encounter ID</th>
+                            <th class="p-3.5">Opened</th>
                             <th class="p-3.5">Type</th>
-                            <th class="p-3.5">Opened Timestamp</th>
+                            <th class="p-3.5">Chief complaint</th>
+                            <th class="p-3.5">Latest vitals</th>
                             <th class="p-3.5">Status</th>
                             <th class="p-3.5 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for encounter in patient.encounters.all|dictsortreversed:"opened_at" %}
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 font-mono text-xs font-bold text-slate-900">#{{ encounter.id|slugify|slice:":8" }}</td>
-                                <td class="p-3.5 font-semibold text-slate-700">{{ encounter.get_encounter_type_display }}</td>
-                                <td class="p-3.5 text-xs text-slate-600 font-mono">{{ encounter.opened_at|date:"Y-m-d H:i" }}</td>
-                                <td class="p-3.5">
-                                    {% if encounter.status == "CLOSED" %}
-                                        <span class="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">Closed</span>
-                                    {% else %}
-                                        <span class="bg-teal-100 text-teal-800 text-xs px-2.5 py-1 rounded-full font-bold">Open</span>
-                                    {% endif %}
-                                </td>
-                                <td class="p-3.5 text-right">
-                                    <a href="{% url 'doctors_portal:consultation_room' encounter.id %}"
-                                       class="text-teal-600 hover:text-teal-800 text-xs font-bold bg-teal-50 px-3 py-1.5 rounded-xl transition">Open Room →</a>
-                                </td>
-                            </tr>
+                        {% for row in encounter_summaries %}
+                            {% with enc=row.encounter v=row.latest_vitals %}
+                                <tr class="hover:bg-slate-50 align-top">
+                                    <td class="p-3.5 text-xs font-mono">{{ enc.opened_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="p-3.5 font-semibold">{{ enc.get_encounter_type_display }}</td>
+                                    <td class="p-3.5 text-xs">{{ enc.chief_complaint|default:"—" }}</td>
+                                    <td class="p-3.5 text-xs">
+                                        {% if v %}
+                                            T {{ v.temperature_c|default:"—" }}°C · P {{ v.pulse_bpm|default:"—" }} ·
+                                            BP {% if v.systolic_mmhg %}{{ v.systolic_mmhg }}/{{ v.diastolic_mmhg }}{% else %}—{% endif %} ·
+                                            SpO2 {{ v.spo2_percent|default:"—" }}% · Wt {{ v.weight_kg|default:"—" }} kg
+                                            {% if v.notes %}<div class="text-slate-500 mt-1">{{ v.notes }}</div>{% endif %}
+                                        {% else %}
+                                            <span class="text-slate-400 italic">None recorded</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="p-3.5">
+                                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if enc.status == 'CLOSED' %}bg-slate-100 text-slate-700{% else %}bg-teal-100 text-teal-800{% endif %}">{{ enc.status|title }}</span>
+                                    </td>
+                                    <td class="p-3.5 text-right">
+                                        <a href="{% url 'doctors_portal:consultation_room' enc.id %}"
+                                           class="text-teal-600 text-xs font-bold bg-teal-50 px-3 py-1.5 rounded-xl">Open record →</a>
+                                    </td>
+                                </tr>
+                            {% endwith %}
                         {% empty %}
                             <tr>
-                                <td colspan="5"
+                                <td colspan="6"
                                     class="p-8 text-center text-slate-500 italic">No clinical encounters recorded for this patient.</td>
                             </tr>
                         {% endfor %}

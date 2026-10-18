@@ -1,0 +1,39 @@
+{% extends "base.html" %} {% block title %}Bills ready - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Bills ready for payment</h1>
+        <p class="text-sm text-slate-500">Closed visits with charges still provisional.</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3.5">Patient</th>
+                    <th class="p-3.5">Closed</th>
+                    <th class="p-3.5">Provisional</th>
+                    <th class="p-3.5">Posted</th>
+                    <th class="p-3.5 text-right">Open</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for enc, tally in rows %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3.5 font-bold">{{ enc.patient.last_name }}, {{ enc.patient.first_name }}</td>
+                        <td class="p-3.5 text-xs font-mono">{{ enc.closed_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3.5 font-semibold text-amber-700">KES {{ tally.provisional|floatformat:2 }}</td>
+                        <td class="p-3.5">KES {{ tally.posted|floatformat:2 }}</td>
+                        <td class="p-3.5 text-right">
+                            <a href="{% url 'billing:encounter' enc.id %}"
+                               class="text-teal-600 text-xs font-bold">Review →</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="p-8 text-center text-slate-500 italic">Nothing waiting for billing.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

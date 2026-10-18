@@ -1,6 +1,8 @@
 import uuid
+
 from django.db import models
 from django.db.models import Q
+
 from core_patients.models import Department, StaffProfile
 from triage_queue.models import Encounter
 
@@ -31,6 +33,7 @@ class Admission(models.Model):
     admitted_at = models.DateTimeField()
     discharged_at = models.DateTimeField(null=True, blank=True)
     admitted_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    planned_days = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
         constraints = [

@@ -2,13 +2,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from triage_queue.models import Encounter
+from triage_queue.services import FlowError
 
+from . import services as ward_services
 from .models import Admission, Bed, Ward
 
 
@@ -85,47 +86,32 @@ def ward_dashboard_view(request):
 @login_required
 @require_POST
 def assign_bed_action(request, bed_id):
-    bed = get_object_or_404(Bed, pk=bed_id)
-    encounter_id = request.POST.get("encounter_id")
-    encounter = get_object_or_404(Encounter.objects.select_related("patient"), pk=encounter_id)
+    encounter = get_object_or_404(Encounter.objects.select_related("patient"), pk=request.POST.get("encounter_id"))
+    try:
+        days = int(request.POST.get("planned_days", "1"))
+        ward_services.admit(encounter=encounter, bed_id=bed_id, planned_days=days,
+                            staff=request.staff_profile)
+    except (ValueError, FlowError) as exc:
+        messages.error(request, str(exc) or "Enter a valid stay length.")
+        return redirect("wards:dashboard")
 
-    Admission.objects.create(
-        encounter=encounter,
-        bed=bed,
-        admitted_at=timezone.now(),
-        admitted_by=getattr(request, "staff_profile", None)
-    )
-
-    bed.status = "OCCUPIED"
-    bed.save(update_fields=["status"])
-
-    log_action(
-        request,
-        AuditAction.BED_ASSIGNED,
-        f"Assigned bed {bed.code} to patient {encounter.patient} (encounter #{encounter.id}).",
-    )
-
-    messages.success(request, f"Successfully admitted {encounter.patient.first_name} to Bed {bed.code}.")
+    log_action(request, AuditAction.WARD_ADMISSION_CREATED,
+               f"Admitted {encounter.patient} for {days} day(s).")
+    messages.success(request, f"{encounter.patient.first_name} admitted for {days} day(s).")
     return redirect("wards:dashboard")
 
 
 @login_required
 @require_POST
 def discharge_patient_action(request, admission_id):
-    """Discharges a patient from their ward bed and marks the bed as CLEANING."""
     admission = get_object_or_404(Admission, pk=admission_id, discharged_at__isnull=True)
-    admission.discharged_at = timezone.now()
-    admission.save(update_fields=["discharged_at"])
-    
-    # Transition bed status to CLEANING
-    bed = admission.bed
-    bed.status = "CLEANING"
-    bed.save(update_fields=["status"])
-    
-    log_action(
-        request,
-        AuditAction.PATIENT_DISCHARGED,
-        f"Discharged patient {admission.encounter.patient} from Bed {bed.code} ({bed.ward.name}). Bed status set to CLEANING."
-    )
-    messages.success(request, f"Patient successfully discharged. Bed {bed.code} is now marked for cleaning.")
-    return redirect(request.META.get("HTTP_REFERER", "wards:dashboard"))
+    try:
+        _, actual = ward_services.discharge(admission=admission, staff=request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("wards:dashboard")
+
+    log_action(request, AuditAction.PATIENT_DISCHARGED,
+               f"Discharged {admission.encounter.patient} after {actual} day(s).")
+    messages.success(request, f"Discharged after {actual} day(s). The bill is ready for billing.")
+    return redirect("wards:dashboard")

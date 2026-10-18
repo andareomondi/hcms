@@ -8,7 +8,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from billing.models import BillingAccount, Charge
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 
@@ -105,27 +104,8 @@ def save_radiology_report(request, order_id):
         scan_order.status = "REPORTED"
         scan_order.save(update_fields=["status"])
         
-        # Automatically generate provisional billing charge
-        patient = scan_order.encounter.patient
-        billing_account, _ = BillingAccount.objects.get_or_create(owner=patient)
-        scan_fee = 1500.00  # Standard imaging fee
-        
-        Charge.objects.create(
-            encounter=scan_order.encounter,
-            treated_patient=patient,
-            billing_account=billing_account,
-            source_type="SCAN_ORDER",
-            source_id=scan_order.id,
-            description=f"Imaging Scan ({scan_order.modality} - {scan_order.body_part}): {report_text[:50]}",
-            quantity=1,
-            unit_price=scan_fee,
-            amount=scan_fee,
-            status="PROVISIONAL",
-            created_by=request.user.staff_profile
-        )
-        
-        log_action(request, AuditAction.RADIOLOGY_REPORT_SAVED, f"Saved radiology report for patient {patient} ({scan_order.modality}).")
-        messages.success(request, f"Radiology report successfully saved for {patient}.")
+        log_action(request, AuditAction.RADIOLOGY_REPORT_SAVED, f"Saved radiology report for patient ({scan_order.modality}).")
+        messages.success(request, "Radiology report successfully saved for patient.")
     else:
         messages.error(request, "Report findings are required.")
         

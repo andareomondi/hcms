@@ -21,25 +21,27 @@
                     </p>
                 </div>
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center flex-wrap gap-3">
                 <button @click="showPrescribeModal = true"
-                        class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition shadow-sm">+ Prescribe Medication</button>
+                        class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-sm">+ Prescribe</button>
                 <button @click="showRadiologyModal = true"
-                        class="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-700 transition shadow-sm">+ Request Imaging</button>
+                        class="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-700 shadow-sm">+ Request scan</button>
                 {% if active_admission %}
                     <button disabled
-                            title="Patient is already admitted to a ward"
-                            class="bg-slate-300 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold cursor-not-allowed shadow-sm">+ Already Admitted</button>
+                            class="bg-slate-300 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold cursor-not-allowed">Already admitted</button>
                 {% else %}
                     <button @click="showAdmitModal = true"
-                            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm">+ Admit to Ward</button>
+                            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 shadow-sm">+ Admit to ward</button>
                 {% endif %}
                 <form action="{% url 'doctors_portal:complete' encounter.id %}"
                       method="post"
-                      class="inline">
+                      class="inline"
+                      onsubmit="return confirm('Complete this consultation?{% if active_admission %} The patient stays admitted.{% else %} The visit will close and the bill will go to billing.{% endif %}');">
                     {% csrf_token %}
                     <button type="submit"
-                            class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition shadow-sm">Complete & Discharge</button>
+                            class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-sm">
+                        {% if active_admission %}Complete consultation (stay continues){% else %}Complete &amp; close visit{% endif %}
+                    </button>
                 </form>
             </div>
         </div>
@@ -69,6 +71,52 @@
              class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left: Form to Add Note -->
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-1 space-y-4">
+                {% if allergies %}
+                    <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm">
+                        <p class="font-bold text-red-800 text-xs uppercase tracking-wider mb-1">Allergies</p>
+                        {% for a in allergies %}<span class="inline-block bg-white border border-red-200 text-red-800 text-xs font-bold px-2 py-0.5 rounded-full mr-1">{{ a.allergen.display_name }} ({{ a.get_severity_display }})</span>{% endfor %}
+                    </div>
+                {% endif %}
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Triage</p>
+                    {% if encounter.chief_complaint %}
+                        <p class="text-sm"><span class="font-bold text-slate-700">Chief complaint:</span> {{ encounter.chief_complaint }}</p>
+                    {% endif %}
+                    {% if latest_vitals %}
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <span class="text-slate-500">Temp</span>
+                                <br>
+                                <strong>{{ latest_vitals.temperature_c|default:"—" }} °C</strong>
+                            </div>
+                            <div>
+                                <span class="text-slate-500">Pulse</span>
+                                <br>
+                                <strong>{{ latest_vitals.pulse_bpm|default:"—" }} bpm</strong>
+                            </div>
+                            <div><span class="text-slate-500">BP</span><br><strong>{% if latest_vitals.systolic_mmhg %}{{ latest_vitals.systolic_mmhg }}/{{ latest_vitals.diastolic_mmhg }}{% else %}—{% endif %}</strong></div>
+                            <div>
+                                <span class="text-slate-500">Resp.</span>
+                                <br>
+                                <strong>{{ latest_vitals.respiratory_rate|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span class="text-slate-500">SpO2</span>
+                                <br>
+                                <strong>{{ latest_vitals.spo2_percent|default:"—" }}%</strong>
+                            </div>
+                            <div>
+                                <span class="text-slate-500">Weight</span>
+                                <br>
+                                <strong>{{ latest_vitals.weight_kg|default:"—" }} kg</strong>
+                            </div>
+                        </div>
+                        {% if latest_vitals.notes %}<p class="text-xs text-slate-600"><span class="font-bold">Triage notes:</span> {{ latest_vitals.notes }}</p>{% endif %}
+                        <p class="text-[10px] text-slate-400">Recorded {{ latest_vitals.recorded_at|date:"Y-m-d H:i" }} by {{ latest_vitals.recorded_by.user.get_full_name|default:latest_vitals.recorded_by.user.username }}</p>
+                    {% else %}
+                        <p class="text-xs text-slate-500 italic">No vitals recorded.</p>
+                    {% endif %}
+                </div>
                 <h2 class="font-bold text-slate-900 text-base">Record Consultation Note</h2>
                 <form action="{% url 'doctors_portal:add_note' encounter.id %}"
                       method="post"
@@ -144,6 +192,12 @@
                     {% endfor %}
                 </div>
             </div>
+        </div>
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Bill so far</p>
+            <div class="flex justify-between text-sm"><span>Provisional</span><strong>KES {{ tally.provisional|floatformat:2 }}</strong></div>
+            <div class="flex justify-between text-sm"><span>Posted</span><strong>KES {{ tally.posted|floatformat:2 }}</strong></div>
+            <div class="flex justify-between text-base border-t pt-2"><span class="font-bold">Total</span><strong>KES {{ tally.total|floatformat:2 }}</strong></div>
         </div>
         <!-- TAB 2: PRESCRIBED MEDICATIONS -->
         <div x-show="activeTab === 'prescriptions'"
@@ -224,8 +278,9 @@
                             <select name="route"
                                     class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
                                 <option value="ORAL">Oral</option>
-                                <option value="IV">Intravenous (IV)</option>
-                                <option value="IM">Intramuscular (IM)</option>
+                                <option value="IM">Intramuscular (nurse gives)</option>
+                                <option value="IV">Intravenous (nurse gives)</option>
+                                <option value="SC">Subcutaneous (nurse gives)</option>
                                 <option value="TOPICAL">Topical</option>
                             </select>
                         </div>
@@ -278,11 +333,19 @@
                         <select name="imaging_type"
                                 required
                                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white">
-                            <option value="X_RAY">X-Ray</option>
-                            <option value="CT_SCAN">CT Scan</option>
+                            <option value="X-Ray">X-Ray</option>
+                            <option value="CT Scan">CT Scan</option>
                             <option value="MRI">MRI</option>
-                            <option value="ULTRASOUND">Ultrasound</option>
+                            <option value="Ultrasound">Ultrasound</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Body part *</label>
+                        <input type="text"
+                               name="body_part"
+                               required
+                               placeholder="e.g. Chest, Left knee"
+                               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Clinical Indication / Notes *</label>
@@ -334,6 +397,17 @@
                                     </optgroup>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Planned stay (days) *</label>
+                            <input type="number"
+                                   name="planned_days"
+                                   min="1"
+                                   max="365"
+                                   value="1"
+                                   required
+                                   class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm">
+                            <p class="text-xs text-slate-500 mt-1">Charged at the ward's bed-day rate. Reconciled to actual days at discharge.</p>
                         </div>
                         <div class="flex space-x-3 pt-2">
                             <button type="button"

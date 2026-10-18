@@ -84,6 +84,17 @@
                                     {% endif %}
                                 </div>
                                 <div>
+                                    <div>
+                                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Planned stay (days) *</label>
+                                        <input type="number"
+                                               name="planned_days"
+                                               min="1"
+                                               max="365"
+                                               value="1"
+                                               required
+                                               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm">
+                                        <p class="text-xs text-slate-500 mt-1">Charged at the ward's bed-day rate. Reconciled to actual days at discharge.</p>
+                                    </div>
                                     {% if bed.status == "VACANT" %}
                                         <button @click="showModal = true; selectedBedId = '{{ bed.id }}'; selectedBedCode = '{{ bed.code }}'"
                                                 class="w-full bg-emerald-600 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm">

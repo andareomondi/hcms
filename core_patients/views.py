@@ -270,7 +270,7 @@ def patient_register_view(request):
 
 @login_required
 def patient_detail_view(request, patient_id):
-    """Comprehensive patient detail view showing demographics, ward admissions, duration, and financial ledgers."""
+    """Patient file: demographics, visits with triage data, ward history, bill and allergies."""
     patient = get_object_or_404(Patient.objects.select_related("created_by"), pk=patient_id)
 
     log_action(
@@ -283,36 +283,48 @@ def patient_detail_view(request, patient_id):
         patient=patient, status="ACTIVE"
     ).select_related("allergen", "allergen__allergen_class")
 
-    # Ward Admissions & Bed Allocations
-    admissions = Admission.objects.filter(encounter__patient=patient).select_related("bed__ward", "admitted_by").order_by("-admitted_at")
+    # Ward admissions and bed allocations
+    admissions = (Admission.objects.filter(encounter__patient=patient)
+                  .select_related("bed__ward", "admitted_by")
+                  .order_by("-admitted_at"))
 
-    # Financial & Billing Data
+    # Financial data
     billing_account = getattr(patient, "billing_account", None)
     charges = Charge.objects.filter(
         Q(treated_patient=patient) | Q(encounter__patient=patient)
     ).order_by("-created_at")
-    
-    # Financial Metrics
+
     total_billed = sum(c.amount for c in charges)
     total_paid = sum(c.amount for c in charges.filter(status="PAID"))
     total_posted = sum(c.amount for c in charges.filter(status="POSTED"))
     total_provisional = sum(c.amount for c in charges.filter(status="PROVISIONAL"))
 
-    # Clinical Timeline Items
+    # Clinical timeline (notes and medication orders across all visits)
     timeline_items = []
     for encounter in patient.encounters.all():
         for note in encounter.clinical_notes.all():
             timeline_items.append({
                 "type": "NOTE", "get_type_display": "Clinical Note", "timestamp": note.created_at,
-                "summary": f"Complaint: {note.presenting_complaint[:80]}... | Diagnosis: {note.diagnosis}", "author": note.author,
+                "summary": f"Complaint: {note.presenting_complaint[:80]}... | Diagnosis: {note.diagnosis}",
+                "author": note.author,
             })
         for order in encounter.medication_orders.all():
             timeline_items.append({
                 "type": "ORDER", "get_type_display": "Medication Order", "timestamp": order.ordered_at,
-                "summary": f"{order.medication.brand_name} {order.dose_text} - {order.get_route_display()}", "author": order.ordered_by,
+                "summary": f"{order.medication.brand_name} {order.dose_text} - {order.get_route_display()}",
+                "author": order.ordered_by,
             })
-
     timeline_items.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    # Visits with their triage data (used by the encounter table in the patient file)
+    encounter_summaries = [
+        {
+            "encounter": enc,
+            "latest_vitals": enc.vitals.order_by("-recorded_at").first(),
+            "vitals_count": enc.vitals.count(),
+        }
+        for enc in patient.encounters.order_by("-opened_at")
+    ]
 
     context = {
         "patient": patient,
@@ -325,9 +337,9 @@ def patient_detail_view(request, patient_id):
         "total_posted": total_posted,
         "total_provisional": total_provisional,
         "timeline_items": timeline_items,
+        "encounter_summaries": encounter_summaries,
     }
     return render(request, "core_patients/patient_detail.html", context)
-
 
 @login_required
 def patient_edit_view(request, patient_id):

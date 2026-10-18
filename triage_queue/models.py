@@ -1,5 +1,7 @@
 import uuid
+
 from django.db import models
+
 from core_patients.models import Patient, StaffProfile
 
 
@@ -18,6 +20,7 @@ class Encounter(models.Model):
     closed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, default="OPEN", choices=[("OPEN", "Open"), ("CLOSED", "Closed")], db_index=True)
     opened_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    chief_complaint = models.TextField(blank=True, default="")
 
 
 class TriageVitals(models.Model):

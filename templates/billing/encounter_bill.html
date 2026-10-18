@@ -1,0 +1,74 @@
+{% extends "base.html" %} {% block title %}Bill - {{ encounter.patient.last_name }}{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <a href="{% url 'billing:bills_ready' %}"
+               class="text-xs text-slate-500 hover:underline">← Bills ready</a>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {{ encounter.patient.last_name }}, {{ encounter.patient.first_name }}
+            </h1>
+            <p class="text-sm text-slate-500">
+                {{ encounter.get_encounter_type_display }} · {{
+                    encounter.get_status_display }}{% if encounter.closed_at %} · closed {{
+                    encounter.closed_at|date:"Y-m-d H:i" }}{% endif %}
+                    </p>
+                    </div>
+                    {% if encounter.status == "CLOSED" %}
+                        <form action="{% url 'billing:post_encounter' encounter.id %}"
+                              method="post">
+                            {% csrf_token %}
+                            <button class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700">
+                                Post all provisional charges
+                            </button>
+                        </form>
+                    {% endif %}
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                            <p class="text-xs uppercase font-bold text-slate-500">Provisional</p>
+                            <p class="text-2xl font-extrabold text-amber-600">KES {{ tally.provisional|floatformat:2 }}</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                            <p class="text-xs uppercase font-bold text-slate-500">Posted</p>
+                            <p class="text-2xl font-extrabold text-blue-600">KES {{ tally.posted|floatformat:2 }}</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200">
+                            <p class="text-xs uppercase font-bold text-slate-500">Total</p>
+                            <p class="text-2xl font-extrabold text-slate-900">KES {{ tally.total|floatformat:2 }}</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3.5">Date</th>
+                                    <th class="p-3.5">Type</th>
+                                    <th class="p-3.5">Description</th>
+                                    <th class="p-3.5">Qty</th>
+                                    <th class="p-3.5">Unit (KES)</th>
+                                    <th class="p-3.5">Amount (KES)</th>
+                                    <th class="p-3.5">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-sm">
+                                {% for c in charges %}
+                                    <tr class="hover:bg-slate-50 {% if c.status == 'VOIDED' %}opacity-50 line-through{% endif %}">
+                                        <td class="p-3.5 text-xs font-mono">{{ c.created_at|date:"Y-m-d H:i" }}</td>
+                                        <td class="p-3.5 text-xs font-semibold">{{ c.get_source_type_display }}</td>
+                                        <td class="p-3.5 text-xs">{{ c.description }}</td>
+                                        <td class="p-3.5">{{ c.quantity|floatformat:"-2" }}</td>
+                                        <td class="p-3.5">{{ c.unit_price|floatformat:2 }}</td>
+                                        <td class="p-3.5 font-bold">{{ c.amount|floatformat:2 }}</td>
+                                        <td class="p-3.5 text-xs font-bold">{{ c.get_status_display }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="7"
+                                            class="p-8 text-center text-slate-500 italic">No charges for this visit.</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    </div>
+                {% endblock %}
