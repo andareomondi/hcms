@@ -11,9 +11,9 @@ from dashboard.utils import log_action
 from duty.services import current_session
 from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder
+from radiology.models import ScanOrder
 from triage_queue.models import Encounter, QueueEntry
 from wards.models import Admission, Bed, Ward
-from radiology.models import ScanOrder
 
 from .models import ClinicalNote
 
@@ -183,27 +183,29 @@ def complete_consultation_action(request, encounter_id):
 @user_passes_test(is_physician)
 def doctor_dashboard_view(request):
     doctor_profile = request.staff_profile
-    now = timezone.now()
+    session = current_session(doctor_profile)
+    if session is None:
+        messages.info(request, "Clock in with your room to see your patients.")
+        return redirect("duty:clock_in")
 
+    now = timezone.now()
     current_consultation = QueueEntry.objects.filter(
-        assigned_doctor=doctor_profile,
-        status="IN_CONSULTATION"
+        assigned_doctor=doctor_profile, status="IN_CONSULTATION"
     ).select_related("encounter__patient", "encounter").first()
 
     waiting_entries = QueueEntry.objects.filter(
-        assigned_doctor=doctor_profile,
-        status="WAITING"
+        assigned_doctor=doctor_profile, status="WAITING"
     ).select_related("encounter__patient", "encounter").order_by("-priority", "joined_at")
 
     for entry in waiting_entries:
         entry.wait_duration_minutes = int((now - entry.joined_at).total_seconds() / 60)
 
     context = {
+        "session": session,
         "current_consultation": current_consultation,
         "waiting_entries": waiting_entries,
     }
     return render(request, "doctors_portal/dashboard.html", context)
-
 
 @login_required
 @user_passes_test(is_physician)

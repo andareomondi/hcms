@@ -1,0 +1,68 @@
+{% extends "base.html" %} {% block title %}{{ label }} - Data manager{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <a href="{% url 'dashboard:crud_index' %}"
+               class="text-xs text-slate-500 hover:underline">← All models</a>
+            <h1 class="text-2xl font-bold text-slate-900">{{ label }}</h1>
+        </div>
+        {% if editable %}
+            <a href="{% url 'dashboard:crud_create' app_label model_name %}"
+               class="bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-700">+ New</a>
+        {% else %}
+            <span class="text-xs text-slate-500 bg-slate-100 px-3 py-2 rounded-xl">Append-only: view only</span>
+        {% endif %}
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    {% for col in columns %}
+                        <th class="p-3.5">{{ col|capfirst }}</th>
+                    {% endfor %}
+                    <th class="p-3.5 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for obj, values in rows %}
+                    <tr class="hover:bg-slate-50">
+                        {% for v in values %}
+                            <td class="p-3.5 text-xs text-slate-700">{{ v|default_if_none:"—" }}</td>
+                        {% endfor %}
+                        <td class="p-3.5 text-right space-x-2 whitespace-nowrap">
+                            {% if editable %}
+                                <a href="{% url 'dashboard:crud_edit' app_label model_name obj.pk %}"
+                                   class="text-teal-600 text-xs font-bold hover:underline">Edit</a>
+                            {% endif %}
+                            {% if deletable %}
+                                <form action="{% url 'dashboard:crud_delete' app_label model_name obj.pk %}"
+                                      method="post"
+                                      class="inline"
+                                      onsubmit="
+                return confirm('Delete this record? This cannot be undone.');
+              ">
+                                    {% csrf_token %}
+                                    <button class="text-red-600 text-xs font-bold hover:underline">Delete</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="99" class="p-8 text-center text-slate-500 italic">No records yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if page.has_other_pages %}
+        <div class="flex justify-between text-xs">
+            {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}"
+   class="font-bold text-slate-700">← Previous</a>{% else %}<span></span>{% endif %}
+            <span class="text-slate-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+            {% if page.has_next %}<a href="?page={{ page.next_page_number }}"
+   class="font-bold text-slate-700">Next →</a>{% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

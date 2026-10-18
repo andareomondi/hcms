@@ -48,6 +48,7 @@ class AuditAction:
     # Generic (used by admin master views)
     CREATE = "CREATE"
     DELETE = "DELETE"
+    UPDATE = "UPDATE"
 
     # Staff onboarding
     STAFF_REQUEST_SUBMITTED = "STAFF_REQUEST_SUBMITTED"

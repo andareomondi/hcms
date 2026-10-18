@@ -28,21 +28,20 @@
                 </div>
                 <div class="relative" x-data="{ open: false }">
                     <button type="button"
-                            @click="open = !open; if (open) { htmx.ajax('GET', '{% url 'notifications:dropdown' %}', '#notif-panel') }"
+                            @click="open = !open"
                             class="relative text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100">
                         🔔
-                        {% if unread_notification_count %}
-                            <span class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                {{ unread_notification_count }}
-                            </span>
-                        {% endif %}
+                        {% include "notifications/_badge.html" with count=unread_notification_count %}
                     </button>
                     <div x-show="open"
                          @click.away="open = false"
                          x-cloak
                          style="display:none"
                          class="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-                        <div id="notif-panel"></div>
+                        <div id="notif-panel"
+                             hx-get="{% url 'notifications:dropdown' %}"
+                             hx-trigger="load, every 15s"
+                             hx-swap="innerHTML"></div>
                     </div>
                 </div>
                 <a href="{% url 'dashboard:profile' %}"
@@ -136,6 +135,16 @@
             </aside>
             <!-- Main Content Canvas -->
             <main class="flex-grow p-6 lg:p-8 max-w-7xl mx-auto w-full">
+                <!-- for any messages -->
+                {% if messages %}
+                    <div class="space-y-2 mb-4">
+                        {% for message in messages %}
+                            <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200 {% elif message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200 {% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
                 {% block content %}{% endblock %}
             </main>
         </div>

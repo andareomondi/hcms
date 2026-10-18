@@ -7,12 +7,15 @@
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Physician Portal Dashboard</h1>
                 <p class="text-sm text-slate-500 mt-0.5">Welcome, Dr. {% firstof request.user.get_full_name request.user.username %}</p>
             </div>
-            <div>
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-600 bg-slate-100 px-3 py-2 rounded-xl">
+                    Room: <strong class="text-slate-900">{{ session.room.name|default:"not set" }}</strong>
+                </span>
                 <form action="{% url 'doctors_portal:call_next' %}" method="post">
                     {% csrf_token %}
                     <button type="submit"
-                            class="bg-teal-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-teal-700 shadow-sm transition flex items-center space-x-2">
-                        <span>📢 Call Next Patient</span>
+                            class="bg-teal-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-teal-700 shadow-sm transition">
+                        📢 Call Next Patient
                     </button>
                 </form>
             </div>

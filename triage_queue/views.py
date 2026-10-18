@@ -1,7 +1,11 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import transaction
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from core_patients.models import Patient
 from dashboard.audit_actions import AuditAction
@@ -10,13 +14,39 @@ from duty.services import on_duty_staff
 from notifications.services import notify
 
 from .models import Encounter, QueueEntry, TriageVitals
-from django.db import transaction
-from django.urls import reverse
-from django.contrib import messages
 
 
 def is_triage_staff(user):
     return hasattr(user, "staff_profile") and user.staff_profile.role in ("TRIAGE_NURSE", "RECEPTION", "DOCTOR", "ADMIN")
+
+@login_required
+@user_passes_test(is_triage_staff)
+@require_POST
+def reassign_entry_action(request, entry_id):
+    entry = get_object_or_404(QueueEntry.objects.select_related("encounter__patient", "assigned_doctor__user"),
+                              pk=entry_id, status="WAITING")
+    new_doctor = on_duty_staff(role="DOCTOR").filter(pk=request.POST.get("doctor_id")).first()
+    if new_doctor is None:
+        messages.error(request, "Choose a doctor who is on duty.")
+        return redirect("triage_queue:board")
+
+    old_doctor = entry.assigned_doctor
+    with transaction.atomic():
+        entry.assigned_doctor = new_doctor
+        entry.save(update_fields=["assigned_doctor", "updated_at"])
+        patient = entry.encounter.patient
+        notify([new_doctor], kind="PATIENT_ASSIGNED",
+               message=f"Reassigned to you: {patient.last_name}, {patient.first_name}.",
+               link=reverse("doctors_portal:dashboard"))
+        if old_doctor and old_doctor.pk != new_doctor.pk:
+            notify([old_doctor], kind="SYSTEM",
+                   message=f"{patient.last_name}, {patient.first_name} was reassigned to another doctor.")
+
+    log_action(request, AuditAction.ENCOUNTER_OPENED,
+               f"Reassigned encounter #{entry.encounter_id} to {new_doctor}.")
+    messages.success(request, f"Reassigned to {new_doctor}.")
+    return redirect("triage_queue:board")
+
 
 
 @login_required
@@ -100,4 +130,5 @@ def _get_board_context():
             urgent_entries.append(entry)
         else:
             routine_entries.append(entry)
+
     return {"resuscitation_entries": resuscitation_entries, "urgent_entries": urgent_entries, "routine_entries": routine_entries}

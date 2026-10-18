@@ -1,0 +1,32 @@
+{% extends "base.html" %} {% block title %}{{ mode }} {{ label }}{% endblock %}
+{% block content %}
+    <div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+        <div>
+            <a href="{% url 'dashboard:crud_list' app_label model_name %}"
+               class="text-xs text-slate-500 hover:underline">← Back to list</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-2">{{ mode }} {{ label }}</h1>
+        </div>
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="bg-red-50 text-red-800 p-3 rounded-xl text-sm">{{ form.non_field_errors }}</div>
+            {% endif %}
+            {% for field in form %}
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+                    {{ field }} {% if field.help_text %}
+                    <p class="text-xs text-slate-500 mt-1">{{ field.help_text }}</p>
+            {% endif %}
+            {% for error in field.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+            {% endfor %}
+        </div>
+{% endfor %}
+<div class="flex gap-3 pt-2">
+    <a href="{% url 'dashboard:crud_list' app_label model_name %}"
+       class="flex-1 text-center bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold">Cancel</a>
+    <button class="flex-1 bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700">Save</button>
+</div>
+</form>
+</div>
+{% endblock %}

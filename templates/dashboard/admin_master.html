@@ -35,6 +35,8 @@ HCMS{% endblock %} {% block content %}
         <div class="flex justify-between items-center">
             <h2 class="text-base font-bold text-slate-800">Hospital Wards & Bed Infrastructure</h2>
             <div class="flex space-x-3">
+                <a href="{% url 'dashboard:crud_index' %}"
+                   class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition">Data manager →</a>
                 <button @click="showWardModal = true"
                         class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-teal-700 transition shadow-sm">
                     + Add New Ward
@@ -66,7 +68,8 @@ HCMS{% endblock %} {% block content %}
                                           method="post"
                                           class="inline ml-1">
                                         {% csrf_token %}
-                                        <button type="submit" class="text-red-500 hover:text-red-700 font-bold">×</button>
+                                        <button type="submit"
+                                                class="text-red-500 hover:text-red-700 font-bold">×</button>
                                     </form>
                                 </div>
                             {% empty %}

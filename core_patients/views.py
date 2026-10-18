@@ -6,7 +6,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -25,6 +25,7 @@ from .models import (
     StaffProfile,
     StaffRegistrationRequest,
 )
+from .ratelimit import too_many_attempts
 
 
 def staff_register_view(request):
@@ -32,6 +33,14 @@ def staff_register_view(request):
     PUBLIC. Submits a staff account request for administrator review.
     Creates no User and does not log anyone in.
     """
+    if request.method == "POST":
+        # Honeypot: real users never fill this hidden field. Bots do.
+        if request.POST.get("website"):
+            return render(request, "core_patients/staff_register_submitted.html",
+                          {"username": "your request"})
+        if too_many_attempts(request.META.get("REMOTE_ADDR", "unknown")):
+            return HttpResponse("Too many requests. Please try again later.", status=429)
+
     departments = Department.objects.all()
     role_choices = [r for r in StaffProfile.ROLE_CHOICES
                     if r[0] in StaffRegistrationRequest.REQUESTABLE_ROLES]
