@@ -5,84 +5,80 @@
         <p class="text-sm text-slate-500">Approve to create the account, or decline with a reason.</p>
     </div>
     <div class="flex border-b border-slate-200 space-x-6 text-sm font-bold">
-        {% for s, label in
-            "PENDING|Pending,APPROVED|Approved,DECLINED|Declined"|make_list %}{% endfor
-                %}
-            <a href="?status=PENDING"
-               class="pb-3 {% if status == 'PENDING' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Pending ({{ counts.PENDING }})</a>
-            <a href="?status=APPROVED"
-               class="pb-3 {% if status == 'APPROVED' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Approved ({{ counts.APPROVED }})</a>
-            <a href="?status=DECLINED"
-               class="pb-3 {% if status == 'DECLINED' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Declined ({{ counts.DECLINED }})</a>
-            </div>
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Submitted</th>
-                            <th class="p-3.5">Name / Username</th>
-                            <th class="p-3.5">Email</th>
-                            <th class="p-3.5">Requested role</th>
-                            <th class="p-3.5">Department</th>
-                            <th class="p-3.5">Employee ID</th>
-                            <th class="p-3.5 text-right">Decision</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for r in requests %}
-                            <tr class="hover:bg-slate-50 align-top">
-                                <td class="p-3.5 text-xs font-mono text-slate-500">
-                                    {{ r.submitted_at|date:"Y-m-d H:i" }}
-                                    <br />
-                                    IP {{
-                                        r.submitted_ip|default:"unknown" }}
-                                </td>
-                                <td class="p-3.5">
-                                    <span class="font-bold text-slate-900">{{ r.first_name }} {{ r.last_name }}</span>
-                                    <br />
-                                    <span class="text-xs text-slate-500">@{{ r.username }}</span>
-                                </td>
-                                <td class="p-3.5 text-xs">{{ r.email }}</td>
-                                <td class="p-3.5 font-semibold">{{ r.get_requested_role_display }}</td>
-                                <td class="p-3.5 text-xs">{{ r.department.name }}</td>
-                                <td class="p-3.5 font-mono text-xs">{{ r.employee_id }}</td>
-                                <td class="p-3.5 text-right space-y-2">
-                                    {% if r.status == "PENDING" %}
-                                        <form action="{% url 'core_patients:staff_request_approve' r.id %}"
-                                              method="post">
-                                            {% csrf_token %}
-                                            <button class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-700">
-                                                Approve
-                                            </button>
-                                        </form>
-                                        <form action="{% url 'core_patients:staff_request_decline' r.id %}"
-                                              method="post"
-                                              class="flex gap-2 justify-end">
-                                            {% csrf_token %}
-                                            <input type="text"
-                                                   name="reason"
-                                                   required
-                                                   placeholder="Reason"
-                                                   class="border border-slate-300 rounded-lg px-2 py-1 text-xs w-40" />
-                                            <button class="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-700">Decline</button>
-                                        </form>
-                                    {% elif r.status == "APPROVED" %}
-                                        <span class="text-xs text-emerald-700 font-bold">Approved {{ r.reviewed_at|date:"Y-m-d" }}</span>
-                                    {% else %}
-                                        <span class="text-xs text-red-700 font-bold">Declined</span>
-                                        <br />
-                                        <span class="text-xs text-slate-500">{{ r.decline_reason }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="7"
-                                    class="p-8 text-center text-slate-500 italic">No requests in this list.</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            </div>
-        {% endblock %}
+        {% for s in "PENDING|Pending,APPROVED|Approved,DECLINED|Declined"|make_list %}{% endfor %}
+        <a href="?status=PENDING"
+           class="pb-3 {% if status == 'PENDING' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Pending ({{ counts.PENDING }})</a>
+        <a href="?status=APPROVED"
+           class="pb-3 {% if status == 'APPROVED' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Approved ({{ counts.APPROVED }})</a>
+        <a href="?status=DECLINED"
+           class="pb-3 {% if status == 'DECLINED' %}text-teal-600 border-b-2 border-teal-600{% else %}text-slate-500{% endif %}">Declined ({{ counts.DECLINED }})</a>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3.5">Submitted</th>
+                    <th class="p-3.5">Name / Username</th>
+                    <th class="p-3.5">Email</th>
+                    <th class="p-3.5">Requested role</th>
+                    <th class="p-3.5">Department</th>
+                    <th class="p-3.5">Employee ID</th>
+                    <th class="p-3.5 text-right">Decision</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for r in requests %}
+                    <tr class="hover:bg-slate-50 align-top">
+                        <td class="p-3.5 text-xs font-mono text-slate-500">
+                            {{ r.submitted_at|date:"Y-m-d H:i" }}
+                            <br />
+                            IP {{ r.submitted_ip|default:"unknown" }}
+                        </td>
+                        <td class="p-3.5">
+                            <span class="font-bold text-slate-900">{{ r.first_name }} {{ r.last_name }}</span>
+                            <br />
+                            <span class="text-xs text-slate-500">@{{ r.username }}</span>
+                        </td>
+                        <td class="p-3.5 text-xs">{{ r.email }}</td>
+                        <td class="p-3.5 font-semibold">{{ r.get_requested_role_display }}</td>
+                        <td class="p-3.5 text-xs">{{ r.department.name }}</td>
+                        <td class="p-3.5 font-mono text-xs">{{ r.employee_id }}</td>
+                        <td class="p-3.5 text-right space-y-2">
+                            {% if r.status == "PENDING" %}
+                                <form action="{% url 'core_patients:staff_request_approve' r.id %}"
+                                      method="post">
+                                    {% csrf_token %}
+                                    <button class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-700">
+                                        Approve
+                                    </button>
+                                </form>
+                                <form action="{% url 'core_patients:staff_request_decline' r.id %}"
+                                      method="post"
+                                      class="flex gap-2 justify-end">
+                                    {% csrf_token %}
+                                    <input type="text"
+                                           name="reason"
+                                           required
+                                           placeholder="Reason"
+                                           class="border border-slate-300 rounded-lg px-2 py-1 text-xs w-40" />
+                                    <button class="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-700">Decline</button>
+                                </form>
+                            {% elif r.status == "APPROVED" %}
+                                <span class="text-xs text-emerald-700 font-bold">Approved {{ r.reviewed_at|date:"Y-m-d" }}</span>
+                            {% else %}
+                                <span class="text-xs text-red-700 font-bold">Declined</span>
+                                <br />
+                                <span class="text-xs text-slate-500">{{ r.decline_reason }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-500 italic">No requests in this list.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

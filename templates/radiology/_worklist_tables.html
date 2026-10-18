@@ -60,8 +60,7 @@
                 {% else %}
                     <span class="px-3 py-1.5 text-slate-300 border border-transparent">← Previous Page</span>
                 {% endif %}
-                <span class="font-medium text-slate-600">Showing {{ pending_orders.start_index }} - {{ pending_orders.end_index
-                }} of {{ pending_orders.paginator.count }} items</span>
+                <span class="font-medium text-slate-600">Showing {{ pending_orders.start_index }} - {{ pending_orders.end_index }} of {{ pending_orders.paginator.count }} items</span>
                 {% if pending_orders.has_next %}
                     <button hx-get="{% url 'radiology:dashboard' %}?page={{ pending_orders.next_page_number }}&q={{ query }}"
                             hx-target="#worklist-container"

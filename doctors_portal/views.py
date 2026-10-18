@@ -13,6 +13,7 @@ from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder
 from triage_queue.models import Encounter, QueueEntry
 from wards.models import Admission, Bed, Ward
+from radiology.models import ScanOrder
 
 from .models import ClinicalNote
 

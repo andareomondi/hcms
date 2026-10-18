@@ -18,8 +18,8 @@
             <option value="">-- No room (non-clinical) --</option>
             {% for room in rooms %}
                 <option value="{{ room.id }}">
-                    {{ room.code }} · {{ room.name }}{% if room.floor %} (Floor {{
-                        room.floor }}){% endif %}
+                    {{ room.code }} · {{ room.name }}{% if room.floor %} (Floor 
+                    {{ room.floor }}){% endif %}
                         </option>
                     {% empty %}
                         <option value="" disabled>No free rooms in your department</option>
