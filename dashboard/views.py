@@ -1,17 +1,23 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from billing.models import Charge
-from core_patients.models import Patient, StaffProfile
+from billing.models import Charge, Payment
+from core_patients.models import Patient, StaffProfile, StaffRegistrationRequest
+from duty.services import on_duty_staff
 from hospital_system.permissions import caps_for
 from pharmacy.models import Medication, MedicationOrder
-from triage_queue.models import QueueEntry
+from radiology.models import ScanOrder
+from triage_queue.models import Encounter, QueueEntry
 from wards.models import Bed, Ward
 
 from .audit_actions import AuditAction
@@ -190,49 +196,164 @@ def audit_log_view(request):
         return render(request, "dashboard/audit_log_feed.html", context)
 
     return render(request, "dashboard/audit_log.html", context)
+
 @login_required
 def overview_dashboard_view(request):
-    """Hospital-wide overview dashboard matching the main control UI."""
+    """
+    Overview built only from live data. Every number is a real count or sum.
+    Each card links to the page where the number can be acted on, and only
+    appears for roles allowed to use that page.
+    """
+    caps = caps_for(request.user)
+    profile = getattr(request.user, "staff_profile", None)
     now = timezone.now()
-    today = now.date()
+    today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
 
-    # Metrics computation
-    patients_today_count = Patient.objects.filter(created_at__date=today).count()
-    if patients_today_count == 0:
-        patients_today_count = Patient.objects.count()
+    # Patients and visits (Africa/Nairobi calendar days)
+    patients_today = Patient.objects.filter(created_at__date=today).count()
+    patients_yesterday = Patient.objects.filter(created_at__date=yesterday).count()
+    visits_today = Encounter.objects.filter(opened_at__date=today).count()
 
-    waiting_entries = QueueEntry.objects.filter(status="WAITING").select_related("encounter__patient", "assigned_doctor__user")
+    # Waiting queue, with real wait times
+    waiting_list = list(
+        QueueEntry.objects.filter(status="WAITING")
+        .select_related("encounter__patient", "assigned_doctor__user")
+        .order_by("-priority", "joined_at")
+    )
+    for entry in waiting_list:
+        entry.wait_minutes = int((now - entry.joined_at).total_seconds() // 60)
+    waits = [e.wait_minutes for e in waiting_list]
+    avg_wait = round(sum(waits) / len(waits)) if waits else None
+    longest_wait = max(waits) if waits else None
+    over_30 = sum(1 for w in waits if w >= 30)
 
-    total_wait_minutes = sum(int((now - e.joined_at).total_seconds() / 60) for e in waiting_entries)
-    count_waiting = waiting_entries.count()
-    avg_wait = int(total_wait_minutes / count_waiting) if count_waiting > 0 else 18
+    doctors_on_duty = on_duty_staff(role="DOCTOR").count()
 
-    total_beds = Bed.objects.count() or 96
-    available_beds = Bed.objects.filter(status="VACANT").count() or 23
+    beds = Bed.objects.aggregate(
+        total=Count("id"),
+        vacant=Count("id", filter=Q(status="VACANT")),
+    )
 
-    provisional_charges = Charge.objects.filter(status="PROVISIONAL")
-    prov_sum = sum(c.amount for c in provisional_charges)
-    prov_count = provisional_charges.count()
+    # Trend against yesterday, only when there is a real figure to compare
+    if patients_yesterday:
+        change = round((patients_today - patients_yesterday) / patients_yesterday * 100)
+        patients_detail = f"{change:+d}% vs yesterday ({patients_yesterday})"
+    else:
+        patients_detail = "No registrations yesterday to compare"
 
-    queue_list = waiting_entries.order_by("-priority", "joined_at")[:10]
-    pharmacy_pending_count = MedicationOrder.objects.filter(status="ORDERED").count() or 7
-    long_wait_count = sum(1 for e in waiting_entries if (now - e.joined_at).total_seconds() > 1800)
+    # Doctor's own queue
+    my_waiting = my_in_consultation = None
+    if profile and "CLINICAL_ACTIONS" in caps:
+        my_waiting = QueueEntry.objects.filter(assigned_doctor=profile, status="WAITING").count()
+        my_in_consultation = QueueEntry.objects.filter(
+            assigned_doctor=profile, status="IN_CONSULTATION").count()
+
+    # Pharmacy, nursing and radiology
+    nurse_pending = MedicationOrder.objects.filter(status="ORDERED", fulfilment="NURSE_ADMINISTER").count()
+    dispense_pending = MedicationOrder.objects.filter(status="ORDERED", fulfilment="PHARMACY_DISPENSE").count()
+    scans_pending = ScanOrder.objects.filter(status__in=["ORDERED", "PERFORMED"]).count()
+
+    # Finance
+    billed = Charge.objects.exclude(status="VOIDED").aggregate(t=Sum("amount"))["t"] or Decimal(0)
+    paid_all = Payment.objects.aggregate(t=Sum("amount"))["t"] or Decimal(0)
+    outstanding = billed - paid_all
+    payments_today_qs = Payment.objects.filter(recorded_at__date=today)
+    payments_today_total = payments_today_qs.aggregate(t=Sum("amount"))["t"] or Decimal(0)
+    payments_today_count = payments_today_qs.count()
+    provisional_count = Charge.objects.filter(status="PROVISIONAL").count()
+
+    staff_pending = StaffRegistrationRequest.objects.filter(status="PENDING").count()
+
+    # Cards: each has a link and is only added when the role may use that page
+    cards = []
+
+    def add(label, value, detail, url, cta, show=True):
+        if show:
+            cards.append({"label": label, "value": value, "detail": detail, "url": url, "cta": cta})
+
+    add("Patients registered today", patients_today, patients_detail,
+        reverse("core_patients:registry"), "Open registry", "PATIENT_SEARCH" in caps)
+
+    add("Visits opened today", visits_today,
+        f"{doctors_on_duty} doctor(s) on duty now",
+        reverse("triage_queue:board"), "Open triage board", "TRIAGE_BOARD" in caps)
+
+    if "TRIAGE_BOARD" in caps or "CLINICAL_ACTIONS" in caps:
+        if waiting_list:
+            wait_detail = (f"Average {avg_wait} min · longest {longest_wait} min · "
+                           f"{over_30} waiting 30+ min")
+        else:
+            wait_detail = "No one is waiting"
+        waiting_url = (reverse("triage_queue:board") if "TRIAGE_BOARD" in caps
+                       else reverse("doctors_portal:dashboard"))
+        add("Waiting now", len(waiting_list), wait_detail, waiting_url, "View queue")
+
+    add("Doctors on duty", doctors_on_duty,
+        "Clocked in with a room", reverse("duty:board"), "See who is where", True)
+
+    if my_waiting is not None:
+        add("My waiting patients", my_waiting,
+            f"{my_in_consultation} in consultation now",
+            reverse("doctors_portal:dashboard"), "Open my queue")
+
+    add("Beds vacant",
+        f"{beds['vacant']} of {beds['total']}" if beds["total"] else "—",
+        "No beds configured yet" if not beds["total"] else "Available for admission",
+        reverse("wards:dashboard"), "Open bed board", "WARD_VIEW" in caps)
+
+    add("Scans awaiting report", scans_pending,
+        "Ordered or performed, not yet reported",
+        reverse("radiology:dashboard"), "Open radiology", "VIEW_RADIOLOGY" in caps)
+
+    add("Medicines to give", nurse_pending,
+        "Injections and IV orders waiting",
+        reverse("pharmacy:nurse_worklist"), "Open nurse worklist", "NURSE_ADMINISTER" in caps)
+
+    add("Medicines to dispense", dispense_pending,
+        "Oral orders waiting",
+        reverse("pharmacy:dashboard"), "Open pharmacy", "VIEW_PHARMACY" in caps)
+
+    add("Outstanding balance", f"KES {outstanding:,.2f}",
+        "Billed minus payments, all visits",
+        reverse("billing:bills_ready"), "Open bills", "VIEW_FINANCE" in caps)
+
+    add("Payments today", f"KES {payments_today_total:,.2f}",
+        f"{payments_today_count} payment(s) recorded today",
+        reverse("billing:bills_ready"), "Open bills", "VIEW_FINANCE" in caps)
+
+    add("Charges to post", provisional_count,
+        "Provisional charges awaiting posting",
+        reverse("billing:dashboard"), "Open billing", "POST_CHARGES" in caps)
+
+    add("Staff requests pending", staff_pending,
+        "New staff accounts awaiting approval",
+        reverse("core_patients:staff_requests"), "Review requests", "ADMIN_CONFIG" in caps)
+
+    # Activity: real audit entries only
+    if "ADMIN_CONFIG" in caps:
+        activity = list(AuditLog.objects.select_related("actor")
+                        .filter(actor__isnull=False).order_by("-timestamp")[:8])
+        activity_title = "Recent system activity"
+    else:
+        activity = list(AuditLog.objects.filter(actor=request.user).order_by("-timestamp")[:8])
+        activity_title = "Your recent activity"
+
+    hour = timezone.localtime().hour
+    greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 17 else "Good evening"
 
     context = {
-        "patients_today_count": patients_today_count,
-        "avg_wait": avg_wait,
-        "available_beds": available_beds,
-        "total_beds": total_beds,
-        "prov_sum": prov_sum,
-        "prov_count": prov_count,
-        "queue_list": queue_list,
-        "pharmacy_pending_count": pharmacy_pending_count,
-        "long_wait_count": long_wait_count,
-        "today_date": now.strftime("%A, %d %B %Y"),
-        "staff_count": StaffProfile.objects.filter(is_active=True).count(),
+        "greeting": greeting,
+        "today_label": today.strftime("%A, %d %B %Y"),
+        "cards": cards,
+        "show_waiting_list": "TRIAGE_BOARD" in caps or "CLINICAL_ACTIONS" in caps,
+        "waiting_list": waiting_list[:10],
+        "waiting_total": len(waiting_list),
+        "activity": activity,
+        "activity_title": activity_title,
+        "show_register": "PATIENT_REGISTER" in caps,
     }
     return render(request, "dashboard/overview.html", context)
-
 
 @login_required
 def user_profile_view(request):

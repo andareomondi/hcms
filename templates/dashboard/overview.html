@@ -2,174 +2,90 @@
 {% block title %}Overview - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-8">
-        <!-- Top Greeting & Action Header -->
+        <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <p class="text-sm font-medium text-slate-500">{{ today_date }}</p>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Good morning, {% firstof request.user.first_name request.user.username %}</h1>
-                <p class="text-sm text-slate-600 mt-0.5">Here's what's happening across the hospital today.</p>
+                <p class="text-sm font-medium text-slate-500">{{ today_label }}</p>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
+                    {{ greeting }}, {% firstof request.user.first_name request.user.username %}
+                </h1>
+                <p class="text-sm text-slate-600 mt-0.5">Live figures for today. Select a card to act on it.</p>
             </div>
-            <div class="flex items-center space-x-3">
-                <button class="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-slate-50 flex items-center space-x-2">
-                    <span>📅</span>
-                    <span>Today</span>
-                </button>
-                <a href="/patients/search"
-                   class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-blue-700 transition flex items-center space-x-2">
-                    <span>+</span>
-                    <span>New encounter</span>
-                </a>
-            </div>
+            {% if show_register %}
+                <a href="{% url 'core_patients:register' %}"
+                   class="bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-teal-700">+ Register patient</a>
+            {% endif %}
         </div>
-        <!-- 4 Metrics Cards Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <div class="flex justify-between items-start text-slate-400">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Patients today</span>
-                    <span>👥</span>
-                </div>
-                <div class="mt-4">
-                    <h3 class="text-3xl font-extrabold text-slate-900">{{ patients_today_count }}</h3>
-                    <p class="text-xs font-semibold text-emerald-600 mt-1">+12% vs yesterday</p>
-                </div>
+        <!-- Cards: each is a link to the page behind the number -->
+        {% if cards %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {% for c in cards %}
+                    <a href="{{ c.url }}"
+                       class="block bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:border-teal-400 hover:shadow-md transition">
+                        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ c.label }}</p>
+                        <p class="text-3xl font-extrabold text-slate-900 mt-3 break-words">{{ c.value }}</p>
+                        <p class="text-xs text-slate-500 mt-2">{{ c.detail }}</p>
+                        <p class="text-xs font-bold text-teal-700 mt-3">{{ c.cta }} →</p>
+                    </a>
+                {% endfor %}
             </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <div class="flex justify-between items-start text-slate-400">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Average wait time</span>
-                    <span>⏱️</span>
-                </div>
-                <div class="mt-4">
-                    <h3 class="text-3xl font-extrabold text-slate-900">{{ avg_wait }} min</h3>
-                    <p class="text-xs font-semibold text-teal-600 mt-1">↓ 4 min today</p>
-                </div>
+        {% else %}
+            <div class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-sm text-slate-500">
+                Your role does not have figures on this page. Use the sidebar to open your work area, or see the
+                <a href="{% url 'dashboard:role_guide' %}"
+                   class="text-teal-700 font-semibold hover:underline">role guide</a>.
             </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <div class="flex justify-between items-start text-slate-400">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Available beds</span>
-                    <span>🛏️</span>
-                </div>
-                <div class="mt-4">
-                    <h3 class="text-3xl font-extrabold text-slate-900">{{ available_beds }}</h3>
-                    <p class="text-xs text-slate-500 mt-1">of {{ total_beds }} total</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <div class="flex justify-between items-start text-slate-400">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Provisional charges</span>
-                    <span>💳</span>
-                </div>
-                <div class="mt-4">
-                    <h3 class="text-3xl font-extrabold text-slate-900">KES {{ prov_sum|floatformat:0 }}</h3>
-                    <p class="text-xs font-semibold text-amber-600 mt-1">{{ prov_count }} to review</p>
-                </div>
-            </div>
-        </div>
-        <!-- Middle Grid: Triage Queue & Recent Activity -->
+        {% endif %}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Triage Queue -->
-            <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
-                    <div>
-                        <h2 class="font-bold text-slate-900 text-lg">Triage queue</h2>
-                        <p class="text-xs text-slate-500">Live view • updated just now</p>
+            <!-- Waiting list -->
+            {% if show_waiting_list %}
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="font-bold text-slate-900 text-lg">Waiting now</h2>
+                            <p class="text-xs text-slate-500">{{ waiting_total }} patient(s) in the queue</p>
+                        </div>
+                        <a href="{% url 'triage_queue:board' %}"
+                           class="text-sm font-semibold text-teal-700 hover:underline">Open triage board →</a>
                     </div>
-                    <a href="{% url 'triage_queue:board' %}"
-                       class="text-sm font-semibold text-blue-600 hover:underline">Open triage board →</a>
-                </div>
-                <!-- Queue Items List -->
-                <div class="divide-y divide-slate-100">
-                    {% for entry in queue_list %}
-                        <div class="py-3.5 flex items-center justify-between hover:bg-slate-50 px-3 rounded-xl transition">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 font-bold text-xs flex items-center justify-center">
-                                    {{ entry.encounter.patient.first_name|slice:":1" }}{{ entry.encounter.patient.last_name|slice:":1" }}
-                                </div>
+                    <div class="divide-y divide-slate-100">
+                        {% for entry in waiting_list %}
+                            <div class="py-3 flex items-center justify-between px-2">
                                 <div>
                                     <p class="text-sm font-bold text-slate-900">{{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}</p>
-                                    <p class="text-xs text-slate-500">DOB: {{ entry.encounter.patient.date_of_birth|default:"Unknown" }} • Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</p>
+                                    <p class="text-xs text-slate-500">
+                                        {% if entry.assigned_doctor %}Dr. {{ entry.assigned_doctor.user.get_full_name|default:entry.assigned_doctor.user.username }}{% else %}No doctor{% endif %}
+                                        · waiting {{ entry.wait_minutes }} min
+                                    </p>
                                 </div>
+                                <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if entry.priority == 3 %}bg-red-100 text-red-800{% elif entry.priority == 2 %}bg-amber-100 text-amber-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                                    {% if entry.priority == 3 %}Resuscitation{% elif entry.priority == 2 %}Urgent{% else %}Routine{% endif %}
+                                </span>
                             </div>
-                            <div class="text-right">
-                                {% if entry.priority == 3 %}
-                                    <span class="text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">Resuscitation</span>
-                                {% elif entry.priority == 2 %}
-                                    <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">Urgent</span>
-                                {% else %}
-                                    <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Routine</span>
-                                {% endif %}
-                                <p class="text-[10px] text-slate-400 mt-1">Waiting active</p>
-                            </div>
-                        </div>
+                        {% empty %}
+                            <p class="text-sm text-slate-500 py-6 text-center">No one is waiting right now.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+            <!-- Activity -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4 {% if not show_waiting_list %}lg:col-span-3{% endif %}">
+                <div class="border-b border-slate-100 pb-3">
+                    <h2 class="font-bold text-slate-900 text-lg">{{ activity_title }}</h2>
+                    <p class="text-xs text-slate-500">From the audit log</p>
+                </div>
+                <ul class="space-y-3">
+                    {% for a in activity %}
+                        <li>
+                            <p class="text-xs text-slate-800">{{ a.description|truncatechars:140 }}</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">
+                                {{ a.timestamp|date:"H:i" }}{% if a.actor and "ADMIN_CONFIG" in caps %} · {{ a.actor.username }}{% endif %}
+                            </p>
+                        </li>
                     {% empty %}
-                        <p class="text-sm text-slate-500 py-6 text-center">No patients waiting in queue.</p>
+                        <li class="text-sm text-slate-500">No activity recorded yet.</li>
                     {% endfor %}
-                </div>
-            </div>
-            <!-- Recent Activity Column -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
-                    <div>
-                        <h2 class="font-bold text-slate-900 text-lg">Recent activity</h2>
-                        <p class="text-xs text-slate-500">Across your assigned departments</p>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div class="flex items-start space-x-3">
-                        <div class="p-2 bg-teal-50 text-teal-700 rounded-lg text-xs">💊</div>
-                        <div>
-                            <p class="text-xs font-bold text-slate-800">Medication dispensed</p>
-                            <p class="text-[11px] text-slate-500">Amoxicillin 500mg</p>
-                            <p class="text-[10px] text-slate-400 mt-1">Just now</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start space-x-3">
-                        <div class="p-2 bg-blue-50 text-blue-700 rounded-lg text-xs">🩺</div>
-                        <div>
-                            <p class="text-xs font-bold text-slate-800">Consultation started</p>
-                            <p class="text-[11px] text-slate-500">Outpatient triage completed</p>
-                            <p class="text-[10px] text-slate-400 mt-1">5m ago</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Bottom 3 Alert Boxes Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-red-50/60 border border-red-200 p-6 rounded-2xl flex flex-col justify-between">
-                <div class="space-y-2">
-                    <div class="flex items-center space-x-2 text-red-700 text-xs font-bold uppercase tracking-wider">
-                        <span>⚠️</span>
-                        <span>Priority attention</span>
-                    </div>
-                    <h3 class="text-3xl font-extrabold text-red-900">{{ long_wait_count }}</h3>
-                    <p class="text-xs text-red-700 font-medium">Patients have been waiting over 30 minutes.</p>
-                </div>
-                <a href="{% url 'triage_queue:board' %}"
-                   class="text-xs font-bold text-red-900 hover:underline mt-6 inline-block">Review queue →</a>
-            </div>
-            <div class="bg-amber-50/60 border border-amber-200 p-6 rounded-2xl flex flex-col justify-between">
-                <div class="space-y-2">
-                    <div class="flex items-center space-x-2 text-amber-700 text-xs font-bold uppercase tracking-wider">
-                        <span>💊</span>
-                        <span>Pharmacy worklist</span>
-                    </div>
-                    <h3 class="text-3xl font-extrabold text-amber-900">{{ pharmacy_pending_count }}</h3>
-                    <p class="text-xs text-amber-800 font-medium">Orders ready for dispensing or administration.</p>
-                </div>
-                <a href="{% url 'pharmacy:nurse_worklist' %}"
-                   class="text-xs font-bold text-amber-900 hover:underline mt-6 inline-block">Open worklist →</a>
-            </div>
-            <div class="bg-blue-50/60 border border-blue-200 p-6 rounded-2xl flex flex-col justify-between">
-                <div class="space-y-2">
-                    <div class="flex items-center space-x-2 text-blue-700 text-xs font-bold uppercase tracking-wider">
-                        <span>👤</span>
-                        <span>On duty now</span>
-                    </div>
-                    <h3 class="text-3xl font-extrabold text-blue-900">{{ staff_count }}</h3>
-                    <p class="text-xs text-blue-800 font-medium">Clinical and support staff active.</p>
-                </div>
-                <a href="{% url 'dashboard:profile' %}"
-                   class="text-xs font-bold text-blue-900 hover:underline mt-6 inline-block">View profile →</a>
+                </ul>
             </div>
         </div>
     </div>
