@@ -61,7 +61,7 @@ ROLE_GUIDE = [
     {"role": "Administrator", "who": "System administrator (superuser)",
      "does": "Approves staff accounts, manages data and rooms, reviews the audit log.",
      "sees": "Everything, read-only, including finance and clinical records.",
-     "cannot": "Consultations, reception, triage, pharmacy, nursing or payment actions. The admin account is for management, not for doing clinical work."},
+     "cannot": "Consultations, reception, triage, pharmacy or nursing. The admin account is for management, not for doing clinical work."},
 ]
 
 

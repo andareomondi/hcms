@@ -84,3 +84,40 @@ def finish_encounter(encounter, staff):
         encounter.closed_at = timezone.now()
         encounter.save(update_fields=["status", "closed_at"])
     notify_billing_ready(encounter)
+
+def consultation_mode(encounter, profile):
+    """
+    Works out what the viewing doctor may do on this visit.
+    Returns (mode, queue_entry).
+    """
+    entry = (QueueEntry.objects.filter(encounter=encounter)
+             .select_related("assigned_doctor__user")
+             .order_by("-joined_at").first())
+
+    if encounter.status == "CLOSED":
+        mode = "CLOSED"
+    elif entry is None:
+        mode = "NO_QUEUE"
+    elif profile is None or entry.assigned_doctor_id != profile.id:
+        mode = "NOT_YOURS"
+    elif entry.status == "WAITING":
+        mode = "WAITING"
+    elif entry.status == "IN_CONSULTATION":
+        mode = "ACTIVE"
+    elif entry.status == "ADMITTED" and encounter.status == "OPEN":
+        mode = "IN_WARD"
+    else:
+        mode = "READ_ONLY"
+    return mode, entry
+
+
+def require_active(encounter, profile, allow_ward=True):
+    """
+    Raises FlowError unless the doctor may change this visit right now.
+    Admission is only allowed while the patient is in consultation (allow_ward=False).
+    """
+    mode, _ = consultation_mode(encounter, profile)
+    allowed = {"ACTIVE", "IN_WARD"} if allow_ward else {"ACTIVE"}
+    if mode not in allowed:
+        raise FlowError("This consultation is not open for changes.")
+    return mode

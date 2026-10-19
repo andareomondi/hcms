@@ -16,7 +16,11 @@ from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder
 from radiology.models import ScanOrder
 from triage_queue.models import Encounter, QueueEntry
-from triage_queue.services import FlowError, close_consultation
+from triage_queue.services import (
+    FlowError,
+    close_consultation,
+    consultation_mode,
+)
 from wards import services as ward_services
 from wards.models import Admission, Ward
 
@@ -48,11 +52,19 @@ def consultation_room_view(request, encounter_id):
 
     latest_vitals = encounter.vitals.order_by("-recorded_at").first()
     vitals_history = encounter.vitals.order_by("-recorded_at")[:10]
-    scan_orders = encounter.scan_orders.order_by("-ordered_at")
+    scan_orders = list(
+        encounter.scan_orders
+        .prefetch_related("studies")
+        .order_by("-ordered_at")
+    )
+    for scan in scan_orders:
+        studies = list(scan.studies.all())   # uses the prefetched cache
+        scan.latest_study = max(studies, key=lambda s: s.uploaded_at) if studies else None
     allergies = (PatientAllergy.objects
                  .filter(patient=patient, status="ACTIVE")
                  .select_related("allergen"))
     tally = billing_services.encounter_tally(encounter)
+    mode, queue_entry = consultation_mode(encounter, request.staff_profile)
 
     context = {
         "encounter": encounter,
@@ -68,6 +80,9 @@ def consultation_room_view(request, encounter_id):
         "allergies": allergies,
         "tally": tally,
         "scan_prices": SCAN_PRICES,
+        "mode": mode,
+        "queue_entry": queue_entry,
+        "can_act": mode in ("ACTIVE", "IN_WARD"),
     }
     return render(request, "doctors_portal/consultation_room.html", context)
 
@@ -78,6 +93,12 @@ def consultation_room_view(request, encounter_id):
 def add_clinical_note_action(request, encounter_id):
     """Saves clinical examination notes and diagnosis."""
     encounter = get_object_or_404(Encounter, pk=encounter_id)
+
+    try:
+        require_active(encounter, request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     if request.staff_profile is None:
         messages.error(request, "Your account has no staff profile, so notes cannot be saved.")
@@ -111,6 +132,13 @@ def add_clinical_note_action(request, encounter_id):
 @require_POST
 def prescribe_medication_action(request, encounter_id):
     encounter = get_object_or_404(Encounter, pk=encounter_id)
+
+    try:
+        require_active(encounter, request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
     profile = request.staff_profile
     medication = get_object_or_404(Medication, pk=request.POST.get("medication_id"), is_active=True)
     route = request.POST.get("route", "ORAL")
@@ -262,6 +290,13 @@ def call_next_patient_action(request):
 @require_POST
 def request_scan_action(request, encounter_id):
     encounter = get_object_or_404(Encounter, pk=encounter_id)
+
+    try:
+        require_active(encounter, request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
     modality = request.POST.get("imaging_type", "X-Ray")
     body_part = request.POST.get("body_part", "").strip()
     indication = request.POST.get("clinical_indication", "").strip()

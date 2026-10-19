@@ -108,206 +108,181 @@
                         opened {{ enc.opened_at|date:"Y-m-d H:i" }}
                     </p>
                     <p class="text-xs text-slate-600">
-                        Status: {{ enc.get_status_display }}{% if enc.closed_at %} · closed {{
-                            enc.closed_at|date:"Y-m-d H:i" }}{% endif %} {% if enc.opened_by %} ·
-                            opened by {{
-                                enc.opened_by.user.get_full_name|default:enc.opened_by.user.username
-                            }}{% endif %}
+                        Status: {{ enc.get_status_display }}{% if enc.closed_at %} · closed {{ enc.closed_at|date:"Y-m-d H:i" }}{% endif %} {% if enc.opened_by %} ·
+                        opened by {{ enc.opened_by.user.get_full_name|default:enc.opened_by.user.username }}{% endif %}
+                </p>
+                {% if show.clinical and enc.chief_complaint %}
+                    <p class="text-xs mt-1">
+                        <strong>Chief complaint:</strong> {{ enc.chief_complaint }}
                     </p>
-                    {% if show.clinical and enc.chief_complaint %}
-                        <p class="text-xs mt-1">
-                            <strong>Chief complaint:</strong> {{ enc.chief_complaint }}
-                        </p>
-                    {% endif %}
-                </div>
-                {% for adm in v.admissions %}
+                {% endif %}
+            </div>
+            {% for adm in v.admissions %}
+                <p class="text-xs">
+                    <strong>Ward stay:</strong> {{ adm.bed.ward.name }}, bed {{ adm.bed.code }} · admitted {{ adm.admitted_at|date:"Y-m-d H:i" }} ·
+                    {% if adm.discharged_at %}discharged {{ adm.discharged_at|date:"Y-m-d H:i" }}{% else %}<em>still admitted</em>{% endif %} · planned {{ adm.planned_days }}
+                    day(s)
+                </p>
+            {% endfor %}
+            {% if show.clinical %}
+                <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Triage and vital signs</h3>
+                {% for vit in v.vitals %}
                     <p class="text-xs">
-                        <strong>Ward stay:</strong> {{ adm.bed.ward.name }}, bed {{ adm.bed.code
-                        }} · admitted {{ adm.admitted_at|date:"Y-m-d H:i" }} ·
-                        {% if adm.discharged_at %}discharged {{ adm.discharged_at|date:"Y-m-d H:i" }}{% else %}<em>still admitted</em>{% endif %} · planned {{ adm.planned_days }}
-                        day(s)
+                        {{ vit.recorded_at|date:"Y-m-d H:i" }} — T {{ vit.temperature_c|default:"—" }}
+                        °C, P {{ vit.pulse_bpm|default:"—" }}, BP
+                        {% if vit.systolic_mmhg %}{{ vit.systolic_mmhg }}/{{ vit.diastolic_mmhg }}{% else %}—{% endif %}, RR {{ vit.respiratory_rate|default:"—" }}, SpO2
+                        {{ vit.spo2_percent|default:"—" }}%, Wt {{ vit.weight_kg|default:"—" }} kg
+                        {% if vit.notes %}— <em>{{ vit.notes }}</em>{% endif %}
+                        <span class="text-slate-500">({{ vit.recorded_by.user.get_full_name|default:vit.recorded_by.user.username }})</span>
+                    </p>
+                {% empty %}
+                    <p class="text-xs italic text-slate-500">No vitals recorded.</p>
+                {% endfor %}
+                <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Clinical notes</h3>
+                {% for note in v.notes %}
+                    <div class="border border-slate-200 rounded p-2 text-xs space-y-1">
+                        <p class="text-slate-500">
+                            {{ note.created_at|date:"Y-m-d H:i" }} · Dr. {{ note.author.user.get_full_name|default:note.author.user.username }}
+                        </p>
+                        <p><strong>Complaint:</strong> {{ note.presenting_complaint }}</p>
+                        {% if note.examination %}
+                            <p><strong>Examination:</strong> {{ note.examination }}</p>
+                        {% endif %}
+                        <p><strong>Diagnosis:</strong> {{ note.diagnosis }}</p>
+                        {% if note.plan %}
+                            <p><strong>Plan:</strong> {{ note.plan }}</p>
+                        {% endif %}
+                        {% for add in note.addenda.all %}
+                            <p class="text-slate-600">
+                                <strong>Addendum {{ add.created_at|date:"Y-m-d H:i" }}:</strong> {{ add.text }}
+                            </p>
+                        {% endfor %}
+                    </div>
+                {% empty %}
+                    <p class="text-xs italic text-slate-500">No clinical notes.</p>
+                {% endfor %}
+            {% endif %}
+            {% if show.pharmacy %}
+                <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Medication</h3>
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="text-left border-b">
+                            <th class="py-1">Ordered</th>
+                            <th>Medicine</th>
+                            <th>Dose / route</th>
+                            <th>Status</th>
+                            <th>Given / dispensed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in v.orders %}
+                            <tr class="border-b align-top">
+                                <td class="py-1">{{ o.ordered_at|date:"Y-m-d H:i" }}</td>
+                                <td>{{ o.medication.brand_name }} {{ o.medication.strength }}</td>
+                                <td>{{ o.dose_text }} · {{ o.get_route_display }} · {{ o.frequency_text }}</td>
+                                <td>{{ o.get_status_display }}</td>
+                                <td>
+                                    {% for a in o.administrations.all %}
+                                        <div>
+                                            Given {{ a.administered_at|date:"Y-m-d H:i" }} · {{ a.dose_given_text }} · by {{ a.administered_by.user.get_full_name|default:a.administered_by.user.username }}
+                                        </div>
+                                    {% endfor %}
+                                    {% for d in o.dispensations.all %}
+                                        <div>
+                                            Dispensed {{ d.dispensed_at|date:"Y-m-d H:i" }} · qty {{ d.quantity }} · by {{ d.dispensed_by.user.get_full_name|default:d.dispensed_by.user.username }}
+                                        </div>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="italic text-slate-500 py-1">No medication orders.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+            {% if show.radiology %}
+                <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Imaging and reports</h3>
+                {% for scan in v.scans %}
+                    <div class="border border-slate-200 rounded p-2 text-xs space-y-2">
+                        <p>
+                            <strong>{{ scan.modality }} · {{ scan.body_part }}</strong> · ordered {{ scan.ordered_at|date:"Y-m-d H:i" }} · status {{ scan.get_status_display }}
+                        </p>
+                        <p><strong>Indication:</strong> {{ scan.clinical_indication }}</p>
+                        {% for study in scan.studies.all %}
+                            <div class="space-y-1">
+                                <p>
+                                    <strong>Report</strong> ({{ study.reported_at|date:"Y-m-d H:i"|default:"not yet reported" }}{% if study.reported_by %}, {{ study.reported_by.user.get_full_name|default:study.reported_by.user.username }}{% endif %}): {{ study.report|default:"—" }}
+                                </p>
+                                {% if study.file %}
+                                    {% if study.is_image %}
+                                        <img class="scan"
+                                             src="{% url 'radiology:study_file' study.id %}"
+                                             alt="{{ scan.modality }} {{ scan.body_part }}" />
+                                    {% else %}
+                                        <p class="no-print">
+                                            <a href="{% url 'radiology:study_file' study.id %}"
+                                               class="text-cyan-700 underline">Open file ({{ study.file.name|slice:"-4:" }})</a>
+                                        </p>
+                                        <p class="hidden print:block text-slate-500">Non-image file attached (DICOM or PDF). Available in the system.</p>
+                                    {% endif %}
+                                    <p class="text-slate-400 text-[10px]">
+                                        SHA-256 {{ study.file_sha256|default:"not recorded" }} · uploaded {{ study.uploaded_at|date:"Y-m-d H:i" }}
+                                    </p>
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            <p class="italic text-slate-500">No images uploaded yet.</p>
+                        {% endfor %}
+                    </div>
+                {% empty %}
+                    <p class="text-xs italic text-slate-500">No scans ordered.</p>
+                {% endfor %}
+            {% endif %}
+            {% if show.finance %}
+                <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Charges and payments</h3>
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="text-left border-b">
+                            <th class="py-1">Date</th>
+                            <th>Item</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in v.charges %}
+                            <tr class="border-b">
+                                <td class="py-1">{{ c.created_at|date:"Y-m-d" }}</td>
+                                <td>{{ c.description }}</td>
+                                <td>{{ c.amount|floatformat:2 }}</td>
+                                <td>{{ c.get_status_display }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4" class="italic text-slate-500 py-1">No charges.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% for p in v.payments %}
+                    <p class="text-xs">
+                        Payment {{ p.receipt_number }} · {{ p.recorded_at|date:"Y-m-d H:i" }} ·
+                        KES {{ p.amount|floatformat:2 }} · {{ p.get_method_display }}
+                        {% if p.reference %}· ref {{ p.reference }}{% endif %} · taken by {{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}
                     </p>
                 {% endfor %}
-                {% if show.clinical %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Triage and vital signs</h3>
-                    {% for vit in v.vitals %}
-                        <p class="text-xs">
-                            {{ vit.recorded_at|date:"Y-m-d H:i" }} — T {{
-                                vit.temperature_c|default:"—" }}
-                            °C, P {{ vit.pulse_bpm|default:"—" }}, BP
-                            {% if vit.systolic_mmhg %}{{ vit.systolic_mmhg }}/{{ vit.diastolic_mmhg
-                            }}{% else %}—{% endif %}, RR {{ vit.respiratory_rate|default:"—" }}, SpO2
-                            {{ vit.spo2_percent|default:"—" }}%, Wt {{ vit.weight_kg|default:"—" }} kg
-                            {% if vit.notes %}— <em>{{ vit.notes }}</em>{% endif %}
-                            <span class="text-slate-500">({{
-                                vit.recorded_by.user.get_full_name|default:vit.recorded_by.user.username
-                                }})</span>
-                                </p>
-                            {% empty %}
-                                <p class="text-xs italic text-slate-500">No vitals recorded.</p>
-                            {% endfor %}
-                            <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Clinical notes</h3>
-                            {% for note in v.notes %}
-                                <div class="border border-slate-200 rounded p-2 text-xs space-y-1">
-                                    <p class="text-slate-500">
-                                        {{ note.created_at|date:"Y-m-d H:i" }} · Dr. {{
-                                            note.author.user.get_full_name|default:note.author.user.username }}
-                                    </p>
-                                    <p><strong>Complaint:</strong> {{ note.presenting_complaint }}</p>
-                                    {% if note.examination %}
-                                        <p><strong>Examination:</strong> {{ note.examination }}</p>
-                                    {% endif %}
-                                    <p><strong>Diagnosis:</strong> {{ note.diagnosis }}</p>
-                                    {% if note.plan %}
-                                        <p><strong>Plan:</strong> {{ note.plan }}</p>
-                                    {% endif %}
-                                    {% for add in note.addenda.all %}
-                                        <p class="text-slate-600">
-                                            <strong>Addendum {{ add.created_at|date:"Y-m-d H:i" }}:</strong> {{
-                                            add.text }}
-                                        </p>
-                                    {% endfor %}
-                                </div>
-                            {% empty %}
-                                <p class="text-xs italic text-slate-500">No clinical notes.</p>
-                            {% endfor %}
-                {% endif %}
-                {% if show.pharmacy %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Medication</h3>
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="text-left border-b">
-                                <th class="py-1">Ordered</th>
-                                <th>Medicine</th>
-                                <th>Dose / route</th>
-                                <th>Status</th>
-                                <th>Given / dispensed</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for o in v.orders %}
-                                <tr class="border-b align-top">
-                                    <td class="py-1">{{ o.ordered_at|date:"Y-m-d H:i" }}</td>
-                                    <td>{{ o.medication.brand_name }} {{ o.medication.strength }}</td>
-                                    <td>
-                                        {{ o.dose_text }} · {{ o.get_route_display }} · {{ o.frequency_text
-                                        }}
-                                    </td>
-                                    <td>{{ o.get_status_display }}</td>
-                                    <td>
-                                        {% for a in o.administrations.all %}
-                                            <div>
-                                                Given {{ a.administered_at|date:"Y-m-d H:i" }} · {{
-                                                    a.dose_given_text }} · by {{
-                                                    a.administered_by.user.get_full_name|default:a.administered_by.user.username
-                                                }}
-                                            </div>
-                                        {% endfor %}
-                                        {% for d in o.dispensations.all %}
-                                            <div>
-                                                Dispensed {{ d.dispensed_at|date:"Y-m-d H:i" }} · qty {{
-                                                    d.quantity }} · by {{
-                                                    d.dispensed_by.user.get_full_name|default:d.dispensed_by.user.username
-                                                }}
-                                            </div>
-                                        {% endfor %}
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="5" class="italic text-slate-500 py-1">No medication orders.</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                {% endif %}
-                {% if show.radiology %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Imaging and reports</h3>
-                    {% for scan in v.scans %}
-                        <div class="border border-slate-200 rounded p-2 text-xs space-y-2">
-                            <p>
-                                <strong>{{ scan.modality }} · {{ scan.body_part }}</strong> · ordered {{
-                                scan.ordered_at|date:"Y-m-d H:i" }} · status {{ scan.get_status_display
-                                }}
-                            </p>
-                            <p><strong>Indication:</strong> {{ scan.clinical_indication }}</p>
-                            {% for study in scan.studies.all %}
-                                <div class="space-y-1">
-                                    <p>
-                                        <strong>Report</strong> ({{ study.reported_at|date:"Y-m-d
-                                        H:i"|default:"not yet reported" }}{% if study.reported_by %}, {{
-                                            study.reported_by.user.get_full_name|default:study.reported_by.user.username
-                                        }}{% endif %}): {{ study.report|default:"—" }}
-                                            </p>
-                                            {% if study.file %}
-                                                {% if study.is_image %}
-                                                    <img class="scan"
-                                                         src="{% url 'radiology:study_file' study.id %}"
-                                                         alt="{{ scan.modality }} {{ scan.body_part }}" />
-                                                {% else %}
-                                                    <p class="no-print">
-                                                        <a href="{% url 'radiology:study_file' study.id %}"
-                                                           class="text-cyan-700 underline">Open file ({{ study.file.name|slice:"-4:" }})</a>
-                                                    </p>
-                                                    <p class="hidden print:block text-slate-500">Non-image file attached (DICOM or PDF). Available in the system.</p>
-                                                {% endif %}
-                                                <p class="text-slate-400 text-[10px]">
-                                                    SHA-256 {{ study.file_sha256|default:"not recorded" }} · uploaded {{
-                                                        study.uploaded_at|date:"Y-m-d H:i" }}
-                                                </p>
-                                            {% endif %}
-                                            </div>
-                                        {% empty %}
-                                            <p class="italic text-slate-500">No images uploaded yet.</p>
-                                        {% endfor %}
-                                    </div>
-                    {% empty %}
-                        <p class="text-xs italic text-slate-500">No scans ordered.</p>
-                    {% endfor %}
-                {% endif %}
-                {% if show.finance %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Charges and payments</h3>
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="text-left border-b">
-                                <th class="py-1">Date</th>
-                                <th>Item</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for c in v.charges %}
-                                <tr class="border-b">
-                                    <td class="py-1">{{ c.created_at|date:"Y-m-d" }}</td>
-                                    <td>{{ c.description }}</td>
-                                    <td>{{ c.amount|floatformat:2 }}</td>
-                                    <td>{{ c.get_status_display }}</td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="4" class="italic text-slate-500 py-1">No charges.</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% for p in v.payments %}
-                        <p class="text-xs">
-                            Payment {{ p.receipt_number }} · {{ p.recorded_at|date:"Y-m-d H:i" }} ·
-                            KES {{ p.amount|floatformat:2 }} · {{ p.get_method_display }}
-                            {% if p.reference %}· ref {{ p.reference }}{% endif %} · taken by {{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}
-                        </p>
-                    {% endfor %}
-                    <p class="text-xs font-bold">Visit balance: KES {{ v.tally.outstanding|floatformat:2 }}</p>
-                {% endif %}
-            </section>
-        {% endwith %}
-    {% empty %}
-        <p class="italic text-slate-500">No visits recorded for this patient.</p>
-    {% endfor %}
-    <footer class="border-t pt-2 text-[10px] text-slate-500 print-section">
-        Confidential. This printout reflects the record at the time shown above.
-        Access is logged.
-    </footer>
+                <p class="text-xs font-bold">Visit balance: KES {{ v.tally.outstanding|floatformat:2 }}</p>
+            {% endif %}
+        </section>
+    {% endwith %}
+{% empty %}
+    <p class="italic text-slate-500">No visits recorded for this patient.</p>
+{% endfor %}
+<footer class="border-t pt-2 text-[10px] text-slate-500 print-section">
+    Confidential. This printout reflects the record at the time shown above.
+    Access is logged.
+</footer>
 </div>
 {% endblock %}

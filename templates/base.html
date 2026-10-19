@@ -85,16 +85,28 @@
                                      hx-swap="innerHTML"></div>
                             </div>
                         </div>
-                        <a href="{% url 'dashboard:profile' %}"
-                           class="flex items-center gap-2.5 pl-2 md:pl-3 border-l border-slate-200 hover:opacity-80">
-                            <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold text-xs shrink-0">
-                                {% if request.user.first_name %}{{ request.user.first_name|slice:":1" }}{% else %}U{% endif %}
-                            </div>
-                            <div class="hidden sm:block text-left">
-                                <p class="text-xs font-bold text-slate-800 leading-tight">{{ request.user.get_full_name|default:request.user.username }}</p>
-                                <p class="text-[10px] text-slate-500 leading-tight">{% if request.user.is_superuser %}System Administrator{% elif request.user.staff_profile %}{{ request.user.staff_profile.get_role_display }}{% else %}Staff{% endif %}</p>
-                            </div>
-                        </a>
+                        <!-- User: profile link and logout -->
+                        <div class="flex items-center gap-2 md:gap-3 pl-2 md:pl-3 border-l border-slate-200">
+                            <a href="{% url 'dashboard:profile' %}"
+                               class="flex items-center gap-2.5 hover:opacity-80">
+                                <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                                    {% if request.user.first_name %}{{ request.user.first_name|slice:":1" }}{% else %}U{% endif %}
+                                </div>
+                                <div class="hidden sm:block text-left">
+                                    <p class="text-xs font-bold text-slate-800 leading-tight">{{ request.user.get_full_name|default:request.user.username }}</p>
+                                    <p class="text-[10px] text-slate-500 leading-tight">{% if request.user.is_superuser %}System Administrator{% elif request.user.staff_profile %}{{ request.user.staff_profile.get_role_display }}{% else %}Staff{% endif %}</p>
+                                </div>
+                            </a>
+                            <form method="post" action="{% url 'logout' %}">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200">
+                                    <span aria-hidden="true">⏻</span>
+                                    <span class="hidden sm:inline">Log out</span>
+                                    <span class="sr-only sm:hidden">Log out</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </header>

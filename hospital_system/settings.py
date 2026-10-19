@@ -21,6 +21,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 LOGIN_URL = "/accounts/login/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # Application definition
 INSTALLED_APPS = [
