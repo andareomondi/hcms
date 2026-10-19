@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Bed {{ bed.code }} history{% endblock %}
+{% block content %}
+    <div class="max-w-4xl mx-auto space-y-6">
+        <!-- Header -->
+        <div>
+            <a href="{% url 'wards:dashboard' %}"
+               class="text-xs text-slate-500 hover:underline">← Wards &amp; beds</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">{{ bed.ward.name }} · Bed {{ bed.code }}</h1>
+            <p class="text-sm text-slate-500">
+                Currently <strong>{{ bed.get_status_display }}</strong>
+                {% if bed.status_changed_at %}since {{ bed.status_changed_at|date:"Y-m-d H:i" }}{% endif %}
+            </p>
+        </div>
+        <!-- Who has been in this bed -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50/50 border-b">
+                <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Who has been in this bed</h2>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5">Patient</th>
+                        <th class="p-3.5">Admitted</th>
+                        <th class="p-3.5">Discharged</th>
+                        <th class="p-3.5">Planned</th>
+                        <th class="p-3.5">Admitted by</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                    {% for s in stays %}
+                        <tr>
+                            <td class="p-3.5 font-bold">
+                                <a href="{% url 'core_patients:detail' s.encounter.patient.id %}"
+                                   class="text-teal-700 hover:underline">
+                                    {{ s.encounter.patient.last_name }}, {{ s.encounter.patient.first_name }}
+                                </a>
+                            </td>
+                            <td class="p-3.5 text-xs font-mono">{{ s.admitted_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs font-mono">
+                                {% if s.discharged_at %}
+                                    {{ s.discharged_at|date:"Y-m-d H:i" }}
+                                {% else %}
+                                    <span class="text-blue-700 font-bold">Still in bed</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3.5 text-xs">{{ s.planned_days }} day(s)</td>
+                            <td class="p-3.5 text-xs">{{ s.admitted_by.user.get_full_name|default:s.admitted_by.user.username }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5"
+                                class="p-8 text-center text-slate-500 italic">This bed has no recorded stays yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        <!-- Status changes -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50/50 border-b">
+                <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Status changes</h2>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5">When</th>
+                        <th class="p-3.5">Change</th>
+                        <th class="p-3.5">Reason</th>
+                        <th class="p-3.5">By</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                    {% for log in logs %}
+                        <tr>
+                            <td class="p-3.5 text-xs font-mono">{{ log.changed_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs font-semibold">{{ log.get_from_status_display }} → {{ log.get_to_status_display }}</td>
+                            <td class="p-3.5 text-xs">
+                                {{ log.reason|default:"—" }}
+                                {% if log.admission %}
+                                    <span class="block text-slate-500">{{ log.admission.encounter.patient.last_name }}, {{ log.admission.encounter.patient.first_name }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3.5 text-xs">{{ log.changed_by.user.get_full_name|default:log.changed_by.user.username }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="p-8 text-center text-slate-500 italic">No changes recorded yet.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </div>
+{% endblock %}

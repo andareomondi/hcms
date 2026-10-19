@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, ProtectedError, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -31,7 +31,7 @@ def is_system_admin(user):
 
 ROLE_GUIDE = [
     {"role": "Reception", "who": "Front desk and registry",
-     "does": "Registers patients, searches the registry, opens visits, runs the triage board, reassigns waiting patients.",
+     "does": "Registers patients, searches the registry, opens visits, runs the triage board, handle ward and bed related tasks, reassigns waiting patients.",
      "sees": "Patient identity, visit dates and types, ward board, who is on duty.",
      "cannot": "Clinical notes, vitals, scans, prescriptions, payments."},
     {"role": "Triage nurse", "who": "Triage",
@@ -39,11 +39,11 @@ ROLE_GUIDE = [
      "sees": "Triage and clinical data for the patient.",
      "cannot": "Finance, payments, consultations."},
     {"role": "Doctor", "who": "Physicians",
-     "does": "Calls patients, writes notes, prescribes, requests scans, admits to a ward, completes consultations.",
+     "does": "Calls patients, writes notes, prescribes, requests scans, admits to a ward, handle ward and bed related tasks, completes consultations.",
      "sees": "Full clinical record, pharmacy records, radiology images and reports.",
      "cannot": "Finance, payments, receipts, reception and triage work."},
     {"role": "Nurse", "who": "Ward and injection nurses",
-     "does": "Gives injections and IV medicines, runs the nurse worklist, manages ward bed status.",
+     "does": "Gives injections and IV medicines, runs the nurse worklist, handle ward and bed related tasks, manages ward bed status.",
      "sees": "Clinical and pharmacy records.",
      "cannot": "Finance, reports, consultations."},
     {"role": "Pharmacist", "who": "Pharmacy",
@@ -59,7 +59,7 @@ ROLE_GUIDE = [
      "sees": "Charges, payments, demographics, visit dates.",
      "cannot": "Clinical notes, vitals, scan images, prescriptions."},
     {"role": "Administrator", "who": "System administrator (superuser)",
-     "does": "Approves staff accounts, manages data and rooms, reviews the audit log.",
+     "does": "Approves staff accounts, manages data and rooms, reviews the audit log. THEY CAN ALMOST DO EVERYTHING",
      "sees": "Everything, read-only, including finance and clinical records.",
      "cannot": "Consultations, reception, triage, pharmacy or nursing. The admin account is for management, not for doing clinical work."},
 ]
@@ -138,13 +138,22 @@ def admin_create_bed_action(request):
 @login_required
 @require_POST
 def admin_delete_bed_action(request, bed_id):
-    """Admin action to delete/remove a bed."""
+    """Removes a bed. Only vacant beds with no history can be removed."""
     bed = get_object_or_404(Bed, pk=bed_id)
     code = bed.code
-    bed.delete()
+    if bed.status != "VACANT":
+        messages.error(request, f"Bed {code} is {bed.get_status_display().lower()}. Only vacant beds can be removed.")
+        return redirect("/dashboard/admin-master/?tab=wards")
+    try:
+        bed.delete()
+    except ProtectedError:
+        messages.error(request, f"Bed {code} has history and cannot be deleted. Take it out of service instead.")
+        return redirect("/dashboard/admin-master/?tab=wards")
+
     log_action(request, AuditAction.DELETE, f"System Admin deleted Bed {code}")
     messages.success(request, f"Bed '{code}' deleted.")
     return redirect("/dashboard/admin-master/?tab=wards")
+
 @login_required
 def audit_log_view(request):
     """Comprehensive system audit log showing all signups, database mutations, and user actions."""

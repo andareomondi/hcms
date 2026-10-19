@@ -1,184 +1,277 @@
 {% extends "base.html" %}
-{% block title %}Ward & Bed Management - HCMS{% endblock %}
+{% block title %}Wards & beds - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-8"
-         x-data="{ showModal: false, selectedBedId: '', selectedBedCode: '' }">
-        <!-- Top Header & Actions -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+         x-data="{
+         assign: { open: false, bedId: '', code: '' },
+         act: { open: false, bedId: '', code: '', to: '', label: '', needsReason: false, reason: '' },
+         discharge: { open: false, url: '', name: '', bed: '' }
+     }"
+         @keydown.escape.window="assign.open = false; act.open = false; discharge.open = false">
+        <!-- Header and occupancy -->
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Inpatient Wards & Bed Management</h1>
-                <p class="text-sm text-slate-500 mt-0.5">Monitor ward occupancy, assign patient encounters to vacant beds, and manage discharges.</p>
+                <h1 class="text-2xl font-bold text-slate-900">Wards &amp; beds</h1>
+                <p class="text-sm text-slate-500 mt-1">Admit, discharge, and keep every bed ready for the next patient.</p>
             </div>
-        </div>
-        <!-- Occupancy Metrics Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Overall Occupancy Rate</span>
-                <div class="mt-4 flex items-baseline justify-between">
-                    <h3 class="text-3xl font-extrabold text-slate-900">{{ occupancy_rate }}%</h3>
-                    <span class="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-full">Inpatient Live</span>
+            <div class="w-full md:w-72">
+                <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                    <span>Occupancy</span>
+                    <span>{{ occupancy_rate }}%</span>
                 </div>
-                <div class="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
-                    <div class="bg-teal-600 h-full rounded-full"
+                <div class="h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-600 rounded-full"
                          style="width: {{ occupancy_rate }}%"></div>
                 </div>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Occupied Beds</span>
-                <div class="mt-4 flex items-baseline justify-between">
-                    <h3 class="text-3xl font-extrabold text-blue-600">{{ occupied_beds }}</h3>
-                    <span class="text-xs text-slate-500">of {{ total_beds }} total</span>
-                </div>
-                <p class="text-xs text-slate-500 mt-3">Currently admitted patients.</p>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Vacant Beds</span>
-                <div class="mt-4 flex items-baseline justify-between">
-                    <h3 class="text-3xl font-extrabold text-emerald-600">{{ vacant_beds }}</h3>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">Ready</span>
-                </div>
-                <p class="text-xs text-slate-500 mt-3">Available for immediate assignment.</p>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Cleaning & Maintenance</span>
-                <div class="mt-4 flex items-baseline justify-between">
-                    <h3 class="text-3xl font-extrabold text-amber-600">{{ cleaning_beds }}</h3>
-                    <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">Turnover</span>
-                </div>
-                <p class="text-xs text-slate-500 mt-3">Beds undergoing sanitation.</p>
+                <p class="text-xs text-slate-500 mt-1">{{ total_beds }} bed(s) in total</p>
             </div>
         </div>
-        <!-- Wards and Bed Grids -->
-        <div class="space-y-6">
-            {% for ward in wards %}
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-                    <div class="flex justify-between items-center border-b border-slate-100 pb-4">
-                        <div>
-                            <h2 class="font-bold text-slate-900 text-lg">{{ ward.name }}</h2>
-                            <p class="text-xs text-slate-500">Department: {{ ward.department.name }} • Bed-Day Rate: KES {{ ward.bed_day_rate }}</p>
-                        </div>
-                        <span class="text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl">
-                            {{ ward.beds.all|length }} Beds Total
-                        </span>
-                    </div>
-                    <!-- Bed Cards Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        {% for bed in ward.beds.all %}
-                            <div class="p-4 rounded-xl border flex flex-col justify-between space-y-3 transition {% if bed.status == 'OCCUPIED' %}bg-blue-50/50 border-blue-200{% elif bed.status == 'VACANT' %}bg-emerald-50/40 border-emerald-200{% else %}bg-amber-50/50 border-amber-200{% endif %}">
-                                <div class="flex justify-between items-start">
-                                    <span class="font-bold text-slate-900 text-sm">{{ bed.code }}</span>
-                                    {% if bed.status == "OCCUPIED" %}
-                                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Occupied</span>
-                                    {% elif bed.status == "VACANT" %}
-                                        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Vacant</span>
-                                    {% else %}
-                                        <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Cleaning</span>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    {% if bed.active_admission %}
-                                        <p class="text-xs font-bold text-slate-800">{{ bed.active_admission.encounter.patient.last_name }}, {{ bed.active_admission.encounter.patient.first_name }}</p>
-                                        <p class="text-[10px] text-slate-500 mt-0.5">Admitted: {{ bed.active_admission.admitted_at|date:"M d, H:i" }}</p>
-                                    {% else %}
-                                        <p class="text-xs text-slate-500 italic">Bed ready for assignment</p>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    <div>
-                                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Planned stay (days) *</label>
-                                        <input type="number"
-                                               name="planned_days"
-                                               min="1"
-                                               max="365"
-                                               value="1"
-                                               required
-                                               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm">
-                                        <p class="text-xs text-slate-500 mt-1">Charged at the ward's bed-day rate. Reconciled to actual days at discharge.</p>
-                                    </div>
-                                    {% if bed.status == "VACANT" %}
-                                        <button @click="showModal = true; selectedBedId = '{{ bed.id }}'; selectedBedCode = '{{ bed.code }}'"
-                                                class="w-full bg-emerald-600 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm">
-                                            Assign Bed
-                                        </button>
-                                    {% elif bed.active_admission %}
-                                        <form action="{% url 'wards:discharge_patient' bed.active_admission.id %}"
-                                              method="post">
-                                            {% csrf_token %}
-                                            <button type="submit"
-                                                    class="w-full bg-slate-900 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition">
-                                                Discharge
-                                            </button>
-                                        </form>
-                                    {% else %}
-                                        <button disabled
-                                                class="w-full bg-slate-200 text-slate-500 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">
-                                            Maintenance
-                                        </button>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% empty %}
-                <p class="text-sm text-slate-500 text-center py-8">No wards configured in the system.</p>
-            {% endfor %}
-            <!-- Pagination Controls -->
-            {% if page_obj.has_other_pages %}
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center text-sm">
-                    <span class="text-slate-500 text-xs">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                    <div class="flex space-x-2">
-                        {% if page_obj.has_previous %}
-                            <a href="?page={{ page_obj.previous_page_number }}"
-                               class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100">Previous</a>
-                        {% endif %}
-                        {% if page_obj.has_next %}
-                            <a href="?page={{ page_obj.next_page_number }}"
-                               class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-100">Next</a>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-        <!-- Bed Assignment Modal -->
-        <div x-show="showModal"
-             class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-             style="display: none">
-            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6"
-                 @click.away="showModal = false">
-                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+        <!-- Status tiles -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {% for code, label, count in status_rows %}
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+                    <span class="w-1.5 h-10 rounded-full {% if code == 'VACANT' %}bg-emerald-500{% elif code == 'OCCUPIED' %}bg-blue-600{% elif code == 'CLEANING' %}bg-amber-500{% elif code == 'ISOLATED' %}bg-red-500{% else %}bg-rose-700{% endif %}"></span>
                     <div>
-                        <h3 class="font-bold text-slate-900 text-lg">Assign Bed <span x-text="selectedBedCode"
-       class="text-teal-600"></span></h3>
-                        <p class="text-xs text-slate-500">Select an active patient encounter for admission.</p>
+                        <p class="text-2xl font-extrabold text-slate-900 leading-none">{{ count }}</p>
+                        <p class="text-xs font-semibold text-slate-500 mt-1">{{ label }}</p>
                     </div>
-                    <button @click="showModal = false"
-                            class="text-slate-400 hover:text-slate-600 font-bold">×</button>
                 </div>
-                <form :action="'/wards/bed/' + selectedBedId + '/assign/'"
-                      method="post"
+            {% endfor %}
+        </div>
+        <!-- Needs action -->
+        {% if attention %}
+            <section class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                <h2 class="font-bold text-amber-900 mb-3">
+                    Needs action <span class="font-semibold text-amber-700">({{ attention|length }})</span>
+                </h2>
+                <ul class="divide-y divide-amber-200 bg-white rounded-xl border border-amber-200">
+                    {% for bed in attention %}
+                        <li class="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+                            <div class="min-w-0">
+                                <p class="font-bold text-slate-900">{{ bed.ward.name }} · Bed {{ bed.code }}</p>
+                                <p class="text-xs font-semibold {% if bed.status == 'CLEANING' %}text-amber-700{% else %}text-red-700{% endif %}">
+                                    {{ bed.get_status_display }}{% if bed.status_reason %} · {{ bed.status_reason }}{% endif %}
+                                </p>
+                            </div>
+                            {% if can_manage %}
+                                <div class="flex flex-wrap gap-2">
+                                    {% for a in bed.actions %}
+                                        <button type="button"
+                                                class="min-h-10 px-4 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800"
+                                                @click="act = { open: true, bedId: '{{ bed.id }}', code: '{{ bed.code|escapejs }}', to: '{{ a.to }}', label: '{{ a.label|escapejs }}', needsReason: {% if a.needs_reason %}true{% else %}false{% endif %}, reason: '' }">{{ a.label }}</button>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+        <!-- Wards -->
+        {% for ward in wards %}
+            <section class="space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 border-b border-slate-200 pb-2">
+                    <h2 class="text-lg font-bold text-slate-900">{{ ward.name }}</h2>
+                    <p class="text-xs text-slate-500">{{ ward.department.name }} · KES {{ ward.bed_day_rate|floatformat:2 }} per bed day</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                    {% for bed in ward.beds.all %}
+                        <article class="rounded-2xl border-2 bg-white p-4 flex flex-col gap-4 {% if bed.status == 'OCCUPIED' %}border-blue-200{% elif bed.status == 'VACANT' %}border-emerald-200{% elif bed.status == 'CLEANING' %}border-amber-200{% else %}border-red-200{% endif %}">
+                            <header class="flex items-start justify-between gap-2">
+                                <div>
+                                    <p class="text-xs text-slate-500">Bed</p>
+                                    <p class="text-2xl font-extrabold text-slate-900 leading-none">{{ bed.code }}</p>
+                                </div>
+                                <span class="text-xs font-bold px-3 py-1 rounded-full {% if bed.status == 'OCCUPIED' %}bg-blue-100 text-blue-800{% elif bed.status == 'VACANT' %}bg-emerald-100 text-emerald-800{% elif bed.status == 'CLEANING' %}bg-amber-100 text-amber-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                    {{ bed.get_status_display }}
+                                </span>
+                            </header>
+                            <div class="min-h-[3rem] text-sm">
+                                {% if bed.active_admission %}
+                                    <p class="font-bold text-slate-900 truncate">{{ bed.active_admission.encounter.patient.last_name }}, {{ bed.active_admission.encounter.patient.first_name }}</p>
+                                    <p class="text-xs text-slate-500">Admitted {{ bed.active_admission.admitted_at|date:"d M, H:i" }} · {{ bed.active_admission.planned_days }} day(s) planned</p>
+                                {% elif bed.status_reason %}
+                                    <p class="text-xs text-slate-600">{{ bed.status_reason }}</p>
+                                {% elif bed.status == "VACANT" %}
+                                    <p class="text-xs text-slate-500">Ready for the next patient</p>
+                                {% endif %}
+                            </div>
+                            <footer class="mt-auto space-y-2">
+                                {% if bed.status == "VACANT" and can_admit %}
+                                    <button type="button"
+                                            class="w-full min-h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
+                                            @click="assign = { open: true, bedId: '{{ bed.id }}', code: '{{ bed.code|escapejs }}' }">Assign patient</button>
+                                {% elif bed.active_admission and can_admit %}
+                                    <button type="button"
+                                            class="w-full min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800"
+                                            @click="discharge = { open: true, url: '{% url 'wards:discharge_patient' bed.active_admission.id %}', name: '{{ bed.active_admission.encounter.patient.last_name|escapejs }}, {{ bed.active_admission.encounter.patient.first_name|escapejs }}', bed: '{{ bed.code|escapejs }}' }">Discharge</button>
+                                {% endif %}
+                                {% if can_manage and not bed.active_admission and bed.actions %}
+                                    <div class="flex flex-wrap gap-2">
+                                        {% for a in bed.actions %}
+                                            <button type="button"
+                                                    class="flex-1 min-h-10 px-3 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                                                    @click="act = { open: true, bedId: '{{ bed.id }}', code: '{{ bed.code|escapejs }}', to: '{{ a.to }}', label: '{{ a.label|escapejs }}', needsReason: {% if a.needs_reason %}true{% else %}false{% endif %}, reason: '' }">{{ a.label }}</button>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <a href="{% url 'wards:bed_history' bed.id %}"
+                                   class="block text-center text-xs font-bold text-teal-700 hover:underline py-1">View history</a>
+                            </footer>
+                        </article>
+                    {% empty %}
+                        <p class="text-sm text-slate-500 italic col-span-full">No beds in this ward yet.</p>
+                    {% endfor %}
+                </div>
+            </section>
+        {% empty %}
+            <div class="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
+                No wards configured yet. A superuser can add wards and beds in the admin panel.
+            </div>
+        {% endfor %}
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <nav class="flex items-center justify-between bg-white rounded-2xl border border-slate-200 p-3">
+                <span class="text-xs text-slate-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}"
+                           class="inline-flex items-center min-h-10 px-4 rounded-xl border border-slate-300 text-xs font-bold">Previous</a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}"
+                           class="inline-flex items-center min-h-10 px-4 rounded-xl border border-slate-300 text-xs font-bold">Next</a>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
+        <!-- ===== Modal: assign patient ===== -->
+        <div x-show="assign.open"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+             @click.self="assign.open = false">
+            <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl p-6 space-y-5">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Assign patient</h3>
+                        <p class="text-sm text-slate-500">Bed <span class="font-bold text-slate-800"
+       x-text="assign.code"></span></p>
+                    </div>
+                    <button type="button"
+                            @click="assign.open = false"
+                            class="w-10 h-10 rounded-full hover:bg-slate-100 text-slate-500 text-xl"
+                            aria-label="Close">×</button>
+                </div>
+                <form method="post"
+                      :action="'{% url 'wards:assign_bed' '00000000-0000-0000-0000-000000000000' %}'.replace('00000000-0000-0000-0000-000000000000', assign.bedId)"
                       class="space-y-4">
                     {% csrf_token %}
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Select Encounter / Patient</label>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Patient visit</label>
                         <select name="encounter_id"
                                 required
-                                class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 bg-white">
-                            <option value="">-- Choose active encounter --</option>
+                                class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm bg-white">
+                            <option value="">Choose an open visit</option>
                             {% for enc in available_encounters %}
-                                <option value="{{ enc.id }}">
-                                    {{ enc.patient.last_name }}, {{ enc.patient.first_name }} ({{ enc.get_encounter_type_display }} • ID: {{ enc.patient.id_number }})
-                                </option>
+                                <option value="{{ enc.id }}">{{ enc.patient.last_name }}, {{ enc.patient.first_name }} · {{ enc.get_encounter_type_display }}</option>
                             {% endfor %}
                         </select>
+                        {% if not available_encounters %}
+                            <p class="text-xs text-amber-700 mt-1">No open visits are waiting for a bed.</p>
+                        {% endif %}
                     </div>
-                    <div class="flex space-x-3 pt-2">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Planned stay (days)</label>
+                        <input type="number"
+                               name="planned_days"
+                               min="1"
+                               max="365"
+                               value="1"
+                               required
+                               class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm">
+                        <p class="text-xs text-slate-500 mt-1">Charged at the ward's bed-day rate. Adjusted to actual days at discharge.</p>
+                    </div>
+                    <div class="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                         <button type="button"
-                                @click="showModal = false"
-                                class="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">Cancel</button>
+                                @click="assign.open = false"
+                                class="flex-1 min-h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Cancel</button>
                         <button type="submit"
-                                class="flex-1 bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 shadow-sm transition">Confirm Admission</button>
+                                class="flex-1 min-h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700">Confirm admission</button>
                     </div>
+                </form>
+            </div>
+        </div>
+        <!-- ===== Modal: bed status change ===== -->
+        <div x-show="act.open"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+             @click.self="act.open = false">
+            <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl p-6 space-y-5">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900" x-text="act.label"></h3>
+                        <p class="text-sm text-slate-500">Bed <span class="font-bold text-slate-800"
+       x-text="act.code"></span></p>
+                    </div>
+                    <button type="button"
+                            @click="act.open = false"
+                            class="w-10 h-10 rounded-full hover:bg-slate-100 text-slate-500 text-xl"
+                            aria-label="Close">×</button>
+                </div>
+                <form method="post"
+                      :action="'{% url 'wards:update_bed_status' '00000000-0000-0000-0000-000000000000' %}'.replace('00000000-0000-0000-0000-000000000000', act.bedId)"
+                      class="space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" :value="act.to">
+                    <div x-show="act.needsReason" x-cloak>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Reason</label>
+                        <input type="text"
+                               name="reason"
+                               x-model="act.reason"
+                               :required="act.needsReason"
+                               placeholder="Required, for example: suspected TB, flood damage"
+                               class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm">
+                    </div>
+                    <p class="text-xs text-slate-500"
+                       x-show="!act.needsReason"
+                       x-cloak>This is logged in the bed history with your name.</p>
+                    <div class="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                        <button type="button"
+                                @click="act.open = false"
+                                class="flex-1 min-h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800"
+                                x-text="act.label"></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- ===== Modal: confirm discharge ===== -->
+        <div x-show="discharge.open"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+             @click.self="discharge.open = false">
+            <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl p-6 space-y-5">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Discharge patient?</h3>
+                    <p class="text-sm text-slate-600 mt-2">
+                        <span class="font-bold" x-text="discharge.name"></span> will leave bed
+                        <span class="font-bold"
+                              x-text="discharge.bed"></span>. The bed will be marked as cleaning, and the bill will be sent to billing.
+                    </p>
+                </div>
+                <form method="post"
+                      :action="discharge.url"
+                      class="flex flex-col-reverse sm:flex-row gap-3">
+                    {% csrf_token %}
+                    <button type="button"
+                            @click="discharge.open = false"
+                            class="flex-1 min-h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">Keep in bed</button>
+                    <button type="submit"
+                            class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800">Confirm discharge</button>
                 </form>
             </div>
         </div>

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Bed occupancy{% endblock %}
+{% block content %}
+    <div class="space-y-6">
+        <div>
+            <a href="{% url 'wards:dashboard' %}"
+               class="text-xs text-slate-500 hover:underline">← Wards &amp; beds</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">Bed occupancy</h1>
+            <p class="text-sm text-slate-500">Who was in which bed. Leave the date blank to see every stay.</p>
+        </div>
+        <form method="get"
+              class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div class="flex-1">
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Ward</label>
+                <select name="ward"
+                        class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm bg-white">
+                    <option value="">All wards</option>
+                    {% for w in wards %}
+                        <option value="{{ w.id }}"
+                                {% if selected_ward == w.id|stringformat:"s" %}selected{% endif %}>{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">On this date</label>
+                <input type="date"
+                       name="date"
+                       value="{{ day }}"
+                       class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm">
+            </div>
+            <div class="flex gap-2">
+                <button type="submit"
+                        class="min-h-11 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold">Show</button>
+                <a href="{% url 'wards:occupancy' %}"
+                   class="min-h-11 px-5 rounded-xl border border-slate-300 text-sm font-bold inline-flex items-center">Clear</a>
+            </div>
+        </form>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5">Ward · bed</th>
+                        <th class="p-3.5">Patient</th>
+                        <th class="p-3.5">Admitted</th>
+                        <th class="p-3.5">Discharged</th>
+                        <th class="p-3.5">Admitted by</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                    {% for s in page_obj %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5">
+                                <a href="{% url 'wards:bed_history' s.bed.id %}"
+                                   class="font-bold text-teal-700 hover:underline">
+                                    {{ s.bed.ward.name }} · {{ s.bed.code }}
+                                </a>
+                            </td>
+                            <td class="p-3.5 font-semibold">
+                                <a href="{% url 'core_patients:detail' s.encounter.patient.id %}"
+                                   class="hover:underline">
+                                    {{ s.encounter.patient.last_name }}, {{ s.encounter.patient.first_name }}
+                                </a>
+                            </td>
+                            <td class="p-3.5 text-xs font-mono">{{ s.admitted_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs font-mono">
+                                {% if s.discharged_at %}{{ s.discharged_at|date:"Y-m-d H:i" }}{% else %}<span class="text-blue-700 font-bold">Still in bed</span>{% endif %}
+                            </td>
+                            <td class="p-3.5 text-xs">{{ s.admitted_by.user.get_full_name|default:s.admitted_by.user.username }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5"
+                                class="p-8 text-center text-slate-500 italic">No stays match these filters.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj.has_other_pages %}
+            <nav class="flex items-center justify-between">
+                <span class="text-xs text-slate-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&ward={{ selected_ward }}&date={{ day }}"
+   class="min-h-10 px-4 rounded-xl border border-slate-300 text-xs font-bold inline-flex items-center">Previous</a>{% endif %}
+                    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&ward={{ selected_ward }}&date={{ day }}"
+   class="min-h-10 px-4 rounded-xl border border-slate-300 text-xs font-bold inline-flex items-center">Next</a>{% endif %}
+                </div>
+            </nav>
+        {% endif %}
+    </div>
+{% endblock %}
