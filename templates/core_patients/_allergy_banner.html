@@ -1,0 +1,14 @@
+{% if patient_allergies %}
+    <div class="bg-red-600 text-white rounded-2xl px-4 py-3 flex flex-wrap items-center gap-2">
+        <span class="font-extrabold uppercase text-xs tracking-wider">⚠ Allergies</span>
+        {% for a in patient_allergies %}
+            <span class="bg-white text-red-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                {{ a.allergen.display_name }} · {{ a.get_severity_display }}
+            </span>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="bg-slate-100 text-slate-600 rounded-2xl px-4 py-2 text-xs">
+        No allergies recorded. This does not mean there are none.
+    </div>
+{% endif %}

@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 
 from billing import services as billing_services
 from billing.prices import SCAN_PRICES
+from core_patients.allergy_services import conflicts_for
 from core_patients.models import PatientAllergy
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
@@ -20,6 +21,7 @@ from triage_queue.services import (
     FlowError,
     close_consultation,
     consultation_mode,
+    require_active,
 )
 from wards import services as ward_services
 from wards.models import Admission, Ward
@@ -126,28 +128,29 @@ def add_clinical_note_action(request, encounter_id):
 
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
-
 @login_required
 @user_passes_test(is_physician)
 @require_POST
 def prescribe_medication_action(request, encounter_id):
     encounter = get_object_or_404(Encounter, pk=encounter_id)
-
-    try:
-        require_active(encounter, request.staff_profile)
-    except FlowError as exc:
-        messages.error(request, str(exc))
-        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
-
     profile = request.staff_profile
     medication = get_object_or_404(Medication, pk=request.POST.get("medication_id"), is_active=True)
     route = request.POST.get("route", "ORAL")
     frequency = request.POST.get("frequency", "OD")
     dose_text = request.POST.get("dose_text", "").strip() or medication.strength
+    override = request.POST.get("allergy_override_reason", "").strip()
     try:
         days = max(1, int(request.POST.get("duration_days", "5")))
     except ValueError:
         days = 5
+
+    hits = list(conflicts_for(encounter.patient, medication))
+    if hits and not override:
+        names = ", ".join(h.allergen.display_name for h in hits)
+        messages.error(request,
+                       f"Allergy alert: the patient is recorded as allergic to {names}. "
+                       "Enter an override reason to prescribe anyway.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     per_day = {"OD": 1, "BID": 2, "TID": 3, "QID": 4, "STAT": 1}.get(frequency, 1)
     doses_total = per_day * days if frequency != "STAT" else 1
@@ -155,33 +158,27 @@ def prescribe_medication_action(request, encounter_id):
 
     with transaction.atomic():
         order = MedicationOrder.objects.create(
-            encounter=encounter,
-            ordered_by=profile,
-            medication=medication,
-            route=route,
-            fulfilment=fulfilment,
-            dose_text=dose_text,
-            frequency_text=frequency,
-            duration_days=days,
-            doses_total=doses_total,
-            status="ORDERED",
+            encounter=encounter, ordered_by=profile, medication=medication,
+            route=route, fulfilment=fulfilment, dose_text=dose_text,
+            frequency_text=frequency, duration_days=days, doses_total=doses_total,
+            status="ORDERED", allergy_override_reason=override if hits else "",
         )
         billing_services.add_charge(
-            encounter=encounter,
-            source_type="MEDICATION_ORDER",
+            encounter=encounter, source_type="MEDICATION_ORDER",
             description=f"{medication.brand_name} {medication.strength} x{doses_total}",
-            unit_price=medication.unit_price,
-            quantity=doses_total,
-            staff=profile,
-            source_id=order.id,
-            key=f"med:{order.id}",
+            unit_price=medication.unit_price, quantity=doses_total, staff=profile,
+            source_id=order.id, key=f"med:{order.id}",
         )
 
+    if hits:
+        names = ", ".join(h.allergen.display_name for h in hits)
+        log_action(request, AuditAction.ALLERGY_OVERRIDDEN,
+                   f"Prescribed {medication.brand_name} despite recorded allergy to {names} "
+                   f"for {encounter.patient}. Reason: {override}")
     log_action(request, AuditAction.MEDICATION_ORDERED,
                f"Prescribed {medication.brand_name} ({fulfilment}) for {encounter.patient}.")
     messages.success(request, f"Prescribed {medication.brand_name}.")
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
-
 
 @login_required
 @user_passes_test(is_physician)

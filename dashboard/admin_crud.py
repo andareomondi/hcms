@@ -91,8 +91,8 @@ class _StyledForm(forms.ModelForm):
 
 def _form_for(model):
     fields = [f.name for f in model._meta.concrete_fields if f.editable and not f.primary_key]
+    fields += [f.name for f in model._meta.many_to_many]
     return forms.modelform_factory(model, form=_StyledForm, fields=fields)
-
 
 def _list_url(app_label, model_name):
     from django.urls import reverse

@@ -1,58 +1,91 @@
 {% extends "base.html" %}
-{% block title %}Nurse Medication Worklist - HCMS{% endblock %}
+{% block title %}Nurse worklist - HCMS{% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        <div class="flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Nurse Medication Worklist</h1>
-                <p class="text-sm text-slate-500 mt-0.5">Active medication prescriptions waiting for administration or dispensing.</p>
-            </div>
-            <a href="{% url 'pharmacy:dashboard' %}"
-               class="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">
-                ← Pharmacy Inventory
-            </a>
+    <div class="space-y-6"
+         x-data="{ open: false, action: '', name: '', medicine: '', dose: '', site: '', notes: '', hits: false }">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Nurse worklist</h1>
+            <p class="text-sm text-slate-500">Injections and IV medicines to give. Check the allergy alert before every dose.</p>
         </div>
-        <!-- Worklist Table -->
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Patient</th>
-                            <th class="p-3.5">Prescribed Medication</th>
-                            <th class="p-3.5">Dosage / Frequency</th>
-                            <th class="p-3.5">Instructions</th>
-                            <th class="p-3.5">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for order in orders %}
-                            <tr class="hover:bg-slate-50/80 transition">
-                                <td class="p-3.5 font-bold text-slate-900">
-                                    {{ order.encounter.patient.last_name }}, {{ order.encounter.patient.first_name }}
-                                </td>
-                                <td class="p-3.5 text-slate-800 font-semibold">{{ order.medication.brand_name }} ({{ order.medication.strength }})</td>
-                                <td class="p-3.5 text-slate-600">{{ order.dose_text }} • {{ order.frequency_text }}</td>
-                                <td class="p-3.5 text-slate-600 text-xs">{{ order.instructions|default:"Take as directed." }}</td>
-                                <td class="p-3.5">
-                                    <form action="{% url 'pharmacy:mark_administered' order.id %}"
-                                          method="post">
-                                        {% csrf_token %}
-                                        <button type="submit"
-                                                class="bg-teal-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold hover:bg-teal-700 shadow-sm transition">
-                                            Mark Administered
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="5"
-                                    class="p-6 text-center text-slate-500">No pending medication orders to administer.</td>
-                            </tr>
+        <ul class="space-y-3">
+            {% for o in orders %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 {% if o.allergy_hits and not o.allergy_override_reason %}border-red-300 bg-red-50/40{% endif %}">
+                    <div class="min-w-0 space-y-1">
+                        <p class="font-bold">
+                            {{ o.encounter.patient.last_name }}, {{ o.encounter.patient.first_name }}
+                            <span class="font-normal text-slate-500">· {{ o.medication.brand_name }} {{ o.medication.strength }} · {{ o.get_route_display }}</span>
+                        </p>
+                        <p class="text-xs text-slate-500">{{ o.dose_text }} · {{ o.frequency_text }} · dose {{ o.given_total|add:"1" }} of {{ o.doses_total }}</p>
+                        {% for h in o.allergy_hits %}
+                            <span class="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full mr-1">⚠ Allergy: {{ h.allergen.display_name }} ({{ h.get_severity_display }})</span>
                         {% endfor %}
-                    </tbody>
-                </table>
+                        {% if o.allergy_hits and o.allergy_override_reason %}
+                            <p class="text-xs text-amber-800">Doctor's override: {{ o.allergy_override_reason }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="shrink-0">
+                        {% if o.allergy_hits and not o.allergy_override_reason %}
+                            <p class="text-xs font-bold text-red-700 mb-1">Do not give. Ask the doctor to document an override.</p>
+                            <button disabled
+                                    class="min-h-11 px-4 rounded-xl bg-slate-200 text-slate-500 text-sm font-bold">Record dose</button>
+                        {% else %}
+                            <button type="button"
+                                    class="min-h-11 px-4 rounded-xl bg-teal-600 text-white text-sm font-bold"
+                                    @click="open = true; action = '{% url 'pharmacy:administer_action' o.id %}'; name = '{{ o.encounter.patient.last_name|escapejs }}, {{ o.encounter.patient.first_name|escapejs }}'; medicine = '{{ o.medication.brand_name|escapejs }} {{ o.medication.strength|escapejs }}'; dose = '{{ o.medication.strength|escapejs }}'; site = ''; notes = ''; hits = {% if o.allergy_hits %}true{% else %}false{% endif %}">Record dose</button>
+                        {% endif %}
+                    </div>
+                </li>
+            {% empty %}
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">No injections or IV medicines are waiting.</li>
+            {% endfor %}
+        </ul>
+        <div x-show="open"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+             @click.self="open = false">
+            <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
+                <div>
+                    <h3 class="text-lg font-bold">Record dose given</h3>
+                    <p class="text-sm text-slate-600"><span x-text="medicine" class="font-bold"></span> for <span x-text="name" class="font-bold"></span></p>
+                </div>
+                <form method="post" :action="action" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Dose given *</label>
+                        <input type="text"
+                               name="dose_given_text"
+                               x-model="dose"
+                               required
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Site</label>
+                        <input type="text"
+                               name="site"
+                               x-model="site"
+                               placeholder="e.g. left deltoid"
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Notes</label>
+                        <input type="text"
+                               name="notes"
+                               x-model="notes"
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    </div>
+                    <label class="flex items-start gap-2 text-xs text-slate-700">
+                        <input type="checkbox" required class="mt-0.5">
+                        <span>I have checked the patient's allergies and the dose matches the order.</span>
+                    </label>
+                    <div class="flex flex-col-reverse sm:flex-row gap-3">
+                        <button type="button"
+                                @click="open = false"
+                                class="flex-1 min-h-11 rounded-xl bg-slate-100 text-sm font-semibold">Cancel</button>
+                        <button type="submit"
+                                class="flex-1 min-h-11 rounded-xl bg-teal-600 text-white text-sm font-bold">Confirm given</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

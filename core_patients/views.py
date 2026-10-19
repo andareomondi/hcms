@@ -20,6 +20,7 @@ from hospital_system.permissions import Cap, caps_for, requires
 from radiology.models import ImagingStudy
 from wards.models import Admission
 
+from .allergy_views import allergy_context
 from .models import (
     Allergen,
     Department,
@@ -327,7 +328,6 @@ def patient_register_view(request):
 
     return render(request, "core_patients/register.html")
 
-
 @login_required
 def patient_detail_view(request, patient_id):
     """Patient file: demographics, visits with triage data, ward history, bill and allergies."""
@@ -399,7 +399,12 @@ def patient_detail_view(request, patient_id):
         "timeline_items": timeline_items,
         "encounter_summaries": encounter_summaries,
     }
+
+    # Allergy panel data (all allergies including resolved, the class list, and manage permission)
+    context.update(allergy_context(patient, request.user))
+
     return render(request, "core_patients/patient_detail.html", context)
+
 
 @login_required
 def patient_edit_view(request, patient_id):

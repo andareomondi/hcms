@@ -1,0 +1,92 @@
+<section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-4 bg-slate-50/50 border-b flex justify-between items-center">
+        <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Allergies</h2>
+        <span class="text-xs text-slate-500">{{ allergy_rows|length }} on record</span>
+    </div>
+    <ul class="divide-y divide-slate-100">
+        {% for a in allergy_rows %}
+            <li class="p-4 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <p class="font-bold text-slate-900">
+                            {{ a.allergen.display_name }}
+                            <span class="text-xs font-normal text-slate-500">({{ a.allergen.allergen_class.name|default:"no class" }})</span>
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {{ a.get_severity_display }} · recorded {{
+                                a.recorded_at|date:"Y-m-d" }}
+                        </p>
+                    </div>
+                    <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if a.status == 'ACTIVE' %}bg-red-100 text-red-800{% elif a.status == 'DISPUTED' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+                        {{ a.get_status_display }}
+                    </span>
+                </div>
+                {% if a.status == "ACTIVE" and can_manage_allergies %}
+                    <details class="text-xs">
+                        <summary class="cursor-pointer font-bold text-teal-700">Change status</summary>
+                        <form action="{% url 'core_patients:allergy_status' patient.id a.id %}"
+                              method="post"
+                              class="mt-2 flex flex-wrap gap-2 items-center">
+                            {% csrf_token %}
+                            <select name="status" class="border rounded-lg px-2 py-1">
+                                <option value="RESOLVED">Resolved (no longer allergic)</option>
+                                <option value="DISPUTED">Disputed (recorded in error)</option>
+                            </select>
+                            <input type="text"
+                                   name="reason"
+                                   required
+                                   placeholder="Reason"
+                                   class="border rounded-lg px-2 py-1 flex-1 min-w-[12rem]" />
+                            <button class="bg-slate-900 text-white px-3 py-1.5 rounded-lg font-bold">Save</button>
+                        </form>
+                    </details>
+                {% endif %}
+            </li>
+        {% empty %}
+            <li class="p-6 text-sm text-slate-500 italic text-center">No allergies recorded for this patient.</li>
+        {% endfor %}
+    </ul>
+    {% if can_manage_allergies %}
+        <form action="{% url 'core_patients:allergy_record' patient.id %}"
+              method="post"
+              class="p-4 bg-slate-50/60 border-t grid grid-cols-1 md:grid-cols-4 gap-3">
+            {% csrf_token %}
+            <div class="md:col-span-1">
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Allergen</label>
+                <select name="allergen"
+                        required
+                        class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="">Choose</option>
+                    {% for al in all_allergens %}
+                        <option value="{{ al.code }}">
+                            {{ al.display_name }}{% if al.allergen_class %} ({{
+                                al.allergen_class.name }}){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Severity</label>
+                        <select name="severity"
+                                required
+                                class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                            <option value="MILD">Mild</option>
+                            <option value="MODERATE">Moderate</option>
+                            <option value="SEVERE">Severe / anaphylaxis</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Reaction seen</label>
+                        <div class="flex gap-2">
+                            <input type="text"
+                                   name="reaction"
+                                   placeholder="e.g. rash and swelling after amoxicillin"
+                                   class="flex-1 border rounded-xl px-3 py-2 text-sm" />
+                            <button class="bg-red-600 text-white px-4 rounded-xl text-sm font-bold">Record</button>
+                        </div>
+                    </div>
+                </form>
+    {% else %}
+        <p class="p-3 text-xs text-slate-500 border-t">Only clinical staff can change allergies.</p>
+    {% endif %}
+</section>

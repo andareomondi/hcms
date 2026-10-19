@@ -1,72 +1,105 @@
-{% extends "base.html" %} {% block title %}Manage Medication - HCMS{% endblock %} {% block content %}
-<div class="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-    <div>
-        <h1 class="text-2xl font-bold text-slate-900">
-            {% if medication %}Edit Medication{% else %}Add New Medication{% endif %}
-        </h1>
-        <p class="text-sm text-slate-500">Update drug info, strength, unit pricing, and stock quantity.</p>
+{% extends "base.html" %}
+{% block title %}Medicine - HCMS{% endblock %}
+{% block content %}
+    <div class="max-w-3xl mx-auto space-y-6">
+        <div>
+            <a href="{% url 'pharmacy:dashboard' %}"
+               class="text-xs text-slate-500 hover:underline">← Pharmacy</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">{% if medication %}{{ medication.brand_name }} {{ medication.strength }}{% else %}New medicine{% endif %}</h1>
+        </div>
+        <form method="post" class="bg-white rounded-2xl border p-6 space-y-5">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Brand name</label>
+                    <input name="brand_name"
+                           required
+                           value="{{ medication.brand_name|default:'' }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Generic name</label>
+                    <input name="generic_name"
+                           required
+                           value="{{ medication.generic_name|default:'' }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Form</label>
+                    <input name="form"
+                           required
+                           value="{{ medication.form|default:'' }}"
+                           placeholder="Tablet, Capsule, Injection"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Strength</label>
+                    <input name="strength"
+                           required
+                           value="{{ medication.strength|default:'' }}"
+                           placeholder="500mg"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit price (KES)</label>
+                    <input name="unit_price"
+                           type="number"
+                           step="0.01"
+                           min="0"
+                           required
+                           value="{{ medication.unit_price|default_if_none:'' }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Allergy classes this medicine belongs to</label>
+                <select name="allergen_class_ids"
+                        multiple
+                        size="6"
+                        class="w-full border rounded-xl px-3 py-2 text-sm">
+                    {% for c in classes %}
+                        <option value="{{ c.id }}"
+                                {% if c.id|stringformat:"s" in selected_ids %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Hold Ctrl (or Cmd) to pick several. A patient allergic to any of these is blocked from this medicine.</p>
+            </div>
+            <button class="min-h-11 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold">Save medicine</button>
+        </form>
+        {% if medication and stock %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form method="post"
+                      action="{% url 'pharmacy:stock_receive' medication.id %}"
+                      class="bg-white rounded-2xl border p-5 space-y-3">
+                    {% csrf_token %}
+                    <h2 class="font-bold">Receive stock</h2>
+                    <p class="text-xs text-slate-500">On hand: <strong>{{ stock.quantity }}</strong></p>
+                    <input name="quantity"
+                           type="number"
+                           min="1"
+                           required
+                           placeholder="Quantity received"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    <button class="min-h-11 w-full rounded-xl bg-emerald-600 text-white text-sm font-bold">Record receipt</button>
+                </form>
+                <form method="post"
+                      action="{% url 'pharmacy:stock_adjust' medication.id %}"
+                      class="bg-white rounded-2xl border p-5 space-y-3">
+                    {% csrf_token %}
+                    <h2 class="font-bold">Adjust stock</h2>
+                    <p class="text-xs text-slate-500">Use a negative number for losses, expiry, or breakage.</p>
+                    <input name="delta"
+                           type="number"
+                           required
+                           placeholder="e.g. -5"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    <input name="note"
+                           required
+                           placeholder="Reason (required)"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    <button class="min-h-11 w-full rounded-xl bg-amber-600 text-white text-sm font-bold">Record adjustment</button>
+                </form>
+            </div>
+        {% endif %}
     </div>
-    <form method="post" class="space-y-4">
-        {% csrf_token %}
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Brand Name</label>
-                <input type="text"
-                       name="brand_name"
-                       value="{{ medication.brand_name|default:'' }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Generic Name</label>
-                <input type="text"
-                       name="generic_name"
-                       value="{{ medication.generic_name|default:'' }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Form (e.g. Tablet, Syrup)</label>
-                <input type="text"
-                       name="form"
-                       value="{{ medication.form|default:'Tablet' }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Strength (e.g. 500mg)</label>
-                <input type="text"
-                       name="strength"
-                       value="{{ medication.strength|default:'500mg' }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit Price (KES)</label>
-                <input type="number"
-                       step="0.01"
-                       name="unit_price"
-                       value="{{ medication.unit_price|default:10.00 }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Current Stock Quantity</label>
-                <input type="number"
-                       name="quantity"
-                       value="{{ stock_item.quantity|default:100 }}"
-                       required
-                       class="w-full border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" />
-            </div>
-        </div>
-        <button type="submit"
-                class="w-full bg-teal-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-teal-700 transition shadow-sm">
-            Save Medication Details
-        </button>
-    </form>
-</div>
 {% endblock %}
