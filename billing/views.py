@@ -107,6 +107,7 @@ def encounter_bill_view(request, encounter_id):
         "charges": charges,
         "tally": bill.encounter_tally(encounter),
         "payments": payments,
+        "hold": bill.billing_hold_reason(encounter.patient),
     })
 
 @login_required

@@ -1,0 +1,21 @@
+<ul class="border rounded-xl divide-y divide-slate-100 max-h-56 overflow-y-auto bg-white">
+    {% for p in results %}
+        <li>
+            <button type="button"
+                    @click="otherId = '{{ p.id }}'; otherName = '{{ p.first_name|escapejs }} {{ p.last_name|escapejs }}'"
+                    class="w-full text-left p-3 hover:bg-teal-50 flex justify-between gap-3">
+                <span>
+                    <span class="font-bold text-sm">{{ p.last_name }}, {{ p.first_name|default:"(unnamed)" }}</span>
+                    <span class="block text-xs text-slate-500">{{ p.get_sex_display }} · {% if p.date_of_birth %}born {{ p.date_of_birth|date:"Y-m-d" }}{% else %}DOB unknown{% endif %}{% if p.id_number %} · ID {{ p.id_number }}{% endif %}</span>
+                </span>
+                <span class="text-xs font-bold text-teal-700 self-center">Select</span>
+            </button>
+        </li>
+    {% empty %}
+        <li class="p-4 text-sm text-slate-500">
+            {% if q|length >= 2 %}No patient matches "{{ q }}".
+                <a href="{% url 'core_patients:register' %}"
+                   class="text-teal-700 font-bold">Register them first</a>, then come back.{% else %}Type at least two letters.{% endif %}
+        </li>
+    {% endfor %}
+</ul>

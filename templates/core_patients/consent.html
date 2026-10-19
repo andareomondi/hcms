@@ -1,0 +1,134 @@
+{% extends "base.html" %} {% block title %}Consent - {{ patient.last_name }}{% endblock %} {% block content %}
+<div class="space-y-6"
+     x-data="{ type: 'TREATMENT', guardian: '', emergency: false }">
+    <div>
+        <a href="{% url 'core_patients:detail' patient.id %}"
+           class="text-xs text-slate-500 hover:underline">← Patient file</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Consent: {{ patient.last_name }}, {{ patient.first_name }}</h1>
+    </div>
+    {% if minor %}
+        {% if status == "CONSENTED" %}
+            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-900">
+                <strong>Treatment consent is on record.</strong> The child can be seen.
+            </div>
+        {% elif status == "WITHDRAWN" %}
+            <div class="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-900">
+                <strong>Consent was withdrawn.</strong> New consultations are blocked until
+                consent is given again, or emergency consent is recorded on a visit.
+            </div>
+        {% else %}
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+                <strong>No treatment consent on record.</strong> Record consent from a
+                parent or guardian before this child is seen. For a real emergency, record
+                emergency consent on the open visit with the reason.
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="bg-slate-100 border rounded-2xl p-4 text-sm text-slate-700">
+            This patient is an adult. Treatment consent is part of the visit process.
+        </div>
+    {% endif %}
+    <form method="post"
+          action="{% url 'core_patients:consent_record' patient.id %}"
+          class="bg-white rounded-2xl border p-6 space-y-4">
+        {% csrf_token %}
+        <p class="font-bold">Record consent</p>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">What is being consented to</label>
+            <select name="consent_type"
+                    x-model="type"
+                    required
+                    class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                <option value="TREATMENT">Treatment (parent or guardian)</option>
+                <option value="DATA">Processing of health data</option>
+                <option value="EMERGENCY">Emergency treatment without consent (on an open visit)</option>
+                <option value="WITHDRAWN">Withdraw consent</option>
+            </select>
+        </div>
+        <div x-show="type !== 'EMERGENCY'" class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Linked guardian (if on record)</label>
+                <select name="given_by_patient"
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    <option value="">Someone not on record</option>
+                    {% for g in guardians %}
+                        <option value="{{ g.related_patient.id }}">
+                            {{ g.related_patient.first_name }} {{ g.related_patient.last_name }}
+                            · {{ g.get_relationship_display }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input name="given_by_name"
+                       placeholder="Name of person giving consent (if not listed)"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+                <input name="relationship"
+                       placeholder="Relationship (e.g. Mother, Guardian)"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+                <input name="identification"
+                       placeholder="ID shown (type and number)"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+        </div>
+        <div x-show="type === 'EMERGENCY'"
+             x-cloak
+             style="display: none"
+             class="space-y-3">
+            <select name="encounter"
+                    class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                <option value="">Choose the open visit</option>
+                {% for v in open_visits %}
+                    <option value="{{ v.id }}">
+                        Visit opened {{ v.opened_at|date:"Y-m-d H:i" }} · {{ v.get_encounter_type_display }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                Reason
+                <span x-show="type === 'EMERGENCY' || type === 'WITHDRAWN'">*</span>
+            </label>
+            <textarea name="reason"
+                      rows="2"
+                      class="w-full border rounded-xl px-3 py-2 text-sm"
+                      placeholder="Required for emergency consent and withdrawal. Describe why guardian consent could not be obtained, or why consent is withdrawn."></textarea>
+        </div>
+        <label class="flex items-start gap-2 text-xs text-slate-700">
+            <input type="checkbox" required class="mt-0.5" />
+            <span>The person has been told what this consent covers. A signed form is on
+            file, or the reason is documented above.</span>
+        </label>
+        <button class="min-h-11 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold">Record</button>
+    </form>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Consent history</h2>
+        </div>
+        <ul class="divide-y divide-slate-100">
+            {% for r in records %}
+                <li class="p-4 text-sm space-y-1">
+                    <p class="font-bold">
+                        {{ r.get_consent_type_display }}
+                        <span class="text-xs font-normal text-slate-500">· {{ r.recorded_at|date:"Y-m-d H:i" }} by {{ r.recorded_by.user.get_full_name|default:r.recorded_by.user.username }}</span>
+                    </p>
+                    {% if r.consent_type != "WITHDRAWN" %}
+                        <p class="text-xs">
+                            Given by {{ r.given_by_name|default:"—" }}{% if r.relationship %} ({{ r.relationship }}){% endif %}{% if r.identification %} · ID {{ r.identification }}{% endif %}
+                        </p>
+                    {% endif %}
+                    {% if r.encounter %}
+                        <p class="text-xs text-slate-600">Visit {{ r.encounter.opened_at|date:"Y-m-d H:i" }}</p>
+                    {% endif %}
+                    {% if r.reason %}
+                        <p class="text-xs text-slate-700 italic">{{ r.reason }}</p>
+                    {% endif %}
+                </li>
+            {% empty %}
+                <li class="p-6 text-center text-sm text-slate-500 italic">No consent recorded.</li>
+            {% endfor %}
+        </ul>
+    </section>
+</div>
+{% endblock %}

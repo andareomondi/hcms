@@ -25,15 +25,13 @@ def billing_owner_for(patient):
 
 
 def billing_hold_reason(patient):
-    """
-    A child with no guarantor cannot be paid for yet. Charges are still recorded.
-    Returns the reason text, or None if the account can be billed.
-    """
     if patient.is_minor is True and not PatientRelationship.objects.filter(
             patient=patient, is_billing_guarantor=True, is_active=True).exists():
-        return ("This child has no billing guarantor. Link a parent or guardian "
-                "in the family view before taking payment.")
+        return ("This child has no paying guardian linked. Open the child's Family page, "
+                "choose 'They are the parent or guardian', search for them, and tick "
+                "'This person pays the bills'.")
     return None
+
 
 def billing_account_for(patient):
     account, _ = BillingAccount.objects.get_or_create(owner=billing_owner_for(patient))

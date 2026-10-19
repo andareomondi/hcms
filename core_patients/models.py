@@ -212,3 +212,34 @@ class StaffRegistrationRequest(models.Model):
 
     def __str__(self):
         return f"{self.username} ({self.get_requested_role_display()}, {self.status})"
+
+class ConsentRecord(models.Model):
+    """
+    Append-only. Consent is never edited. A withdrawal is a new record.
+    """
+    TYPES = [
+        ("TREATMENT", "Consent to treatment"),
+        ("DATA", "Consent to process health data"),
+        ("EMERGENCY", "Emergency treatment without consent"),
+        ("WITHDRAWN", "Consent withdrawn"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="consents")
+    consent_type = models.CharField(max_length=12, choices=TYPES, db_index=True)
+    encounter = models.ForeignKey("triage_queue.Encounter", on_delete=models.PROTECT,
+                                  null=True, blank=True, related_name="consents")
+    given_by_patient = models.ForeignKey(Patient, on_delete=models.PROTECT, null=True, blank=True,
+                                         related_name="+")
+    given_by_name = models.CharField(max_length=120, blank=True)
+    relationship = models.CharField(max_length=40, blank=True)
+    identification = models.CharField(max_length=60, blank=True)
+    reason = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    recorded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-recorded_at"]
+
+    def __str__(self):
+        return f"{self.get_consent_type_display()} for {self.patient}"

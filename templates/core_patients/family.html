@@ -134,20 +134,38 @@
     </div>
     <div x-show="showLink"
          x-cloak
-         style="display: none"
+         style="display:none"
          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
          @click.self="showLink = false">
-        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
-            <h3 class="text-lg font-bold">Link an existing patient</h3>
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4"
+             x-data="{ otherId: '', otherName: '', role: 'child' }">
+            <div>
+                <h3 class="text-lg font-bold">Link someone to {{ patient.first_name }}</h3>
+                <p class="text-xs text-slate-500">Search for the person by name or ID number. Both must already have a patient record.</p>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Search</label>
+                <input type="search"
+                       name="q"
+                       placeholder="Type a name or ID number"
+                       autocomplete="off"
+                       hx-get="{% url 'core_patients:family_search' patient.id %}"
+                       hx-trigger="input changed delay:250ms, search"
+                       hx-target="#family-results"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                <div id="family-results" class="mt-2"></div>
+            </div>
+            <div x-show="otherId"
+                 class="bg-teal-50 border border-teal-200 rounded-xl p-3 text-sm">
+                Selected: <strong x-text="otherName"></strong>
+            </div>
             <form method="post"
                   action="{% url 'core_patients:link_guardian' patient.id %}"
                   class="space-y-3">
                 {% csrf_token %}
-                <input name="other_id"
-                       required
-                       placeholder="Patient ID (UUID) of the other person"
-                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                <input type="hidden" name="other_id" :value="otherId">
                 <select name="role"
+                        x-model="role"
                         required
                         class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
                     <option value="child">They are the child of {{ patient.first_name }}</option>
@@ -155,20 +173,20 @@
                 </select>
                 <select name="relationship"
                         class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
-                    {% for code, label in relationship_choices %}
-                        <option value="{{ code }}">{{ label }}</option>
-                    {% endfor %}
+                    {% for code, label in relationship_choices %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
                 </select>
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="is_guarantor" />
-                    This person pays the
-                    bills
+                <label class="flex items-start gap-2 text-sm">
+                    <input type="checkbox" name="is_guarantor" class="mt-1">
+                    <span>This person pays the bills for the child. Choosing this replaces any previous payer.</span>
                 </label>
                 <div class="flex gap-3">
                     <button type="button"
                             @click="showLink = false"
                             class="flex-1 min-h-11 rounded-xl bg-slate-100 text-sm font-semibold">Cancel</button>
-                    <button class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold">Link</button>
+                    <button type="submit"
+                            :disabled="!otherId"
+                            :class="otherId ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500 cursor-not-allowed'"
+                            class="flex-1 min-h-11 rounded-xl text-sm font-bold">Link</button>
                 </div>
             </form>
         </div>

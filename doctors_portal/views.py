@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from billing import services as billing_services
 from billing.prices import SCAN_PRICES
 from core_patients.allergy_services import conflicts_for
+from core_patients.consent import can_start_consultation
 from core_patients.models import PatientAllergy
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
@@ -267,9 +268,17 @@ def call_next_patient_action(request):
         messages.info(request, "No patients are waiting for you.")
         return redirect("doctors_portal:dashboard")
 
+    patient = next_entry.encounter.patient
+    if not can_start_consultation(patient, next_entry.encounter):
+        log_action(request, AuditAction.CONSULTATION_BLOCKED_NO_CONSENT,
+                   f"Could not call {patient}: no guardian consent on record.")
+        messages.error(request,
+                       f"{patient.first_name or 'This child'} cannot be seen yet. "
+                       "Record guardian consent, or emergency consent with a reason, on the Consent page.")
+        return redirect("core_patients:consent", patient_id=patient.id)
+
     next_entry.status = "IN_CONSULTATION"
     next_entry.save(update_fields=["status", "updated_at"])
-    patient = next_entry.encounter.patient
     room_label = session.room.name if session.room else "a room"
     notify_on_duty(
         role="RECEPTION", kind="DOCTOR_CALLED_PATIENT",

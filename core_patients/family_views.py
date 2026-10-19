@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.contrib import messages
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -123,3 +124,18 @@ def link_guardian_action(request, patient_id):
                f"Linked {child} to {parent} as {request.POST.get('relationship', 'PARENT')}.")
     messages.success(request, "Linked.")
     return redirect("core_patients:family", patient_id=current.id)
+
+@requires(Cap.PATIENT_REGISTER)
+def family_search_view(request, patient_id):
+    """Returns matching patients for the link picker. Loaded by htmx as the user types."""
+    current = get_object_or_404(Patient, pk=patient_id)
+    q = request.GET.get("q", "").strip()
+    results = []
+    if len(q) >= 2:
+        results = (Patient.objects
+                   .filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(id_number__icontains=q))
+                   .exclude(pk=current.pk)
+                   .order_by("last_name", "first_name")[:15])
+    return render(request, "core_patients/_family_search_results.html", {
+        "current": current, "results": results, "q": q,
+    })

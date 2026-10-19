@@ -16,6 +16,16 @@
                 {% endif %}
             </div>
         </div>
+        {% if hold %}
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <p class="font-bold text-amber-900">Payment on hold</p>
+                    <p class="text-sm text-amber-800">{{ hold }}</p>
+                </div>
+                <a href="{% url 'core_patients:family' encounter.patient.id %}"
+                   class="min-h-10 inline-flex items-center px-4 rounded-xl bg-amber-600 text-white text-xs font-bold">Open family &amp; link guardian →</a>
+            </div>
+        {% endif %}
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-white p-5 rounded-2xl border border-slate-200">
                 <p class="text-xs uppercase font-bold text-slate-500">Provisional</p>

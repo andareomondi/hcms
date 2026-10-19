@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import allergy_views, family_views, views
+from . import allergy_views, consent_views, family_views, views
 
 app_name = "core_patients"
 
@@ -23,4 +23,7 @@ urlpatterns = [
     path("<uuid:patient_id>/family/", family_views.family_view, name="family"),
     path("<uuid:patient_id>/family/register-child/", family_views.register_child_action, name="register_child"),
     path("<uuid:patient_id>/family/link/", family_views.link_guardian_action, name="link_guardian"),
+    path("<uuid:patient_id>/consent/", consent_views.consent_page_view, name="consent"),
+    path("<uuid:patient_id>/consent/record/", consent_views.consent_record_action, name="consent_record"),
+    path("<uuid:patient_id>/family/search/", family_views.family_search_view, name="family_search"),
 ]

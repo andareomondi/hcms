@@ -29,6 +29,8 @@
                    class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Family</a>
                 <a href="{% url 'maternity:child' patient.id %}"
                    class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Child health</a>
+                <a href="{% url 'core_patients:consent' patient.id %}"
+                   class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Consent</a>
             </div>
         </div>
         {% include "core_patients/_allergy_banner.html" %}
