@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "dashboard",
     "duty",
     "notifications",
+    "maternity",
 ]
 
 MIDDLEWARE = [

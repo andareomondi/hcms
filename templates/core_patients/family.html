@@ -1,0 +1,178 @@
+{% extends "base.html" %} {% block title %}Family - {{ patient.last_name }}{% endblock %} {% block content %}
+<div class="space-y-6" x-data="{ showRegister: false, showLink: false }">
+    <div class="flex flex-col md:flex-row md:justify-between gap-3">
+        <div>
+            <a href="{% url 'core_patients:detail' patient.id %}"
+               class="text-xs text-slate-500 hover:underline">← Patient file</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">Family: {{ patient.last_name }}, {{ patient.first_name }}</h1>
+            <p class="text-sm text-slate-500">{{ patient.get_sex_display }} · {{ patient_age }}</p>
+        </div>
+        {% if can_register %}
+            <div class="flex gap-2">
+                <button @click="showRegister = true"
+                        class="min-h-11 px-4 rounded-xl bg-teal-600 text-white text-sm font-bold">
+                    + Register child
+                </button>
+                <button @click="showLink = true"
+                        class="min-h-11 px-4 rounded-xl border border-slate-300 text-sm font-bold">
+                    Link someone
+                </button>
+            </div>
+        {% endif %}
+    </div>
+    <section class="bg-white rounded-2xl border p-5 space-y-2">
+        <p class="font-bold text-sm">Parents and guardians of {{ patient.first_name }}</p>
+        {% for p in parents %}
+            <p class="text-sm">
+                {{ p.related_patient.last_name }}, {{ p.related_patient.first_name }} · {{ p.get_relationship_display }} {% if p.is_billing_guarantor %}<span class="text-xs font-bold text-teal-700">· pays for {{ patient.first_name }}</span>{% endif %}
+            </p>
+        {% empty %}
+            <p class="text-sm text-slate-500 italic">None linked.</p>
+        {% endfor %}
+    </section>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Children</h2>
+        </div>
+        <ul class="divide-y divide-slate-100">
+            {% for row in child_rows %}
+                <li class="p-4 flex flex-col md:flex-row md:justify-between gap-2">
+                    <div>
+                        <p class="font-bold">
+                            {{ row.child.last_name }}, {{ row.child.first_name|default:"(unnamed)" }}
+                            <span class="text-xs font-normal text-slate-500">· {{ row.age }}{% if row.child.is_provisional %} · provisional{% endif %}</span>
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {% if row.link.is_billing_guarantor %}Billed to {{ patient.first_name }}{% else %}Not the billing guarantor{% endif %}
+                            {% if row.admitted %}· in {{ row.admitted.bed.ward.name }} bed {{ row.admitted.bed.code }}{% endif %} {% if row.open_visit %} · visit
+                            open{% endif %}
+                    </p>
+                    {% if row.held %}
+                        <p class="text-xs font-bold text-amber-700 mt-1">Billing on hold: {{ row.held }}</p>
+                    {% endif %}
+                </div>
+                <div class="flex gap-2">
+                    <a href="{% url 'maternity:child' row.child.id %}"
+                       class="min-h-10 inline-flex items-center px-3 rounded-xl border text-xs font-bold">Child health</a>
+                    <a href="{% url 'core_patients:detail' row.child.id %}"
+                       class="min-h-10 inline-flex items-center px-3 rounded-xl border text-xs font-bold">Record</a>
+                </div>
+            </li>
+        {% empty %}
+            <li class="p-6 text-center text-sm text-slate-500 italic">No children linked.</li>
+        {% endfor %}
+    </ul>
+</section>
+{% if account %}
+    <section class="bg-white rounded-2xl border p-5 flex justify-between items-center">
+        <div>
+            <p class="font-bold text-sm">Combined account</p>
+            <p class="text-xs text-slate-500">Parent and children charges and payments on one account.</p>
+        </div>
+        <a href="{% url 'billing:account' account.id %}"
+           class="min-h-11 inline-flex items-center px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Open account →</a>
+    </section>
+{% endif %}
+{% if can_register %}
+    <div x-show="showRegister"
+         x-cloak
+         style="display: none"
+         class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+         @click.self="showRegister = false">
+        <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold">Register child under {{ patient.first_name }}</h3>
+            <form method="post"
+                  action="{% url 'core_patients:register_child' patient.id %}"
+                  class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-3">
+                    <input name="first_name"
+                           required
+                           placeholder="First name"
+                           class="min-h-11 border rounded-xl px-3 text-sm" />
+                    <input name="last_name"
+                           required
+                           placeholder="Last name"
+                           value="{{ patient.last_name }}"
+                           class="min-h-11 border rounded-xl px-3 text-sm" />
+                    <input type="date"
+                           name="date_of_birth"
+                           required
+                           class="min-h-11 border rounded-xl px-3 text-sm" />
+                    <select name="sex" class="min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        <option value="U">Unknown</option>
+                        <option value="M">Male</option>
+                        <option value="F">Female</option>
+                        <option value="X">Other</option>
+                    </select>
+                    <select name="id_type"
+                            class="min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        <option value="NONE">No ID yet</option>
+                        <option value="BIRTH_CERT">Birth certificate</option>
+                    </select>
+                    <input name="id_number"
+                           placeholder="Certificate number (if any)"
+                           class="min-h-11 border rounded-xl px-3 text-sm" />
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="dob_is_estimated" />
+                    Date of birth is an
+                    estimate
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="is_guarantor" checked />
+                    {{ patient.first_name }} pays for this child
+                </label>
+                <div class="flex gap-3">
+                    <button type="button"
+                            @click="showRegister = false"
+                            class="flex-1 min-h-11 rounded-xl bg-slate-100 text-sm font-semibold">Cancel</button>
+                    <button class="flex-1 min-h-11 rounded-xl bg-teal-600 text-white text-sm font-bold">Register child</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div x-show="showLink"
+         x-cloak
+         style="display: none"
+         class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
+         @click.self="showLink = false">
+        <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
+            <h3 class="text-lg font-bold">Link an existing patient</h3>
+            <form method="post"
+                  action="{% url 'core_patients:link_guardian' patient.id %}"
+                  class="space-y-3">
+                {% csrf_token %}
+                <input name="other_id"
+                       required
+                       placeholder="Patient ID (UUID) of the other person"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                <select name="role"
+                        required
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    <option value="child">They are the child of {{ patient.first_name }}</option>
+                    <option value="parent">They are the parent or guardian of {{ patient.first_name }}</option>
+                </select>
+                <select name="relationship"
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    {% for code, label in relationship_choices %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="is_guarantor" />
+                    This person pays the
+                    bills
+                </label>
+                <div class="flex gap-3">
+                    <button type="button"
+                            @click="showLink = false"
+                            class="flex-1 min-h-11 rounded-xl bg-slate-100 text-sm font-semibold">Cancel</button>
+                    <button class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold">Link</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endif %}
+</div>
+{% endblock %}

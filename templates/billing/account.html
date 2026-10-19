@@ -1,0 +1,101 @@
+{% extends "base.html" %} {% block title %}Account - {{ account.owner.last_name }}{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <a href="{% url 'core_patients:family' account.owner.id %}"
+           class="text-xs text-slate-500 hover:underline">← Family</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">
+            Account: {{ account.owner.last_name }}, {{ account.owner.first_name }}
+        </h1>
+        <p class="text-sm text-slate-500">Covers the account holder and every child they pay for.</p>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-2xl border p-4">
+            <p class="text-xs uppercase font-bold text-slate-500">Billed</p>
+            <p class="text-xl font-extrabold">KES {{ totals.billed|floatformat:2 }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+            <p class="text-xs uppercase font-bold text-slate-500">Paid</p>
+            <p class="text-xl font-extrabold text-emerald-600">KES {{ totals.paid|floatformat:2 }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+            <p class="text-xs uppercase font-bold text-slate-500">Outstanding</p>
+            <p class="text-xl font-extrabold text-red-600">KES {{ totals.outstanding|floatformat:2 }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border p-4">
+            <p class="text-xs uppercase font-bold text-slate-500">Patients</p>
+            <p class="text-xl font-extrabold">{{ people|length }}</p>
+        </div>
+    </div>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Visits on this account</h2>
+        </div>
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Patient</th>
+                    <th class="p-3">Visit</th>
+                    <th class="p-3">Billed</th>
+                    <th class="p-3">Outstanding</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for row in visits %}
+                    <tr>
+                        <td class="p-3 font-semibold">
+                            {{ row.encounter.patient.last_name }}, {{ row.encounter.patient.first_name|default:"(unnamed)" }}
+                        </td>
+                        <td class="p-3 text-xs">
+                            {{ row.encounter.get_encounter_type_display }} · {{ row.encounter.opened_at|date:"Y-m-d" }} · {{ row.encounter.get_status_display }}
+                        </td>
+                        <td class="p-3">KES {{ row.tally.total|floatformat:2 }}</td>
+                        <td class="p-3 font-bold">KES {{ row.tally.outstanding|floatformat:2 }}</td>
+                        <td class="p-3 text-right">
+                            <a href="{% url 'billing:encounter' row.encounter.id %}"
+                               class="text-teal-700 text-xs font-bold">Open bill →</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="p-6 text-center text-slate-500 italic">No charges yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Payments</h2>
+        </div>
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Receipt</th>
+                    <th class="p-3">When</th>
+                    <th class="p-3">For</th>
+                    <th class="p-3">Method</th>
+                    <th class="p-3">Amount</th>
+                    <th class="p-3">Taken by</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for p in payments %}
+                    <tr>
+                        <td class="p-3 font-mono text-xs">{{ p.receipt_number }}</td>
+                        <td class="p-3 text-xs">{{ p.recorded_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3 text-xs">{{ p.encounter.patient.first_name }} {{ p.encounter.patient.last_name }}</td>
+                        <td class="p-3 text-xs">{{ p.get_method_display }}</td>
+                        <td class="p-3 font-bold">KES {{ p.amount|floatformat:2 }}</td>
+                        <td class="p-3 text-xs">{{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="p-6 text-center text-slate-500 italic">No payments yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

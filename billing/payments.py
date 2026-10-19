@@ -39,6 +39,10 @@ def take_payment(*, encounter, method, amount_raw, reference, payer_phone, staff
         if Payment.objects.filter(method="MPESA", reference=reference).exists():
             raise PaymentError("This M-Pesa code has already been recorded.")
 
+    reason = billing.billing_hold_reason(encounter.patient)
+    if reason:
+        raise PaymentError(reason)
+
     # Lock the visit so two cashiers cannot pay the same balance twice
     encounter = Encounter.objects.select_for_update().get(pk=encounter.pk)
 

@@ -14,4 +14,5 @@ urlpatterns = [
     path("encounter/<uuid:encounter_id>/post/", views.post_encounter_bill_action, name="post_encounter"),
     path("encounter/<uuid:encounter_id>/pay/", views.take_payment_action, name="take_payment"),
     path("payments/<uuid:payment_id>/receipt/", views.payment_receipt_view, name="payment_receipt"),
+    path("account/<uuid:account_id>/", views.account_statement_view, name="account"),
 ]

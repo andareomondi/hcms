@@ -31,6 +31,7 @@ class Cap:
     ADMIN_CONFIG = "ADMIN_CONFIG"            # data manager, staff approvals, audit
     BED_MANAGE = "BED_MANAGE"                # change bed status by hand: cleaning, isolation, out of service
     ALLERGY_MANAGE = "ALLERGY_MANAGE"        # record, update, dispute, resolve allergies
+    MATERNITY_RECORD = "MATERNITY_RECORD"    # record births and vaccinations
 
 
 ADMIN_VIEW_CAPS = {
@@ -50,11 +51,11 @@ ROLE_CAPS = {
     },
     "DOCTOR": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.VIEW_PHARMACY,
-        Cap.VIEW_RADIOLOGY, Cap.CLINICAL_ACTIONS, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE,
+        Cap.VIEW_RADIOLOGY, Cap.CLINICAL_ACTIONS, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE, Cap.MATERNITY_RECORD, 
     },
     "NURSE": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.VIEW_PHARMACY,
-        Cap.NURSE_ADMINISTER, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE,
+        Cap.NURSE_ADMINISTER, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE, Cap.MATERNITY_RECORD, 
     },
     "PHARMACIST": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_PHARMACY, Cap.PHARMACY_MANAGE,

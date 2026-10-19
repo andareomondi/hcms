@@ -40,6 +40,8 @@ MANAGED = {
     "pharmacy.MedicationOrder": {},
     "pharmacy.NursingAdministration": {"editable": False, "deletable": False},
     "pharmacy.Dispensation": {"editable": False, "deletable": False},
+    "maternity.Delivery": {"editable": False, "deletable": False},
+    "maternity.Vaccination": {"editable": False, "deletable": False},
     "radiology.ScanOrder": {},
     "radiology.ImagingStudy": {"editable": False, "deletable": False},
     "wards.Ward": {},

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
@@ -19,6 +21,31 @@ from .payments import PaymentError
 def is_billing(user):
     profile = getattr(user, "staff_profile", None)
     return user.is_superuser or (profile is not None and profile.role in ("BILLING", "ADMIN"))
+
+@requires(Cap.VIEW_FINANCE)
+def account_statement_view(request, account_id):
+    account = get_object_or_404(BillingAccount.objects.select_related("owner"), pk=account_id)
+
+    charges = Charge.objects.filter(billing_account=account).exclude(status="VOIDED")
+    encounter_ids = charges.values_list("encounter_id", flat=True).distinct()
+    encounters = (Encounter.objects.filter(pk__in=encounter_ids)
+                  .select_related("patient").order_by("-opened_at"))
+    visits = [{"encounter": e, "tally": bill.encounter_tally(e)} for e in encounters]
+
+    payments = (Payment.objects.filter(billing_account=account)
+                .select_related("encounter__patient", "recorded_by__user").order_by("-recorded_at"))
+
+    total = sum((row["tally"]["total"] for row in visits), Decimal(0))
+    paid = sum((p.amount for p in payments), Decimal(0))
+    totals = {"billed": total, "paid": paid, "outstanding": total - paid}
+
+    people = {e.patient_id: e.patient for e in encounters}
+    people[account.owner_id] = account.owner
+
+    return render(request, "billing/account.html", {
+        "account": account, "visits": visits, "payments": payments,
+        "totals": totals, "people": list(people.values()),
+    })
 
 @requires(Cap.TAKE_PAYMENT)
 @require_POST

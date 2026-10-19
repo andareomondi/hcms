@@ -1,0 +1,149 @@
+{% extends "base.html" %} {% block title %}Child health - {{ child.first_name }}
+{{ child.last_name }}{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col md:flex-row md:justify-between gap-3">
+        <div>
+            <a href="{% url 'core_patients:detail' child.id %}"
+               class="text-xs text-slate-500 hover:underline">← Patient file</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">
+                {{ child.last_name }}, {{ child.first_name|default:"(unnamed)" }}
+            </h1>
+            <p class="text-sm text-slate-500">
+                {{ child.get_sex_display }} · born {{ child.date_of_birth|default:"unknown" }} ·
+                {% if child.is_provisional %}<span class="font-bold text-amber-700">provisional identity ({{ child.id_number }})</span>{% else %}ID {{ child.id_number|default:"none" }}{% endif %}
+            </p>
+        </div>
+        <a href="{% url 'core_patients:family' child.id %}"
+           class="min-h-11 inline-flex items-center px-4 rounded-xl border border-slate-300 text-sm font-bold">Family &amp; billing →</a>
+    </div>
+    {% if held %}
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+            <strong>Billing on hold.</strong> {{ held }}
+        </div>
+    {% endif %}
+    <section class="bg-white rounded-2xl border p-5 space-y-2">
+        <p class="font-bold text-sm">Parents and guardians</p>
+        {% for g in guardians %}
+            <p class="text-sm">
+                {{ g.related_patient.last_name }}, {{ g.related_patient.first_name }} · {{ g.get_relationship_display }} {% if g.is_billing_guarantor %}<span class="text-xs font-bold text-teal-700">· billing guarantor</span>{% endif %}
+            </p>
+        {% empty %}
+            <p class="text-sm text-slate-500 italic">No parent or guardian linked yet.</p>
+        {% endfor %}
+    </section>
+    {% if birth %}
+        <section class="bg-white rounded-2xl border p-5 space-y-2">
+            <p class="font-bold text-sm">Birth record</p>
+            <p class="text-sm">
+                Born {{ birth.delivered_at|date:"Y-m-d H:i" }} · {{ birth.get_delivery_type_display }}
+                · {{ birth.get_baby_sex_display }}
+            </p>
+            <p class="text-sm">
+                Weight {{ birth.birth_weight_g|default:"—" }} g · APGAR {{ birth.apgar_1|default:"—" }} (1 min), {{ birth.apgar_5|default:"—" }} (5
+                min) · gestation {{ birth.gestation_weeks|default:"—" }} weeks
+            </p>
+            {% if birth.notes %}
+                <p class="text-sm text-slate-600">{{ birth.notes }}</p>
+            {% endif %}
+            <p class="text-xs text-slate-500">
+                Mother's visit:
+                <a href="{% url 'core_patients:detail' birth.mother_encounter.patient.id %}"
+                   class="text-teal-700 font-bold">{{ birth.mother_encounter.patient.last_name }}, {{ birth.mother_encounter.patient.first_name }}</a>
+            </p>
+        </section>
+    {% endif %}
+    {% if child.is_provisional and can_confirm %}
+        <form method="post"
+              action="{% url 'maternity:confirm_birth_certificate' child.id %}"
+              class="bg-white rounded-2xl border p-5 space-y-3">
+            {% csrf_token %}
+            <p class="font-bold text-sm">Confirm birth certificate</p>
+            <p class="text-xs text-slate-500">
+                Enter the name and certificate number exactly as printed. The record is
+                updated in place and the change is kept in its history.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input name="first_name"
+                       required
+                       placeholder="First name"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+                <input name="last_name"
+                       required
+                       placeholder="Last name"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+                <input name="certificate_number"
+                       required
+                       placeholder="Certificate number"
+                       class="min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <button class="min-h-11 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold">Confirm</button>
+        </form>
+    {% endif %}
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Immunisation schedule</h2>
+        </div>
+        {% if schedule is None %}
+            <p class="p-6 text-sm text-slate-500 italic">Record the child's date of birth to show the schedule.</p>
+        {% else %}
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3">Vaccine</th>
+                        <th class="p-3">Due</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Given</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for row in schedule %}
+                        <tr>
+                            <td class="p-3 font-semibold">{{ row.label }}</td>
+                            <td class="p-3 text-xs font-mono">{{ row.due_date|date:"Y-m-d" }}</td>
+                            <td class="p-3 text-xs font-bold {% if row.status == 'GIVEN' %}text-emerald-700{% elif row.status == 'OVERDUE' %}text-red-700{% elif row.status == 'DUE' %}text-amber-700{% else %}text-slate-500{% endif %}">
+                                {{ row.status|title }}
+                            </td>
+                            <td class="p-3 text-xs">
+                                {% if row.given %}{{ row.given.given_at|date:"Y-m-d" }}{% if row.given.batch_number %} · batch {{ row.given.batch_number }}{% endif %}{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </section>
+    {% if can_record and schedule %}
+        <form method="post"
+              action="{% url 'maternity:vaccinate' child.id %}"
+              class="bg-white rounded-2xl border p-5 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            {% csrf_token %}
+            <div class="md:col-span-1">
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Vaccine</label>
+                <select name="vaccine"
+                        required
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    {% for row in schedule %}
+                        {% if row.status != "GIVEN" %}
+                            <option value="{{ row.code }}">{{ row.label }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Given at</label>
+                <input type="datetime-local"
+                       name="given_at"
+                       required
+                       value="{{ now_local }}"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Batch number</label>
+                <input name="batch_number"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <button class="min-h-11 rounded-xl bg-teal-600 text-white text-sm font-bold">Record dose</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

@@ -3,16 +3,41 @@ from decimal import Decimal
 from django.db.models import Sum
 from django.utils import timezone
 
+from core_patients.models import PatientRelationship
+
 from .models import BillingAccount, Charge, Payment
 
 ZERO = Decimal("0.00")
 CENT = Decimal("0.01")
 
 
-def billing_account_for(patient):
-    account, _ = BillingAccount.objects.get_or_create(owner=patient)
-    return account
+def billing_owner_for(patient):
+    """
+    The person who pays. Minors and patients with an unknown date of birth pay through
+    their active guarantor when one exists (spec 10.2). Adults pay for themselves.
+    """
+    if patient.is_minor is False:
+        return patient
+    guarantor = (PatientRelationship.objects
+                 .filter(patient=patient, is_billing_guarantor=True, is_active=True)
+                 .select_related("related_patient").first())
+    return guarantor.related_patient if guarantor else patient
 
+
+def billing_hold_reason(patient):
+    """
+    A child with no guarantor cannot be paid for yet. Charges are still recorded.
+    Returns the reason text, or None if the account can be billed.
+    """
+    if patient.is_minor is True and not PatientRelationship.objects.filter(
+            patient=patient, is_billing_guarantor=True, is_active=True).exists():
+        return ("This child has no billing guarantor. Link a parent or guardian "
+                "in the family view before taking payment.")
+    return None
+
+def billing_account_for(patient):
+    account, _ = BillingAccount.objects.get_or_create(owner=billing_owner_for(patient))
+    return account
 
 def add_charge(*, encounter, source_type, description, unit_price, staff,
                quantity=Decimal(1), source_id=None, key=None):

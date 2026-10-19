@@ -19,6 +19,7 @@ urlpatterns = [
     path("billing/", include("billing.urls")),
     path("duty/", include("duty.urls")),
     path("notifications/", include("notifications.urls")),
+    path("maternity/", include("maternity.urls")),
     
     # Root dashboard app
     path("", include("dashboard.urls")),

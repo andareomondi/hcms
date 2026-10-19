@@ -39,6 +39,13 @@ GROUPS = [
              "caps": [Cap.VIEW_PHARMACY]},        ],
     },
     {
+        "label": "Maternity & children",
+        "items": [
+            {"label": "Births & open visits", "url": "maternity:index", "icon": "🤰",
+             "caps": [Cap.MATERNITY_RECORD]},
+        ],
+    },
+    {
         "label": "Wards & beds",
         "items": [
             {"label": "Bed board", "url": "wards:dashboard", "icon": "🛏️",

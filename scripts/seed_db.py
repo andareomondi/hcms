@@ -1,7 +1,8 @@
 import os
-import django
 import random
 from datetime import date, timedelta
+
+import django
 from django.utils import timezone
 
 # Setup Django environment
@@ -9,15 +10,22 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hospital_system.settings")
 django.setup()
 
 from django.contrib.auth.models import User
-from core_patients.models import (
-    Department, StaffProfile, Patient, AllergenClass, Allergen, PatientAllergy
-)
-from triage_queue.models import Encounter, TriageVitals, QueueEntry
-from doctors_portal.models import ClinicalNote
-from pharmacy.models import Medication, StockItem, MedicationOrder
-from radiology.models import ScanOrder
-from wards.models import Ward, Bed, Admission
+
 from billing.models import BillingAccount, Charge
+from core_patients.models import (
+    Allergen,
+    AllergenClass,
+    Department,
+    Patient,
+    PatientAllergy,
+    StaffProfile,
+)
+from doctors_portal.models import ClinicalNote
+from pharmacy.models import Medication, MedicationOrder, StockItem
+from radiology.models import ScanOrder
+from triage_queue.models import Encounter, QueueEntry, TriageVitals
+from wards.models import Admission, Bed, Ward
+
 
 def run_seed():
     print("🌱 Starting HCMS Bulk Database Seeding (Safe, Unique & Truncation-Free)...")

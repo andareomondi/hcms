@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import allergy_views, views
+from . import allergy_views, family_views, views
 
 app_name = "core_patients"
 
@@ -20,4 +20,7 @@ urlpatterns = [
     path("<uuid:patient_id>/record/", views.patient_record_view, name="record"),
     path("<uuid:patient_id>/allergies/record/", allergy_views.allergy_record_action, name="allergy_record"),
     path("<uuid:patient_id>/allergies/<uuid:allergy_id>/status/", allergy_views.allergy_status_action, name="allergy_status"),
+    path("<uuid:patient_id>/family/", family_views.family_view, name="family"),
+    path("<uuid:patient_id>/family/register-child/", family_views.register_child_action, name="register_child"),
+    path("<uuid:patient_id>/family/link/", family_views.link_guardian_action, name="link_guardian"),
 ]

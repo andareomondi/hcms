@@ -1,0 +1,118 @@
+{% extends "base.html" %} {% block title %}Record birth - HCMS{% endblock %} {% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div>
+        <a href="{% url 'maternity:index' %}"
+           class="text-xs text-slate-500 hover:underline">← Maternity</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Record birth</h1>
+        <p class="text-sm text-slate-600">
+            Mother:
+            <strong>{{ patient.last_name }}, {{ patient.first_name }}</strong> · visit
+            {{ encounter.get_status_display|lower }}
+        </p>
+    </div>
+    {% if deliveries %}
+        <section class="bg-white rounded-2xl border p-4">
+            <p class="font-bold text-sm mb-2">Births on this visit</p>
+            {% for d in deliveries %}
+                <p class="text-sm">
+                    {{ d.delivered_at|date:"Y-m-d H:i" }} · {{ d.get_delivery_type_display }}
+                    ·
+                    <a href="{% url 'maternity:child' d.baby.id %}"
+                       class="text-teal-700 font-bold">{{ d.baby.first_name|default:"baby" }} {{ d.baby.last_name }} →</a>
+                </p>
+            {% endfor %}
+        </section>
+    {% endif %}
+    <form method="post" class="bg-white rounded-2xl border p-6 space-y-5">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Date and time of birth *</label>
+                <input type="datetime-local"
+                       name="delivered_at"
+                       required
+                       value="{{ now_local }}"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Delivery type *</label>
+                <select name="delivery_type"
+                        required
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    {% for code, label in delivery_types %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Baby's sex *</label>
+                <select name="baby_sex"
+                        required
+                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    {% for code, label in sexes %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Birth weight (grams)</label>
+                <input type="number"
+                       name="birth_weight_g"
+                       min="200"
+                       max="8000"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">APGAR at 1 minute</label>
+                <input type="number"
+                       name="apgar_1"
+                       min="0"
+                       max="10"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">APGAR at 5 minutes</label>
+                <input type="number"
+                       name="apgar_5"
+                       min="0"
+                       max="10"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Gestation (weeks)</label>
+                <input type="number"
+                       name="gestation_weeks"
+                       min="20"
+                       max="45"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Baby's first name</label>
+                <input type="text"
+                       name="baby_first_name"
+                       placeholder="Leave blank if not yet named"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Baby's last name</label>
+                <input type="text"
+                       name="baby_last_name"
+                       placeholder="Defaults to mother's surname"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Notes</label>
+            <textarea name="notes"
+                      rows="2"
+                      class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+        </div>
+        <p class="text-xs text-slate-500">
+            Recording a birth creates the baby's record, links them to the mother as
+            guarantor, opens a nursery visit, and adds the delivery charge to the
+            mother's bill.
+        </p>
+        <button class="min-h-11 w-full rounded-xl bg-slate-900 text-white text-sm font-bold">Record birth</button>
+    </form>
+</div>
+{% endblock %}

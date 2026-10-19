@@ -1,0 +1,59 @@
+{% extends "base.html" %} {% block title %}Maternity - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Maternity &amp; children</h1>
+        <p class="text-sm text-slate-500">Record a birth from an open visit, or open a child's health record.</p>
+    </div>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Open visits (record a birth on one of these)</h2>
+        </div>
+        <ul class="divide-y divide-slate-100">
+            {% for e in open_visits %}
+                <li class="p-4 flex justify-between items-center">
+                    <span class="font-semibold">{{ e.patient.last_name }}, {{ e.patient.first_name }}
+                        <span class="text-xs text-slate-500">· {{ e.get_encounter_type_display }}</span></span>
+                    <a href="{% url 'maternity:delivery' e.id %}"
+                       class="min-h-10 inline-flex items-center px-4 rounded-xl bg-slate-900 text-white text-xs font-bold">Record birth</a>
+                </li>
+            {% empty %}
+                <li class="p-6 text-center text-sm text-slate-500 italic">No open visits.</li>
+            {% endfor %}
+        </ul>
+    </section>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Recent births</h2>
+        </div>
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Born</th>
+                    <th class="p-3">Baby</th>
+                    <th class="p-3">Mother</th>
+                    <th class="p-3">Type</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for b in births %}
+                    <tr>
+                        <td class="p-3 text-xs font-mono">{{ b.delivered_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3 font-semibold">{{ b.baby.last_name }}, {{ b.baby.first_name|default:"(unnamed)" }}</td>
+                        <td class="p-3">{{ b.mother_encounter.patient.last_name }}, {{ b.mother_encounter.patient.first_name }}</td>
+                        <td class="p-3 text-xs">{{ b.get_delivery_type_display }}</td>
+                        <td class="p-3 text-right">
+                            <a href="{% url 'maternity:child' b.baby.id %}"
+                               class="text-teal-700 text-xs font-bold">Child health →</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="p-6 text-center text-slate-500 italic">No births recorded.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}
