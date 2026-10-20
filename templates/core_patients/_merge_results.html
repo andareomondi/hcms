@@ -1,0 +1,28 @@
+{% for p in results %}
+    <div class="bg-white rounded-xl border p-4 space-y-3">
+        <div>
+            <p class="font-bold">{{ p.last_name }}, {{ p.first_name|default:"(unnamed)" }}</p>
+            <p class="text-xs text-slate-500">
+                {{ p.get_sex_display }} · {% if p.date_of_birth %}born {{ p.date_of_birth|date:"Y-m-d" }}{% else %}DOB unknown{% endif %}{% if p.id_number %} · ID {{ p.id_number }}{% endif %}{% if p.phone %} · {{ p.phone }}{% endif %}
+            </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+            <button type="submit"
+                    name="pair"
+                    value="{{ current.id }}:{{ p.id }}"
+                    class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-xs font-bold px-3">
+                Keep {{ current.first_name|default:"this" }}'s record, merge {{ p.first_name|default:"them" }} into it
+            </button>
+            <button type="submit"
+                    name="pair"
+                    value="{{ p.id }}:{{ current.id }}"
+                    class="flex-1 min-h-11 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-bold px-3">
+                Keep {{ p.first_name|default:"their" }}'s record, merge {{ current.first_name|default:"this one" }} into it
+            </button>
+        </div>
+    </div>
+{% empty %}
+    {% if q|length >= 2 %}
+        <p class="text-sm text-slate-500 italic">No other record matches "{{ q }}".</p>
+    {% endif %}
+{% endfor %}

@@ -30,6 +30,7 @@ MANAGED = {
     "core_patients.AllergyObservation": {"editable": False, "deletable": False},
     "core_patients.StaffRegistrationRequest": {"editable": False, "deletable": False},
     "core_patients.ConsentRecord": {"editable": False, "deletable": False},
+    "core_patients.PatientMerge": {"editable": False, "deletable": False},
     "triage_queue.Encounter": {},
     "triage_queue.TriageVitals": {"editable": False, "deletable": False},
     "triage_queue.QueueEntry": {},

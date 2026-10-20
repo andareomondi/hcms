@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Possible duplicates - HCMS{% endblock %}
+{% block content %}
+    <div class="max-w-3xl mx-auto space-y-6">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Is this someone already registered?</h1>
+            <p class="text-sm text-slate-600">These records look similar to the person you are registering. Open one if it is them. Only create a new record if you are sure they are someone else.</p>
+        </div>
+        <ul class="space-y-3">
+            {% for c in candidates %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:justify-between gap-3">
+                    <div class="space-y-1">
+                        <p class="font-bold">
+                            {{ c.patient.last_name }}, {{ c.patient.first_name|default:"(unnamed)" }}
+                            <span class="font-normal text-slate-500 text-sm">· {{ c.patient.get_sex_display }} · {% if c.patient.date_of_birth %}born {{ c.patient.date_of_birth|date:"Y-m-d" }}{% else %}DOB unknown{% endif %}</span></p>
+                        <p class="text-xs text-slate-500">{% if c.patient.id_number %}ID {{ c.patient.id_number }} · {% endif %}{% if c.patient.phone %}{{ c.patient.phone }}{% endif %}</p>
+                        <div class="flex flex-wrap gap-1">
+                            {% for r in c.reasons %}<span class="bg-amber-100 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-full">{{ r }}</span>{% endfor %}
+                        </div>
+                    </div>
+                    <a href="{% url 'core_patients:detail' c.patient.id %}"
+                       class="min-h-11 inline-flex items-center justify-center px-4 rounded-xl bg-slate-900 text-white text-sm font-bold shrink-0">This is them, open record</a>
+                </li>
+            {% endfor %}
+        </ul>
+        <form method="post"
+              action="{% url 'core_patients:register' %}"
+              class="bg-white rounded-2xl border p-5 space-y-4">
+            {% csrf_token %}
+            {% for key, value in form.items %}
+                {% if key != "csrfmiddlewaretoken" and key != "confirm_new" %}
+                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="confirm_new" value="1">
+            <p class="font-bold">Not any of these</p>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Why is this a different person? *</label>
+            <textarea name="duplicate_reason"
+                      required
+                      rows="2"
+                      class="w-full border rounded-xl px-3 py-2 text-sm"
+                      placeholder="e.g. Different date of birth on the national ID; same surname only"></textarea>
+            <button class="min-h-11 px-5 rounded-xl bg-amber-600 text-white text-sm font-bold">Create a new record anyway</button>
+        </form>
+    </div>
+{% endblock %}

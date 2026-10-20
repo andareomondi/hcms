@@ -1,0 +1,51 @@
+{% extends "base.html" %} {% block title %}Merge records - HCMS{% endblock %} {% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div>
+        <a href="{% url 'core_patients:detail' current.id %}"
+           class="text-xs text-slate-500 hover:underline">← Patient file</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Merge duplicate records</h1>
+        <p class="text-sm text-slate-600">
+            Find the other record, then choose which one to keep. The other record's
+            visits, bills, vaccinations and links all move to the one you keep.
+        </p>
+    </div>
+    <div class="bg-white rounded-2xl border p-4">
+        <p class="text-xs uppercase font-bold text-slate-500">This record</p>
+        <p class="font-bold">{{ current.last_name }}, {{ current.first_name|default:"(unnamed)" }}</p>
+        <p class="text-xs text-slate-500">
+            {% if current.date_of_birth %}born {{ current.date_of_birth|date:"Y-m-d"
+                }}{% else %}DOB unknown{% endif %}{% if current.id_number %} · ID {{ current.id_number }}{% endif %}
+        </p>
+    </div>
+    <form method="post"
+          action="{% url 'core_patients:merge_action' current.id %}"
+          class="space-y-4"
+          onsubmit="
+      return confirm(
+        'Merge these two records? Check the choice carefully. Merges are recorded permanently and cannot be undone from this screen.',
+      );
+    ">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Reason for the merge *</label>
+            <textarea name="reason"
+                      required
+                      rows="2"
+                      class="w-full border rounded-xl px-3 py-2 text-sm"
+                      placeholder="e.g. Same patient registered twice on the same day; ID confirmed from the card"></textarea>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Find the other record</label>
+            <input type="search"
+                   name="q"
+                   autocomplete="off"
+                   placeholder="Name or ID number"
+                   hx-get="{% url 'core_patients:merge_search' current.id %}"
+                   hx-trigger="input changed delay:250ms, search"
+                   hx-target="#merge-results"
+                   class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+        </div>
+        <div id="merge-results" class="space-y-2"></div>
+    </form>
+</div>
+{% endblock %}

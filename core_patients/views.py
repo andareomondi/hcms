@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.hashers import make_password
@@ -21,6 +23,7 @@ from radiology.models import ImagingStudy
 from wards.models import Admission
 
 from .allergy_views import allergy_context
+from .duplicates import find_candidates
 from .models import (
     Allergen,
     Department,
@@ -272,7 +275,7 @@ def patient_registry_search(request):
     query = request.GET.get("q", "").strip()
 
     # Start with all patients, ordered by newest first
-    patients = Patient.objects.select_related("created_by").order_by("-created_at")
+    patients = Patient.objects.filter(merged_into__isnull=True).select_related("created_by").order_by("-created_at")
 
     # Apply filters only if a search query is provided
     if query:
@@ -301,37 +304,58 @@ def patient_register_view(request):
     if request.method == "POST":
         is_provisional = request.POST.get("is_provisional") == "true"
         last_name = request.POST.get("last_name", "").strip()
+        first_name = request.POST.get("first_name", "").strip()
+        dob_raw = request.POST.get("date_of_birth") or None
+        dob = date.fromisoformat(dob_raw) if dob_raw else None
+        id_number = (request.POST.get("id_number") or "").strip() or None
 
         if not is_provisional and not last_name:
             return render(request, "core_patients/register.html", {"error": "Last name is required."})
 
+        if not is_provisional and request.POST.get("confirm_new") != "1":
+            candidates = find_candidates(first_name=first_name, last_name=last_name,
+                                         date_of_birth=dob, phone=request.POST.get("phone", ""),
+                                         id_number=id_number or "")
+            if candidates:
+                return render(request, "core_patients/duplicates.html", {
+                    "candidates": candidates, "form": request.POST,
+                })
+
+        if not is_provisional and request.POST.get("confirm_new") == "1":
+            reason = request.POST.get("duplicate_reason", "").strip()
+            if not reason:
+                return render(request, "core_patients/register.html", {
+                    "error": "Say why this is a different person from the matches shown."})
+            log_action(request, AuditAction.DUPLICATE_OVERRIDDEN,
+                       f"Registered {first_name} {last_name} despite possible matches: {reason}")
+
         patient = Patient.objects.create(
-            first_name=request.POST.get("first_name", "").strip(),
+            first_name=first_name,
             last_name=last_name or "Unidentified",
-            date_of_birth=request.POST.get("date_of_birth") or None,
+            date_of_birth=dob,
             sex=request.POST.get("sex", "U"),
             id_type=request.POST.get("id_type", "NONE"),
-            id_number=request.POST.get("id_number") or None,
+            id_number=id_number,
             is_provisional=is_provisional,
             provisional_label=request.POST.get("provisional_label", ""),
             phone=request.POST.get("phone", "").strip(),
             created_by=request.staff_profile,
         )
-
         status = "provisional" if is_provisional else "registered"
-        log_action(
-            request,
-            AuditAction.PATIENT_REGISTERED,
-            f"Registered {status} patient #{patient.id}: {patient}.",
-        )
+        log_action(request, AuditAction.PATIENT_REGISTERED,
+                   f"Registered {status} patient #{patient.id}: {patient}.")
         return redirect("core_patients:detail", patient_id=patient.id)
 
     return render(request, "core_patients/register.html")
+
 
 @login_required
 def patient_detail_view(request, patient_id):
     """Patient file: demographics, visits with triage data, ward history, bill and allergies."""
     patient = get_object_or_404(Patient.objects.select_related("created_by"), pk=patient_id)
+    if patient.merged_into_id:
+        messages.info(request, "This record was merged into another. You have been taken to the surviving record.")
+        return redirect("core_patients:detail", patient_id=patient.merged_into_id)
 
     log_action(
         request,

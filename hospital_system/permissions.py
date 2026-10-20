@@ -33,6 +33,7 @@ class Cap:
     ALLERGY_MANAGE = "ALLERGY_MANAGE"        # record, update, dispute, resolve allergies
     MATERNITY_RECORD = "MATERNITY_RECORD"    # record births and vaccinations
     CONSENT_RECORD = "CONSENT_RECORD"        # record and withdraw consent
+    PATIENT_MERGE = "PATIENT_MERGE"          # merge duplicate patient records
 
 
 ADMIN_VIEW_CAPS = {
@@ -44,7 +45,7 @@ ADMIN_VIEW_CAPS = {
 ROLE_CAPS = {
     "RECEPTION": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_REGISTER, Cap.PATIENT_FILE, Cap.OPEN_ENCOUNTER,
-        Cap.TRIAGE_BOARD, Cap.WARD_VIEW, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.CONSENT_RECORD
+        Cap.TRIAGE_BOARD, Cap.WARD_VIEW, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.CONSENT_RECORD, Cap.PATIENT_MERGE,
     },
     "TRIAGE_NURSE": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.OPEN_ENCOUNTER,

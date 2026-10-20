@@ -243,3 +243,21 @@ class ConsentRecord(models.Model):
 
     def __str__(self):
         return f"{self.get_consent_type_display()} for {self.patient}"
+
+class PatientMerge(models.Model):
+    """
+    Append-only. One row per merge. Records who merged which records, why, and what moved.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    survivor = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="merges_received")
+    duplicate = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="merges_away")
+    reason = models.TextField()
+    summary = models.JSONField(default=dict)
+    merged_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    merged_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-merged_at"]
+
+    def __str__(self):
+        return f"{self.duplicate} merged into {self.survivor}"

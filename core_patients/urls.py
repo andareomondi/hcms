@@ -1,5 +1,7 @@
 from django.urls import path
 
+from core_patients import merge_views
+
 from . import allergy_views, consent_views, family_views, views
 
 app_name = "core_patients"
@@ -26,4 +28,10 @@ urlpatterns = [
     path("<uuid:patient_id>/consent/", consent_views.consent_page_view, name="consent"),
     path("<uuid:patient_id>/consent/record/", consent_views.consent_record_action, name="consent_record"),
     path("<uuid:patient_id>/family/search/", family_views.family_search_view, name="family_search"),
+    path("<uuid:patient_id>/merge/", merge_views.merge_page_view, name="merge"),
+    path("<uuid:patient_id>/merge/search/", merge_views.merge_search_view, name="merge_search"),
+    path("<uuid:patient_id>/merge/", merge_views.merge_action, name="merge_action"),
+    path("<uuid:patient_id>/merge/", merge_views.merge_page_view, name="merge"),
+    path("<uuid:patient_id>/merge/search/", merge_views.merge_search_view, name="merge_search"),
+    path("<uuid:patient_id>/merge/submit/", merge_views.merge_action, name="merge_action"),
 ]
