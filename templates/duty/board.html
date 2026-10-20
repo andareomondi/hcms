@@ -1,13 +1,10 @@
-{% extends "base.html" %} {% block title %}Doctors on duty - HCMS{% endblock %}
+{% extends "base.html" %} {% block title %}Staff on duty - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-6">
         <div class="flex justify-between items-center">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900">Doctors on duty</h1>
-                <p class="text-sm text-slate-500">
-                    Where each doctor is right now. Only these doctors can be assigned new
-                    patients.
-                </p>
+                <h1 class="text-2xl font-bold text-slate-900">Staff on duty</h1>
+                <p class="text-sm text-slate-500">Where each staff member is working right now.</p>
             </div>
             {% if my_session %}
                 <form action="{% url 'duty:clock_out' %}" method="post">
@@ -34,18 +31,20 @@
             </form>
         {% endif %}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {% for doctor in doctors %}
+            {% for member in staff_members %}
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                    <p class="font-bold text-slate-900">Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}</p>
-                    <p class="text-xs text-slate-500">{{ doctor.department.name }}</p>
+                    <p class="font-bold text-slate-900">{{ member.user.get_full_name|default:member.user.username }}</p>
+                    <p class="text-xs text-slate-500">{{ member.get_role_display|default:member.role }} · {{ member.department.name }}</p>
                     <p class="mt-3 text-sm font-semibold text-teal-700">
-                        {% if doctor.open_sessions and doctor.open_sessions.0.room %} {{
-                            doctor.open_sessions.0.room.code }} · {{
-                                doctor.open_sessions.0.room.name }} {% else %} Room not set {% endif %}
+                        {% if member.open_sessions and member.open_sessions.0.room %}
+                            {{ member.open_sessions.0.room.code }} · {{ member.open_sessions.0.room.name }}
+                        {% else %}
+                            Room not set
+                        {% endif %}
                     </p>
                 </div>
             {% empty %}
-                <p class="text-sm text-slate-500 italic col-span-3">No doctors are on duty right now.</p>
+                <p class="text-sm text-slate-500 italic col-span-3">No staff members are on duty right now.</p>
             {% endfor %}
         </div>
     </div>

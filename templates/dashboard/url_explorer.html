@@ -1,0 +1,28 @@
+{% extends "base.html" %} {% block title %}URL Explorer - HCMS{% endblock %} {% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Project URL Explorer</h1>
+        <p class="text-sm text-slate-500">All registered routes and named views in your Django application.</p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200 text-slate-400 uppercase text-xs">
+                    <th class="py-3 px-4">URL Pattern</th>
+                    <th class="py-3 px-4">Name</th>
+                    <th class="py-3 px-4">View Callback</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for item in url_patterns %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4 font-mono text-xs text-teal-700">{{ item.pattern }}</td>
+                        <td class="py-3 px-4 font-semibold text-slate-700">{{ item.name }}</td>
+                        <td class="py-3 px-4 font-mono text-xs text-slate-500">{{ item.lookup }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

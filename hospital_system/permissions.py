@@ -36,10 +36,19 @@ class Cap:
     PATIENT_MERGE = "PATIENT_MERGE"          # merge duplicate patient records
 
 
-ADMIN_VIEW_CAPS = {
-    Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.VIEW_PHARMACY,
-    Cap.VIEW_RADIOLOGY, Cap.VIEW_FINANCE, Cap.WARD_VIEW, Cap.TRIAGE_BOARD, Cap.ADMIN_CONFIG,
-    Cap.TAKE_PAYMENT, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE, Cap.CONSENT_RECORD, 
+# Collect every single capability defined in the Cap class
+ALL_CAPS = {
+    getattr(Cap, attr) for attr in dir(Cap) 
+    if not attr.startswith("_") and isinstance(getattr(Cap, attr), str)
+}
+
+# Regular ADMIN role can do everything EXCEPT direct clinical/operational tasks and clocking
+ADMIN_CAPS = ALL_CAPS - {
+    Cap.DUTY_SELF, 
+    Cap.CLINICAL_ACTIONS, 
+    Cap.NURSE_ADMINISTER, 
+    Cap.DISPENSE,
+    Cap.RADIOLOGY_REPORT,
 }
 
 ROLE_CAPS = {
@@ -75,14 +84,25 @@ ROLE_CAPS = {
 
 
 def caps_for(user):
-    """Set of capabilities for a user. Admin has view-only reach plus configuration."""
+    """
+    Set of capabilities for a user.
+    - Superusers have complete access with NO restrictions whatsoever (ALL_CAPS).
+    - Regular ADMIN roles have configuration/view access minus direct clinical execution & clocking.
+    """
     if not user.is_authenticated:
         return set()
+    
+    # Superuser gets every capability in the system
+    if user.is_superuser:
+        return set(ALL_CAPS)
+        
     profile = getattr(user, "staff_profile", None)
-    if user.is_superuser or (profile is not None and profile.role == "ADMIN"):
-        return set(ADMIN_VIEW_CAPS)
+    if profile is not None and profile.role == "ADMIN":
+        return set(ADMIN_CAPS)
+        
     if profile is None:
         return set()
+        
     return set(ROLE_CAPS.get(profile.role, set()))
 
 

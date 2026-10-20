@@ -33,8 +33,6 @@ GROUPS = [
         "items": [
             {"label": "My consultations", "url": "doctors_portal:dashboard", "icon": "🩺",
              "caps": [Cap.CLINICAL_ACTIONS]},
-            {"label": "Nurse worklist", "url": "pharmacy:nurse_worklist", "icon": "💉",
-             "caps": [Cap.NURSE_ADMINISTER]},
             {"label": "Dispense queue", "url": "pharmacy:dispense_queue", "icon": "🧾",
              "caps": [Cap.DISPENSE]},
             {"label": "Nurse worklist", "url": "pharmacy:nurse_worklist", "icon": "💉",
@@ -85,11 +83,11 @@ GROUPS = [
         "label": "Administration",
         "items": [
             {"label": "Admin panel", "url": "dashboard:admin_master", "icon": "🛡️",
-             "superuser": True},
+             "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Data manager", "url": "dashboard:crud_index", "icon": "🗂️",
-             "superuser": True},
+             "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Staff requests", "url": "core_patients:staff_requests", "icon": "📝",
-             "superuser": True},
+             "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Audit log", "url": "dashboard:audit_logs", "icon": "📜",
              "caps": [Cap.ADMIN_CONFIG]},
         ],

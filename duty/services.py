@@ -1,11 +1,12 @@
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from core_patients.models import StaffProfile
 from pharmacy.models import Medication  # noqa: F401  (keeps app loading order explicit)
 from triage_queue.models import QueueEntry
 
-from .models import DutySession
+from .models import DutySession, Room
 
 
 class DutyError(Exception):
@@ -14,10 +15,21 @@ class DutyError(Exception):
 
 def on_duty_staff(role=None):
     """Active staff who are currently clocked in. Optionally filtered by role."""
+    active_staff_ids = DutySession.objects.filter(
+        clocked_out_at__isnull=True
+    ).values_list("staff_id", flat=True)
+
+    open_sessions_prefetch = Prefetch(
+        "duty_sessions",
+        queryset=DutySession.objects.filter(clocked_out_at__isnull=True).select_related("room"),
+        to_attr="open_sessions",
+    )
+    
     qs = StaffProfile.objects.filter(
         is_active=True,
-        duty_sessions__clocked_out_at__isnull=True,
-    ).select_related("user", "department")
+        id__in=active_staff_ids,
+    ).select_related("user", "department").prefetch_related(open_sessions_prefetch)
+    
     if role:
         qs = qs.filter(role=role)
     return qs.distinct()
@@ -32,7 +44,6 @@ def current_session(staff):
 
 def available_rooms(department=None):
     """Active rooms with nobody clocked into them right now."""
-    from .models import Room
     occupied = DutySession.objects.filter(clocked_out_at__isnull=True, room__isnull=False) \
         .values_list("room_id", flat=True)
     qs = Room.objects.filter(is_active=True).exclude(id__in=occupied)
@@ -42,13 +53,11 @@ def available_rooms(department=None):
 
 
 def clock_in(staff, room):
-    if staff.role == "DOCTOR" and room is None:
-        raise DutyError("Doctors must choose a room to clock in.")
+    # Removed doctor-only room enforcement so any staff can clock in with or without a room
     try:
         with transaction.atomic():
             session = DutySession.objects.create(staff=staff, room=room)
     except IntegrityError:
-        # Either already clocked in, or the room was just taken by someone else
         if current_session(staff):
             raise DutyError("You are already clocked in.")
         raise DutyError("That room was just taken. Choose another room.")
@@ -60,6 +69,7 @@ def clock_out(staff):
     if session is None:
         raise DutyError("You are not clocked in.")
 
+    # Only check for open patient assignments if the staff member is a doctor
     if staff.role == "DOCTOR":
         open_patients = QueueEntry.objects.filter(
             assigned_doctor=staff,

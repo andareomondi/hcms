@@ -90,11 +90,11 @@ def change_room_action(request):
 @login_required
 def board_view(request):
     """Who is on duty and where. Any logged-in user can read this, including reception."""
-    doctors = services.on_duty_staff(role="DOCTOR").order_by("user__last_name")
+    staff_members = services.on_duty_staff().order_by("user__last_name")
     my_session = services.current_session(getattr(request, "staff_profile", None))
     rooms = services.available_rooms() if my_session else []
     return render(request, "duty/board.html", {
-        "doctors": doctors,
+        "staff_members": staff_members,
         "my_session": my_session,
         "rooms": rooms,
     })
