@@ -1,0 +1,72 @@
+{% extends "base.html" %} {% block title %}Stock units - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col md:flex-row md:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Stock units</h1>
+            <p class="text-sm text-slate-500">Every pack and vial, by serial, with its batch and expiry.</p>
+        </div>
+        {% if can_manage %}
+            <a href="{% url 'pharmacy:receive' %}"
+               class="min-h-11 inline-flex items-center px-4 rounded-xl bg-teal-600 text-white text-sm font-bold">Receive stock</a>
+        {% endif %}
+    </div>
+    <form method="get" class="flex gap-2">
+        <input name="serial"
+               value="{{ query }}"
+               placeholder="Search serial"
+               autocomplete="off"
+               class="flex-1 min-h-11 border rounded-xl px-3 text-sm font-mono uppercase" />
+        <button class="min-h-11 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Find</button>
+    </form>
+    <div class="bg-white rounded-2xl border overflow-x-auto">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Serial</th>
+                    <th class="p-3">Medicine</th>
+                    <th class="p-3">Batch</th>
+                    <th class="p-3">Expiry</th>
+                    <th class="p-3">Doses</th>
+                    <th class="p-3">Status</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for u in page_obj %}
+                    <tr class="{% if u.batch.expiry_date < today %}bg-red-50{% endif %}">
+                        <td class="p-3 font-mono text-xs">{{ u.serial }}</td>
+                        <td class="p-3">{{ u.medication.brand_name }} {{ u.medication.strength }}</td>
+                        <td class="p-3 font-mono text-xs">{{ u.batch.batch_number }}</td>
+                        <td class="p-3 text-xs {% if u.batch.expiry_date < today %}font-bold text-red-700{% endif %}">
+                            {{ u.batch.expiry_date|date:"d M Y" }}
+                        </td>
+                        <td class="p-3 font-bold">{{ u.doses_remaining }} / {{ u.doses_total }}</td>
+                        <td class="p-3 text-xs font-bold">{{ u.get_status_display }}</td>
+                        <td class="p-3 text-right">
+                            {% if can_manage and u.status == "IN_STOCK" %}
+                                <details class="inline-block text-left">
+                                    <summary class="cursor-pointer text-xs font-bold text-red-700">Write off</summary>
+                                    <form method="post"
+                                          action="{% url 'pharmacy:write_off' u.serial %}"
+                                          class="mt-2 flex gap-2">
+                                        {% csrf_token %}
+                                        <input name="reason"
+                                               required
+                                               placeholder="Reason"
+                                               class="border rounded-lg px-2 py-1 text-xs" />
+                                        <button class="bg-red-600 text-white px-2 py-1 rounded-lg text-xs font-bold">Confirm</button>
+                                    </form>
+                                </details>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-500 italic">No units found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

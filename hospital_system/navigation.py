@@ -38,7 +38,12 @@ GROUPS = [
             {"label": "Nurse worklist", "url": "pharmacy:nurse_worklist", "icon": "💉",
              "caps": [Cap.NURSE_ADMINISTER]},
             {"label": "Pharmacy & stock", "url": "pharmacy:dashboard", "icon": "💊",
-             "caps": [Cap.VIEW_PHARMACY]},        ],
+             "caps": [Cap.VIEW_PHARMACY]},
+            {"label": "Receive stock", "url": "pharmacy:receive", "icon": "📦",
+             "caps": [Cap.PHARMACY_MANAGE]},
+            {"label": "Stock units", "url": "pharmacy:units", "icon": "🏷️",
+             "caps": [Cap.VIEW_PHARMACY]},
+        ],
     },
     {
         "label": "Maternity & children",

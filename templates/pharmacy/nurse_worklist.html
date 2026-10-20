@@ -68,6 +68,16 @@
                                class="w-full min-h-11 border rounded-xl px-3 text-sm">
                     </div>
                     <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Scan vial or pack (optional)</label>
+                        <textarea name="serials"
+                                  rows="3"
+                                  autocomplete="off"
+                                  spellcheck="false"
+                                  placeholder="Scan the barcode. Leave empty to take the earliest-expiring stock."
+                                  class="w-full border rounded-xl px-3 py-2 text-sm font-mono uppercase"></textarea>
+                        <p class="text-xs text-slate-500 mt-1">Required for vaccines. For other medicines, scanning lets you choose the exact pack.</p>
+                    </div>
+                    <div>
                         <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Notes</label>
                         <input type="text"
                                name="notes"

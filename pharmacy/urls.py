@@ -14,4 +14,7 @@ urlpatterns = [
     path("dispense/<uuid:order_id>/", views.dispense_action, name="dispense_action"),
     path("worklist/", views.nurse_worklist_view, name="nurse_worklist"),
     path("worklist/<uuid:order_id>/administer/", views.administer_action, name="administer_action"),
+    path("receive/", views.receive_view, name="receive"),
+    path("units/", views.units_view, name="units"),
+    path("units/<str:serial>/write-off/", views.write_off_action, name="write_off"),
 ]

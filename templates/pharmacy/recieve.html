@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Receive stock - HCMS{% endblock %}
+{% block content %}
+    <div class="max-w-3xl mx-auto space-y-6">
+        <div>
+            <a href="{% url 'pharmacy:dashboard' %}"
+               class="text-xs text-slate-500 hover:underline">← Pharmacy</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">Receive stock</h1>
+            <p class="text-sm text-slate-500">Enter the batch from the label, then scan each pack or vial. A receipt is saved in full or not at all.</p>
+        </div>
+        <form method="post"
+              class="bg-white rounded-2xl border p-6 space-y-5"
+              x-data="{ count: 0 }">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Medicine or vaccine *</label>
+                    <select name="medication"
+                            required
+                            class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        <option value="">Choose</option>
+                        {% for m in medications %}
+                            <option value="{{ m.id }}"
+                                    {% if form.medication == m.id|stringformat:"s" %}selected{% endif %}>{{ m.brand_name }} {{ m.strength }} · {{ m.form }}{% if m.vaccine_code %} (vaccine){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Batch number *</label>
+                    <input name="batch_number"
+                           required
+                           value="{{ form.batch_number|default:'' }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm font-mono uppercase">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Expiry date *</label>
+                    <input type="date"
+                           name="expiry_date"
+                           required
+                           value="{{ form.expiry_date|default:'' }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Doses per pack or vial</label>
+                    <input type="number"
+                           name="doses_per_unit"
+                           min="1"
+                           max="255"
+                           placeholder="Leave blank to use the medicine's setting"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between items-end mb-1">
+                    <label class="block text-xs font-semibold uppercase text-slate-600">Scan serials (one per line)</label>
+                    <span class="text-xs text-slate-500"><span x-text="count"></span> scanned</span>
+                </div>
+                <textarea name="serials"
+                          rows="8"
+                          required
+                          autofocus
+                          autocomplete="off"
+                          spellcheck="false"
+                          @input="count = $event.target.value.split('\n').filter(l => l.trim()).length"
+                          placeholder="Scan each barcode. The scanner moves to the next line by itself."
+                          class="w-full border rounded-xl px-3 py-2 text-sm font-mono uppercase"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Every serial is checked. If one is already in the system or badly formed, nothing is saved.</p>
+            </div>
+            <button class="min-h-11 w-full rounded-xl bg-slate-900 text-white text-sm font-bold">Save receipt</button>
+        </form>
+    </div>
+{% endblock %}
