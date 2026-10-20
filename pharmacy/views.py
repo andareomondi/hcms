@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -5,6 +6,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core_patients.allergy_services import conflicts_for
@@ -13,8 +15,9 @@ from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, caps_for, requires
 
+from . import serials as serial_rules
 from . import services
-from .models import Medication, MedicationOrder, StockItem
+from .models import Medication, MedicationOrder, StockItem, StockUnit
 from .services import PharmacyError
 
 
@@ -172,8 +175,10 @@ def dispense_queue_view(request):
 def dispense_action(request, order_id):
     try:
         qty = _int(request.POST.get("quantity"), "Quantity")
-        order = services.dispense(order_id=order_id, quantity=qty, staff=_profile(request))
-    except PharmacyError as exc:
+        scanned = serial_rules.parse_list(request.POST.get("serials", ""))
+        order = services.dispense(order_id=order_id, quantity=qty, staff=_profile(request),
+                                  serials=scanned or None)
+    except (PharmacyError, serial_rules.SerialError) as exc:
         messages.error(request, str(exc))
         return redirect("pharmacy:dispense_queue")
 
@@ -197,14 +202,16 @@ def nurse_worklist_view(request):
 @require_POST
 def administer_action(request, order_id):
     try:
+        scanned = serial_rules.parse_list(request.POST.get("serials", ""))
         order = services.administer(
             order_id=order_id,
             nurse=_profile(request),
             dose_given_text=request.POST.get("dose_given_text", ""),
             site=request.POST.get("site", ""),
             notes=request.POST.get("notes", ""),
+            serials=scanned or None,
         )
-    except PharmacyError as exc:
+    except (PharmacyError, serial_rules.SerialError) as exc:
         messages.error(request, str(exc))
         return redirect("pharmacy:nurse_worklist")
 
@@ -212,3 +219,57 @@ def administer_action(request, order_id):
                f"Administered {order.medication.brand_name} to {order.encounter.patient}.")
     messages.success(request, f"Recorded: {order.medication.brand_name} given.")
     return redirect("pharmacy:nurse_worklist")
+
+
+@requires(Cap.PHARMACY_MANAGE)
+def receive_view(request):
+    medications = Medication.objects.filter(is_active=True).order_by("brand_name")
+    if request.method == "POST":
+        medication = get_object_or_404(Medication, pk=request.POST.get("medication"), is_active=True)
+        try:
+            expiry = date.fromisoformat(request.POST.get("expiry_date", "").strip())
+            per_unit = int(request.POST.get("doses_per_unit") or medication.doses_per_unit)
+            scanned = serial_rules.parse_list(request.POST.get("serials", ""))
+            batch, units = services.receive_batch(
+                medication=medication, batch_number=request.POST.get("batch_number", ""),
+                expiry_date=expiry, serials=scanned, doses_per_unit=per_unit,
+                staff=_profile(request),
+            )
+        except (PharmacyError, serial_rules.SerialError, ValueError) as exc:
+            messages.error(request, str(exc) or "Check the receipt details.")
+            return render(request, "pharmacy/receive.html", {"medications": medications, "form": request.POST})
+
+        log_action(request, AuditAction.STOCK_BATCH_RECEIVED,
+                   f"Received batch {batch.batch_number} of {medication.brand_name}: {len(units)} unit(s).")
+        messages.success(request, f"Received {len(units)} unit(s) of batch {batch.batch_number}.")
+        return redirect("pharmacy:units")
+    return render(request, "pharmacy/receive.html", {"medications": medications, "form": {}})
+
+
+@requires(Cap.VIEW_PHARMACY)
+def units_view(request):
+    query = request.GET.get("serial", "").strip().upper()
+    units = StockUnit.objects.select_related("medication", "batch").order_by("batch__expiry_date", "serial")
+    if query:
+        units = units.filter(serial__icontains=query)
+    page_obj = Paginator(units, 50).get_page(request.GET.get("page"))
+    return render(request, "pharmacy/units.html", {
+        "page_obj": page_obj, "query": query,
+        "can_manage": Cap.PHARMACY_MANAGE in caps_for(request.user),
+        "today": timezone.localdate(),
+    })
+
+
+@requires(Cap.PHARMACY_MANAGE)
+@require_POST
+def write_off_action(request, serial):
+    try:
+        unit = services.write_off(serial=serial, reason=request.POST.get("reason", ""),
+                                  staff=_profile(request))
+    except PharmacyError as exc:
+        messages.error(request, str(exc))
+        return redirect("pharmacy:units")
+    log_action(request, AuditAction.STOCK_UNIT_WRITTEN_OFF,
+               f"Wrote off {unit.serial} ({unit.medication.brand_name}): {request.POST.get('reason', '').strip()}")
+    messages.success(request, f"{unit.serial} written off.")
+    return redirect("pharmacy:units")

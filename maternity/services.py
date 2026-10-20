@@ -6,11 +6,12 @@ from django.utils import timezone
 
 from billing import services as billing
 from core_patients.models import Patient, PatientRelationship
+from pharmacy import services as pharmacy
 from triage_queue.models import Encounter
 
 from .models import Delivery, Vaccination
 from .prices import DELIVERY_PRICES
-from .schedule import SCHEDULE_CODES
+from .schedule import LABELS, SCHEDULE_CODES
 
 
 class MaternityError(Exception):
@@ -18,7 +19,6 @@ class MaternityError(Exception):
 
 
 def _newborn_identifier(delivered_at):
-    # A unique temporary identifier. Replace with the hospital's sequence when one is set up (spec 7.3).
     return f"NB-{timezone.localtime(delivered_at):%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
 
 
@@ -138,8 +138,15 @@ def link_relationship(*, patient, related, relationship, is_guarantor):
     return link
 
 
+def _immunisation_visit_for_vaccine(patient, staff, vaccine):
+    return Encounter.objects.create(
+        patient=patient, encounter_type="OUTPATIENT", payer_type="SELF_PAY",
+        opened_by=staff, chief_complaint=f"Immunisation: {LABELS[vaccine]}",
+    )
+
+
 @transaction.atomic
-def record_vaccination(*, patient, vaccine, given_at, batch_number, encounter, staff):
+def record_vaccination(*, patient, vaccine, given_at, serial, staff):
     if staff is None:
         raise MaternityError("Your account has no staff profile.")
     if vaccine not in SCHEDULE_CODES:
@@ -148,10 +155,42 @@ def record_vaccination(*, patient, vaccine, given_at, batch_number, encounter, s
         raise MaternityError("Record the child's date of birth first.")
     if Vaccination.objects.filter(patient=patient, vaccine=vaccine).exists():
         raise MaternityError("This vaccine is already recorded for this child.")
-    return Vaccination.objects.create(
+
+    try:
+        unit = pharmacy.lock_unit_for_vaccine(serial=serial.strip().upper(), vaccine_code=vaccine)
+    except pharmacy.PharmacyError as exc:
+        raise MaternityError(str(exc))
+
+    visit = _immunisation_visit_for_vaccine(patient, staff, vaccine)
+    vacc = Vaccination.objects.create(
         patient=patient, vaccine=vaccine, given_at=given_at,
-        batch_number=batch_number.strip(), encounter=encounter, given_by=staff,
+        batch_number=unit.batch.batch_number, encounter=visit,
+        given_by=staff, stock_unit=unit,
     )
+    try:
+        pharmacy.consume_unit(unit=unit, doses=1, staff=staff, reason="ADMINISTER",
+                              reference_id=vacc.id)
+    except pharmacy.PharmacyError as exc:
+        raise MaternityError(str(exc))
+
+    medication = unit.medication
+    charged = False
+    if not medication.is_programme_free and medication.unit_price > 0:
+        billing.add_charge(
+            encounter=visit, source_type="MANUAL",
+            description=f"{medication.brand_name}: {LABELS[vaccine]}",
+            unit_price=medication.unit_price, staff=staff,
+            source_id=vacc.id, key=f"vacc:{vacc.id}",
+        )
+        charged = True
+
+    visit.status = "CLOSED"
+    visit.closed_at = timezone.now()
+    visit.save(update_fields=["status", "closed_at"])
+    if charged:
+        from triage_queue.services import notify_billing_ready
+        notify_billing_ready(visit)
+    return vacc
 
 
 @transaction.atomic

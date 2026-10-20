@@ -118,8 +118,7 @@ def vaccination_action(request, patient_id):
             patient=child,
             vaccine=request.POST.get("vaccine", ""),
             given_at=_aware(request.POST.get("given_at")),
-            batch_number=request.POST.get("batch_number", ""),
-            encounter=None,
+            serial=request.POST.get("serial", ""),
             staff=_profile(request),
         )
     except MaternityError as exc:

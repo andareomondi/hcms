@@ -1,3 +1,4 @@
+
 from django.db import transaction
 from django.db.models import Sum
 
@@ -15,6 +16,8 @@ from .models import (
 class PharmacyError(Exception):
     """A rule staff must see. Shown as-is."""
 
+def _dispensed_total(order):
+    return order.dispensations.aggregate(t=Sum("quantity"))["t"] or 0
 
 def allergy_hits(order):
     return list(conflicts_for(order.encounter.patient, order.medication))
@@ -74,25 +77,26 @@ def adjust_stock(*, medication, delta, staff):
 
 
 @transaction.atomic
-def dispense(*, order_id, quantity, staff):
-    order = _lock_order(order_id)
+def dispense(*, order_id, quantity, staff, serials=None):
+    order = (MedicationOrder.objects.select_for_update()
+             .select_related("medication", "encounter__patient").get(pk=order_id))
     if order.fulfilment != "PHARMACY_DISPENSE":
         raise PharmacyError("This medicine is given by a nurse, not dispensed.")
     if order.status not in ("ORDERED", "PARTIALLY_DONE"):
         raise PharmacyError("This order is no longer open.")
     check_allergies(order)
 
-    done = order.dispensations.aggregate(t=Sum("quantity"))["t"] or 0
+    done = _dispensed_total(order)
     remaining = order.doses_total - done
     if not (1 <= quantity <= remaining):
         raise PharmacyError(f"Enter a quantity between 1 and {remaining}.")
 
-    _move_stock(order.medication, -quantity, "DISPENSE", staff, order.id)
+    take_doses(medication=order.medication, doses=quantity, staff=staff,
+               reason="DISPENSE", reference_id=order.id, serials=serials)
     Dispensation.objects.create(order=order, quantity=quantity, dispensed_by=staff)
     order.status = "COMPLETED" if quantity == remaining else "PARTIALLY_DONE"
     order.save(update_fields=["status"])
     return order
-
 
 @transaction.atomic
 def administer(*, order_id, nurse, dose_given_text, site="", notes=""):

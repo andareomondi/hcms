@@ -56,6 +56,8 @@ class Vaccination(models.Model):
     batch_number = models.CharField(max_length=40, blank=True)
     given_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     recorded_at = models.DateTimeField(auto_now_add=True)
+    stock_unit = models.ForeignKey("pharmacy.StockUnit", on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name="vaccinations")
 
     class Meta:
         ordering = ["given_at"]

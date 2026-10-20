@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block title %}Dispense queue - HCMS{% endblock %}
+{% extends "base.html" %}
+{% block title %}Dispense queue - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-6"
          x-data="{ open: false, action: '', name: '', medicine: '', remaining: 0, qty: 1 }">
@@ -14,14 +15,8 @@
                             {{ o.encounter.patient.last_name }}, {{ o.encounter.patient.first_name }}
                             <span class="font-normal text-slate-500">· {{ o.medication.brand_name }} {{ o.medication.strength }}</span>
                         </p>
-                        <p class="text-xs text-slate-500">
-                            {{ o.dose_text }} · {{ o.frequency_text }} · {{ o.duration_days }}
-                            day(s) · {{ o.doses_total }} total · given {{ o.dispensed_total }}
-                        </p>
-                        <p class="text-xs">
-                            Stock:
-                            <strong class="{% if not o.stock_quantity %}text-red-600{% endif %}">{{ o.stock_quantity|default:0 }}</strong>
-                        </p>
+                        <p class="text-xs text-slate-500">{{ o.dose_text }} · {{ o.frequency_text }} · {{ o.duration_days }} day(s) · {{ o.doses_total }} total · given {{ o.dispensed_total }}</p>
+                        <p class="text-xs">Stock: <strong class="{% if not o.stock_quantity %}text-red-600{% endif %}">{{ o.stock_quantity|default:0 }}</strong></p>
                         {% for h in o.allergy_hits %}
                             <span class="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full mr-1">⚠ Allergy: {{ h.allergen.display_name }}</span>
                         {% endfor %}
@@ -33,36 +28,27 @@
                         {% if o.allergy_hits and not o.allergy_override_reason %}
                             <p class="text-xs font-bold text-red-700 mb-1">Blocked until the doctor documents an override.</p>
                             <button disabled
-                                    class="min-h-11 px-4 rounded-xl bg-slate-200 text-slate-500 text-sm font-bold">
-                                Dispense
-                            </button>
+                                    class="min-h-11 px-4 rounded-xl bg-slate-200 text-slate-500 text-sm font-bold">Dispense</button>
                         {% else %}
                             <button type="button"
                                     class="min-h-11 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold"
-                                    @click="open = true; action = '{% url 'pharmacy:dispense_action' o.id %}'; name = '{{ o.encounter.patient.last_name|escapejs }}, {{ o.encounter.patient.first_name|escapejs }}'; medicine = '{{ o.medication.brand_name|escapejs }} {{ o.medication.strength|escapejs }}'; remaining = {{ o.doses_total|add:'0' }} - {{ o.dispensed_total }}; qty = remaining">
-                                Dispense
-                            </button>
+                                    @click="open = true; action = '{% url 'pharmacy:dispense_action' o.id %}'; name = '{{ o.encounter.patient.last_name|escapejs }}, {{ o.encounter.patient.first_name|escapejs }}'; medicine = '{{ o.medication.brand_name|escapejs }} {{ o.medication.strength|escapejs }}'; remaining = {{ o.doses_total|add:'0' }} - {{ o.dispensed_total }}; qty = remaining">Dispense</button>
                         {% endif %}
                     </div>
                 </li>
             {% empty %}
-                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">
-                    Nothing waiting to be dispensed.
-                </li>
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">Nothing waiting to be dispensed.</li>
             {% endfor %}
         </ul>
         <div x-show="open"
              x-cloak
-             style="display: none"
+             style="display:none"
              class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4"
              @click.self="open = false">
             <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
                 <div>
                     <h3 class="text-lg font-bold">Dispense medicine</h3>
-                    <p class="text-sm text-slate-600">
-                        <span x-text="medicine" class="font-bold"></span> for
-                        <span x-text="name" class="font-bold"></span>
-                    </p>
+                    <p class="text-sm text-slate-600"><span x-text="medicine" class="font-bold"></span> for <span x-text="name" class="font-bold"></span></p>
                 </div>
                 <form method="post" :action="action" class="space-y-4">
                     {% csrf_token %}
@@ -74,16 +60,24 @@
                                :max="remaining"
                                x-model.number="qty"
                                required
-                               class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Scan packs or vials (optional)</label>
+                        <textarea name="serials"
+                                  rows="3"
+                                  autocomplete="off"
+                                  spellcheck="false"
+                                  placeholder="Scan a barcode per line. Leave empty to take the earliest-expiring stock."
+                                  class="w-full border rounded-xl px-3 py-2 text-sm font-mono uppercase"></textarea>
+                        <p class="text-xs text-slate-500 mt-1">For medicines, scanning lets you choose the exact pack. Leave empty to use the earliest-expiring stock.</p>
                     </div>
                     <div class="flex flex-col-reverse sm:flex-row gap-3">
                         <button type="button"
                                 @click="open = false"
                                 class="flex-1 min-h-11 rounded-xl bg-slate-100 text-sm font-semibold">Cancel</button>
                         <button type="submit"
-                                class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold">
-                            Confirm dispensed
-                        </button>
+                                class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold">Confirm dispensed</button>
                     </div>
                 </form>
             </div>

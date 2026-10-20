@@ -137,10 +137,14 @@
                        value="{{ now_local }}"
                        class="w-full min-h-11 border rounded-xl px-3 text-sm" />
             </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Batch number</label>
-                <input name="batch_number"
-                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            <div class="md:col-span-2">
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Scan the vial serial</label>
+                <input name="serial"
+                       required
+                       autocomplete="off"
+                       autofocus
+                       placeholder="Scan the vial barcode"
+                       class="w-full min-h-11 border rounded-xl px-3 text-sm font-mono uppercase">
             </div>
             <button class="min-h-11 rounded-xl bg-teal-600 text-white text-sm font-bold">Record dose</button>
         </form>
