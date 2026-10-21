@@ -22,10 +22,6 @@ GROUPS = [
              "caps": [Cap.PATIENT_REGISTER]},
             {"label": "Triage board", "url": "triage_queue:board", "icon": "⚡",
              "caps": [Cap.TRIAGE_BOARD]},
-            {"label": "Consent records", "url": "core_patients:search", "icon": "✍️",
-             "caps": [Cap.CONSENT_RECORD]},
-            {"label": "Merge duplicates", "url": "core_patients:search", "icon": "🔀",
-             "caps": [Cap.PATIENT_MERGE]},
         ],
     },
     {

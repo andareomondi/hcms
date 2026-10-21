@@ -1,0 +1,25 @@
+<ul class="border rounded-xl divide-y bg-white max-h-56 overflow-y-auto">
+    {% for m in results %}
+        <li>
+            <button type="button"
+                    @click="pick('{{ m.id }}', '{{ m.brand_name|escapejs }}', '{{ m.strength|escapejs }}', {{ m.stock_quantity }})"
+                    class="w-full text-left p-3 hover:bg-indigo-50 flex justify-between gap-3">
+                <span>
+                    <span class="font-bold text-sm">{{ m.brand_name }}</span>
+                    <span class="text-xs text-slate-500">{{ m.generic_name }} · {{ m.strength }} · {{ m.form }}</span>
+                </span>
+                <span class="text-xs self-center">
+                {% if m.stock_quantity > 0 %}<span class="text-emerald-700">In stock</span>
+            {% else %}<span class="text-amber-700">Out of stock</span>{% endif %}
+        </span>
+    </button>
+</li>
+{% empty %}
+{% if q|length >= 2 %}
+    <li class="p-3 text-sm text-slate-500">
+        No formulary match for "{{ q }}". You can prescribe it as an external
+        purchase below.
+    </li>
+{% endif %}
+{% endfor %}
+</ul>

@@ -77,12 +77,17 @@ class MedicationOrder(models.Model):
     FULFILMENT = [("PHARMACY_DISPENSE", "Pharmacy dispense"), ("NURSE_ADMINISTER", "Nurse administration")]
     STATUS = [("ORDERED", "Ordered"), ("PARTIALLY_DONE", "Partially done"),
               ("COMPLETED", "Completed"), ("CANCELLED", "Cancelled")]
+    SOURCE = [("FORMULARY", "Hospital formulary"), ("EXTERNAL", "External purchase")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="medication_orders")
     ordered_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+",
                                    limit_choices_to={"role": "DOCTOR"})
-    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="orders")
+
+    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="orders",
+                                   null=True, blank=True)
+    source = models.CharField(max_length=12, choices=SOURCE, default="FORMULARY", db_index=True)
+
     route = models.CharField(max_length=10, choices=ROUTES)
     fulfilment = models.CharField(max_length=20, choices=FULFILMENT)
     dose_text = models.CharField(max_length=255)
@@ -95,6 +100,28 @@ class MedicationOrder(models.Model):
     ordered_at = models.DateTimeField(auto_now_add=True)
     cancelled_reason = models.TextField(blank=True)
 
+    # External purchase fields (QOL-1)
+    external_name = models.CharField(max_length=200, blank=True)
+    external_strength = models.CharField(max_length=60, blank=True)
+    external_form = models.CharField(max_length=60, blank=True)
+    external_reason = models.TextField(blank=True)
+    allergy_check_acknowledged = models.BooleanField(default=False)
+    allergy_check_acknowledged_by = models.ForeignKey(
+        "core_patients.StaffProfile", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+")
+    allergy_check_acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (models.Q(source="FORMULARY") & models.Q(medication_id__isnull=False))
+                    | (models.Q(source="EXTERNAL") & models.Q(medication_id__isnull=True)
+                       & ~models.Q(external_name=""))
+                ),
+                name="order_source_consistent",
+            ),
+        ]
 
 class NursingAdministration(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

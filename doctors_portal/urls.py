@@ -14,4 +14,6 @@ urlpatterns = [
     path("workstation/<uuid:encounter_id>/note/", views.save_clinical_note, name="save_note"),
     path("call-next/", views.call_next_patient_action, name="call_next"),
     path("consultation/<uuid:encounter_id>/request-scan/", views.request_scan_action, name="request_radiology"),
+    path("consultation/<uuid:encounter_id>/formulary/", views.formulary_search_view,
+     name="formulary_search"),
 ]

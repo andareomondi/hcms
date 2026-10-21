@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
+from django.db.models import Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -33,6 +35,20 @@ from .models import ClinicalNote
 def is_physician(user):
     return hasattr(user, "staff_profile") and user.staff_profile.role in ("DOCTOR", "ADMIN")
 
+@login_required
+@user_passes_test(is_physician)
+def formulary_search_view(request, encounter_id):
+    q = request.GET.get("q", "").strip()
+    results = []
+    if len(q) >= 2:
+        results = (Medication.objects.filter(is_active=True)
+                   .filter(Q(brand_name__icontains=q) | Q(generic_name__icontains=q))
+                   .annotate(stock_quantity=Coalesce(
+                       Sum("units__doses_remaining", filter=Q(units__status="IN_STOCK")),
+                       Value(0)))
+                   .order_by("brand_name")[:15])
+    return render(request, "doctors_portal/_formulary_results.html",
+                  {"results": results, "q": q})
 
 @login_required
 @user_passes_test(is_physician)
@@ -135,16 +151,40 @@ def add_clinical_note_action(request, encounter_id):
 def prescribe_medication_action(request, encounter_id):
     encounter = get_object_or_404(Encounter, pk=encounter_id)
     profile = request.staff_profile
-    medication = get_object_or_404(Medication, pk=request.POST.get("medication_id"), is_active=True)
+    try:
+        require_active(encounter, profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+    source = request.POST.get("source", "")
     route = request.POST.get("route", "ORAL")
     frequency = request.POST.get("frequency", "OD")
-    dose_text = request.POST.get("dose_text", "").strip() or medication.strength
-    override = request.POST.get("allergy_override_reason", "").strip()
+    dose_text = request.POST.get("dose_text", "").strip()
     try:
         days = max(1, int(request.POST.get("duration_days", "5")))
     except ValueError:
         days = 5
+    per_day = {"OD": 1, "BID": 2, "TID": 3, "QID": 4, "STAT": 1}.get(frequency, 1)
+    doses_total = per_day * days if frequency != "STAT" else 1
 
+    if source == "EXTERNAL":
+        return _create_external(request, encounter, profile, route, frequency,
+                                dose_text, days, doses_total)
+    if source == "FORMULARY":
+        return _create_formulary(request, encounter, profile, route, frequency,
+                                 dose_text, days, doses_total)
+    messages.error(request, "Choose hospital formulary or external purchase.")
+    return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+
+def _create_formulary(request, encounter, profile, route, frequency, dose_text, days, doses_total):
+    medication = Medication.objects.filter(pk=request.POST.get("medication_id"), is_active=True).first()
+    if medication is None:
+        messages.error(request, "Choose a medicine from the formulary search.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+    override = request.POST.get("allergy_override_reason", "").strip()
     hits = list(conflicts_for(encounter.patient, medication))
     if hits and not override:
         names = ", ".join(h.allergen.display_name for h in hits)
@@ -153,14 +193,11 @@ def prescribe_medication_action(request, encounter_id):
                        "Enter an override reason to prescribe anyway.")
         return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
-    per_day = {"OD": 1, "BID": 2, "TID": 3, "QID": 4, "STAT": 1}.get(frequency, 1)
-    doses_total = per_day * days if frequency != "STAT" else 1
     fulfilment = "PHARMACY_DISPENSE" if route == "ORAL" else "NURSE_ADMINISTER"
-
     with transaction.atomic():
         order = MedicationOrder.objects.create(
-            encounter=encounter, ordered_by=profile, medication=medication,
-            route=route, fulfilment=fulfilment, dose_text=dose_text,
+            encounter=encounter, ordered_by=profile, medication=medication, source="FORMULARY",
+            route=route, fulfilment=fulfilment, dose_text=dose_text or medication.strength,
             frequency_text=frequency, duration_days=days, doses_total=doses_total,
             status="ORDERED", allergy_override_reason=override if hits else "",
         )
@@ -180,6 +217,49 @@ def prescribe_medication_action(request, encounter_id):
                f"Prescribed {medication.brand_name} ({fulfilment}) for {encounter.patient}.")
     messages.success(request, f"Prescribed {medication.brand_name}.")
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+
+def _create_external(request, encounter, profile, route, frequency, dose_text, days, doses_total):
+    name = request.POST.get("external_name", "").strip()
+    strength = request.POST.get("external_strength", "").strip()
+    form = request.POST.get("external_form", "").strip()
+    reason = request.POST.get("external_reason", "").strip()
+    acknowledged = request.POST.get("allergy_check_acknowledged") == "1"
+
+    if not name:
+        messages.error(request, "Enter the medicine name.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+    if not acknowledged:
+        messages.error(request, "You must confirm the allergy check and accept responsibility "
+                                "to issue an external prescription.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+    matches = Medication.objects.filter(is_active=True).filter(
+        Q(brand_name__iexact=name) | Q(generic_name__iexact=name)).exists()
+    if matches and not reason:
+        messages.error(request, f"'{name}' is in the hospital formulary. Give a reason to "
+                                "prescribe it as external, or choose it from the formulary.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+    now = timezone.now()
+    with transaction.atomic():
+        MedicationOrder.objects.create(
+            encounter=encounter, ordered_by=profile, medication=None, source="EXTERNAL",
+            external_name=name[:200], external_strength=strength[:60], external_form=form[:60],
+            external_reason=reason,
+            route=route, fulfilment="PHARMACY_DISPENSE" if route == "ORAL" else "NURSE_ADMINISTER",
+            dose_text=dose_text or strength, frequency_text=frequency,
+            duration_days=days, doses_total=doses_total, status="ORDERED",
+            allergy_check_acknowledged=True,
+            allergy_check_acknowledged_by=profile, allergy_check_acknowledged_at=now,
+        )
+    log_action(request, AuditAction.EXTERNAL_PRESCRIPTION_ACKNOWLEDGED,
+               f"External prescription '{name}' for {encounter.patient}, acknowledged by {profile}. "
+               f"Matched formulary: {matches}. Reason: {reason or 'none'}.")
+    messages.success(request, f"External prescription recorded for {name}. Not billed by the hospital.")
+    return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+
 
 @login_required
 @user_passes_test(is_physician)

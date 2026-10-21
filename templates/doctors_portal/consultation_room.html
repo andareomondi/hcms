@@ -224,6 +224,13 @@
                 <div class="p-4 bg-slate-50/50 border-b flex justify-between items-center">
                     <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Prescriptions</h2>
                 </div>
+                {% if order.source == "EXTERNAL" %}
+                    <span class="text-[10px] text-amber-800">
+                        Allergy check not run by hospital. Acknowledged by
+                        {{ order.allergy_check_acknowledged_by.user.get_full_name|default:order.allergy_check_acknowledged_by.user.username }}
+                        on {{ order.allergy_check_acknowledged_at|date:"Y-m-d H:i" }}.
+                    </span>
+                {% endif %}
                 <table class="w-full text-left text-sm">
                     <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
                         <tr>
@@ -237,7 +244,19 @@
                         {% for order in medication_orders %}
                             <tr>
                                 <td class="p-3 text-xs font-mono">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
-                                <td class="p-3 font-bold">{{ order.medication.brand_name }} <span class="text-xs font-normal text-slate-500">({{ order.medication.strength }})</span></td>
+                                <td class="p-3 font-bold">
+                                    {% if order.source == "EXTERNAL" %}
+                                        {{ order.external_name }} <span class="text-xs font-normal text-amber-700">(external)</span>
+                                        <br>
+                                        <span class="text-[10px] font-normal text-amber-800">
+                                            Allergy check not run by hospital. Acknowledged by
+                                            {{ order.allergy_check_acknowledged_by.user.get_full_name|default:order.allergy_check_acknowledged_by.user.username }}
+                                            on {{ order.allergy_check_acknowledged_at|date:"Y-m-d H:i" }}.
+                                        </span>
+                                    {% else %}
+                                        {{ order.medication.brand_name }} <span class="text-xs font-normal text-slate-500">({{ order.medication.strength }})</span>
+                                    {% endif %}
+                                </td>
                                 <td class="p-3 text-xs">{{ order.dose_text }} · {{ order.get_route_display }}</td>
                                 <td class="p-3 text-xs font-bold">{{ order.get_status_display }}</td>
                             </tr>
@@ -312,26 +331,104 @@
                  x-cloak
                  style="display:none"
                  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-                <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5"
-                     @click.away="showPrescribe = false">
+                <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+                     @click.away="showPrescribe = false"
+                     x-data="{
+         mode: 'formulary',
+         q: '',
+         pickedId: '',
+         pickedLabel: '',
+         pickedStock: null,
+         ack: false,
+         pick(id, label, strength, stock) {
+           this.pickedId = id;
+           this.pickedLabel = label + ' (' + strength + ')';
+           this.pickedStock = stock;
+           this.q = label;
+           this.$refs.results.innerHTML = '';
+         }
+       }">
                     <div class="flex justify-between items-center border-b pb-3">
                         <h3 class="font-bold text-lg">Prescribe medicine</h3>
-                        <button @click="showPrescribe = false" class="text-slate-400 font-bold">×</button>
+                        <button type="button"
+                                @click="showPrescribe = false"
+                                class="text-slate-400 font-bold">×</button>
                     </div>
                     <form action="{% url 'doctors_portal:prescribe' encounter.id %}"
                           method="post"
                           class="space-y-4">
                         {% csrf_token %}
-                        <select name="medication_id"
-                                required
-                                class="w-full border rounded-xl px-3 py-2.5 text-sm bg-white">
-                            <option value="">-- Choose formulary item --</option>
-                            {% for med in medications %}<option value="{{ med.id }}">{{ med.brand_name }} ({{ med.strength }})</option>{% endfor %}
-                        </select>
-                        <input type="text"
-                               name="dose_text"
-                               placeholder="Dose, e.g. 2 tablets"
-                               class="w-full border rounded-xl px-3 py-2.5 text-sm">
+                        <div class="flex gap-2 text-xs font-bold">
+                            <button type="button"
+                                    @click="mode = 'formulary'"
+                                    :class="mode === 'formulary' ? 'bg-indigo-600 text-white' : 'bg-slate-100'"
+                                    class="px-3 py-1.5 rounded-lg">Hospital formulary</button>
+                            <button type="button"
+                                    @click="mode = 'external'"
+                                    :class="mode === 'external' ? 'bg-amber-600 text-white' : 'bg-slate-100'"
+                                    class="px-3 py-1.5 rounded-lg">External purchase</button>
+                        </div>
+                        <input type="hidden"
+                               name="source"
+                               :value="mode === 'formulary' ? 'FORMULARY' : 'EXTERNAL'">
+                        <!-- FORMULARY -->
+                        <div x-show="mode === 'formulary'" class="space-y-2">
+                            <input type="search"
+                                   x-model="q"
+                                   autocomplete="off"
+                                   placeholder="Type brand or generic name"
+                                   hx-get="{% url 'doctors_portal:formulary_search' encounter.id %}"
+                                   hx-trigger="input changed delay:250ms, search"
+                                   hx-target="#formulary-results"
+                                   hx-swap="innerHTML"
+                                   class="w-full border rounded-xl px-3 py-2.5 text-sm">
+                            <input type="hidden" name="medication_id" :value="pickedId">
+                            <div id="formulary-results" x-ref="results"></div>
+                            <p x-show="pickedId" class="text-xs text-slate-600">
+                                Selected: <strong x-text="pickedLabel"></strong>
+                                <span x-show="pickedStock !== null && pickedStock <= 0"
+                                      class="text-amber-700 font-bold">
+                                    · out of stock; the pharmacy may not be able to supply this now.
+                                </span>
+                            </p>
+                        </div>
+                        <!-- EXTERNAL -->
+                        <div x-show="mode === 'external'" class="space-y-3">
+                            <input type="text"
+                                   name="external_name"
+                                   placeholder="Medicine name *"
+                                   class="w-full border rounded-xl px-3 py-2.5 text-sm">
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="text"
+                                       name="external_strength"
+                                       placeholder="Strength, e.g. 500mg"
+                                       class="border rounded-xl px-3 py-2.5 text-sm">
+                                <input type="text"
+                                       name="external_form"
+                                       placeholder="Form, e.g. tablet"
+                                       class="border rounded-xl px-3 py-2.5 text-sm">
+                            </div>
+                            <textarea name="external_reason"
+                                      rows="2"
+                                      placeholder="Reason (required if the name matches the formulary)"
+                                      class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+                            <div class="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+                                <p class="text-xs text-amber-900">
+                                    The hospital cannot run an allergy check on external items. The patient is not charged
+                                    and the hospital does not supply this medicine. You are responsible for checking the
+                                    patient's allergies and for any harm arising from this prescription.
+                                </p>
+                                <label class="flex items-start gap-2 text-xs font-bold text-amber-900">
+                                    <input type="checkbox"
+                                           name="allergy_check_acknowledged"
+                                           value="1"
+                                           x-model="ack"
+                                           class="mt-0.5">
+                                    I have checked this patient's allergies and accept responsibility for this external prescription.
+                                </label>
+                            </div>
+                        </div>
+                        <!-- SHARED -->
                         <div class="grid grid-cols-2 gap-3">
                             <select name="route" class="border rounded-xl px-3 py-2.5 text-sm bg-white">
                                 <option value="ORAL">Oral</option>
@@ -349,26 +446,29 @@
                                 <option value="STAT">Immediately</option>
                             </select>
                         </div>
+                        <input type="text"
+                               name="dose_text"
+                               placeholder="Dose, e.g. 2 tablets"
+                               class="w-full border rounded-xl px-3 py-2.5 text-sm">
                         <input type="number"
                                name="duration_days"
                                min="1"
                                value="5"
-                               class="w-full border rounded-xl px-3 py-2.5 text-sm"
-                               placeholder="Days">
-                        <div>
+                               class="w-full border rounded-xl px-3 py-2.5 text-sm">
+                        <div x-show="mode === 'formulary'">
                             <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Allergy override reason</label>
                             <textarea name="allergy_override_reason"
                                       rows="2"
-                                      placeholder="Only if the patient has a recorded allergy to this medicine: why you are prescribing it anyway"
                                       class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
-                            <p class="text-xs text-slate-500 mt-1">Required only when the patient has a matching allergy. The override is logged.</p>
                         </div>
                         <div class="flex gap-3">
                             <button type="button"
                                     @click="showPrescribe = false"
                                     class="flex-1 bg-slate-100 py-2.5 rounded-xl text-sm font-semibold">Cancel</button>
                             <button type="submit"
-                                    class="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold">Issue prescription</button>
+                                    :disabled="mode === 'external' && !ack"
+                                    :class="mode === 'external' && !ack ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600'"
+                                    class="flex-1 text-white py-2.5 rounded-xl text-sm font-semibold">Issue prescription</button>
                         </div>
                     </form>
                 </div>

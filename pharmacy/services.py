@@ -1,4 +1,3 @@
-
 from django.db import transaction
 from django.db.models import Sum
 
@@ -16,10 +15,20 @@ from .models import (
 class PharmacyError(Exception):
     """A rule staff must see. Shown as-is."""
 
+
 def _dispensed_total(order):
     return order.dispensations.aggregate(t=Sum("quantity"))["t"] or 0
 
+
+def _require_formulary(order):
+    """External prescriptions are never supplied by the hospital (QOL-1)."""
+    if order.source != "FORMULARY" or order.medication_id is None:
+        raise PharmacyError("External prescriptions are not supplied by the hospital.")
+
+
 def allergy_hits(order):
+    if order.medication_id is None:
+        return []
     return list(conflicts_for(order.encounter.patient, order.medication))
 
 
@@ -78,8 +87,8 @@ def adjust_stock(*, medication, delta, staff):
 
 @transaction.atomic
 def dispense(*, order_id, quantity, staff, serials=None):
-    order = (MedicationOrder.objects.select_for_update()
-             .select_related("medication", "encounter__patient").get(pk=order_id))
+    order = _lock_order(order_id)
+    _require_formulary(order)
     if order.fulfilment != "PHARMACY_DISPENSE":
         raise PharmacyError("This medicine is given by a nurse, not dispensed.")
     if order.status not in ("ORDERED", "PARTIALLY_DONE"):
@@ -91,6 +100,8 @@ def dispense(*, order_id, quantity, staff, serials=None):
     if not (1 <= quantity <= remaining):
         raise PharmacyError(f"Enter a quantity between 1 and {remaining}.")
 
+    # take_doses is the pack 10 serial function. It is not in the live file supplied
+    # on 2026-10-21 and must be restored (QOL-2 preconditions).
     take_doses(medication=order.medication, doses=quantity, staff=staff,
                reason="DISPENSE", reference_id=order.id, serials=serials)
     Dispensation.objects.create(order=order, quantity=quantity, dispensed_by=staff)
@@ -98,9 +109,11 @@ def dispense(*, order_id, quantity, staff, serials=None):
     order.save(update_fields=["status"])
     return order
 
+
 @transaction.atomic
-def administer(*, order_id, nurse, dose_given_text, site="", notes=""):
+def administer(*, order_id, nurse, dose_given_text, site="", notes="", serials=None):
     order = _lock_order(order_id)
+    _require_formulary(order)
     if order.fulfilment != "NURSE_ADMINISTER":
         raise PharmacyError("This medicine is dispensed by pharmacy, not given by a nurse.")
     if order.status not in ("ORDERED", "PARTIALLY_DONE"):
@@ -113,7 +126,9 @@ def administer(*, order_id, nurse, dose_given_text, site="", notes=""):
     if given >= order.doses_total:
         raise PharmacyError("All doses for this order are already recorded.")
 
-    _move_stock(order.medication, -1, "ADMINISTER", nurse, order.id)
+    # Pack 10 path. Serial handling is restored with take_doses (QOL-2 preconditions).
+    take_doses(medication=order.medication, doses=1, staff=nurse,
+               reason="ADMINISTER", reference_id=order.id, serials=serials)
     NursingAdministration.objects.create(order=order, administered_by=nurse,
                                          dose_given_text=dose_given_text.strip(),
                                          site=site.strip(), notes=notes.strip())

@@ -38,11 +38,15 @@ def _annotate(orders):
     """Attach allergy hits, doses given, and current stock to each order for the worklists."""
     rows = list(orders)
     for o in rows:
-        o.allergy_hits = list(conflicts_for(o.encounter.patient, o.medication))
+        if o.medication is None:
+            o.allergy_hits = []
+            o.stock_quantity = None
+        else:
+            o.allergy_hits = list(conflicts_for(o.encounter.patient, o.medication))
+            o.stock_quantity = (StockItem.objects.filter(medication=o.medication)
+                                .values_list("quantity", flat=True).first())
         o.dispensed_total = sum(d.quantity for d in o.dispensations.all())
         o.given_total = o.administrations.count()
-        o.stock_quantity = (StockItem.objects.filter(medication=o.medication)
-                            .values_list("quantity", flat=True).first())
     return rows
 
 
@@ -64,9 +68,11 @@ def pharmacy_dashboard_view(request):
         "low_count": len(low),
         "out_count": sum(1 for s in stocks if s.quantity <= 0),
         "dispense_pending": MedicationOrder.objects.filter(
-            fulfilment="PHARMACY_DISPENSE", status__in=["ORDERED", "PARTIALLY_DONE"]).count(),
+            source="FORMULARY", fulfilment="PHARMACY_DISPENSE",
+            status__in=["ORDERED", "PARTIALLY_DONE"]).count(),
         "nurse_pending": MedicationOrder.objects.filter(
-            fulfilment="NURSE_ADMINISTER", status__in=["ORDERED", "PARTIALLY_DONE"]).count(),
+            source="FORMULARY", fulfilment="NURSE_ADMINISTER",
+            status__in=["ORDERED", "PARTIALLY_DONE"]).count(),
         "can_manage": Cap.PHARMACY_MANAGE in caps_for(request.user),
         "can_dispense": Cap.DISPENSE in caps_for(request.user),
     })
@@ -163,7 +169,8 @@ def stock_adjust_action(request, medication_id):
 @requires(Cap.DISPENSE)
 def dispense_queue_view(request):
     orders = (MedicationOrder.objects
-              .filter(fulfilment="PHARMACY_DISPENSE", status__in=["ORDERED", "PARTIALLY_DONE"])
+              .filter(source="FORMULARY", fulfilment="PHARMACY_DISPENSE",
+                      status__in=["ORDERED", "PARTIALLY_DONE"])
               .select_related("encounter__patient", "medication", "ordered_by__user")
               .prefetch_related("dispensations")
               .order_by("ordered_at"))
@@ -191,7 +198,8 @@ def dispense_action(request, order_id):
 @requires(Cap.NURSE_ADMINISTER)
 def nurse_worklist_view(request):
     orders = (MedicationOrder.objects
-              .filter(fulfilment="NURSE_ADMINISTER", status__in=["ORDERED", "PARTIALLY_DONE"])
+              .filter(source="FORMULARY", fulfilment="NURSE_ADMINISTER",
+                      status__in=["ORDERED", "PARTIALLY_DONE"])
               .select_related("encounter__patient", "medication", "ordered_by__user")
               .prefetch_related("dispensations", "administrations")
               .order_by("ordered_at"))
