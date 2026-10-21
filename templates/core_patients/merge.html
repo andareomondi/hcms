@@ -13,8 +13,7 @@
         <p class="text-xs uppercase font-bold text-slate-500">This record</p>
         <p class="font-bold">{{ current.last_name }}, {{ current.first_name|default:"(unnamed)" }}</p>
         <p class="text-xs text-slate-500">
-            {% if current.date_of_birth %}born {{ current.date_of_birth|date:"Y-m-d"
-                }}{% else %}DOB unknown{% endif %}{% if current.id_number %} · ID {{ current.id_number }}{% endif %}
+            {% if current.date_of_birth %}born {{ current.date_of_birth|date:"Y-m-d" }}{% else %}DOB unknown{% endif %}{% if current.id_number %} · ID {{ current.id_number }}{% endif %}
         </p>
     </div>
     <form method="post"
