@@ -1,6 +1,8 @@
 from django.db import transaction
 from django.db.models import Sum
 
+from billing import services as billing
+from billing.services import medication_charge_or_none
 from core_patients.allergy_services import conflicts_for
 
 from .models import (
@@ -11,9 +13,17 @@ from .models import (
     StockMovement,
 )
 
+# NOTE: take_doses, consume_unit, unit_problem, receive_batch, write_off, expire_units and
+# lock_unit_for_vaccine are the pack 10 functions (section 3.2). They must be appended to
+# this file before it runs. They are not reproduced here.
+
 
 class PharmacyError(Exception):
     """A rule staff must see. Shown as-is."""
+
+
+class PrepayError(PharmacyError):
+    """A medicine is not paid for. Shown as-is."""
 
 
 def _dispensed_total(order):
@@ -24,6 +34,34 @@ def _require_formulary(order):
     """External prescriptions are never supplied by the hospital (QOL-1)."""
     if order.source != "FORMULARY" or order.medication_id is None:
         raise PharmacyError("External prescriptions are not supplied by the hospital.")
+
+
+def is_prepaid(order):
+    """True when the medicine may be released now. Used for the queue display and the gate."""
+    if order.encounter.prepay_bypassed:
+        return True
+    if order.credit_approved_by_id:
+        return True
+    charge = medication_charge_or_none(order)
+    return charge is not None and billing.charge_fully_paid(charge)
+
+
+def check_prepaid(order):
+    """
+    Pre-pay gate. A formulary medicine is released only when its charge is fully paid,
+    or the visit is an emergency bypass, or billing approved a credit exception.
+    Must run after the order lock and before any allergy check or stock movement.
+    """
+    _require_formulary(order)
+    if is_prepaid(order):
+        return
+    charge = medication_charge_or_none(order)
+    if charge is None:
+        raise PrepayError("No charge exists for this medicine. Ask the doctor to re-issue the prescription.")
+    raise PrepayError(
+        f"Awaiting payment: KES {billing.outstanding_amount(charge):,.2f} still owed on "
+        f"{order.medication.brand_name}. The patient must pay at billing, or billing must approve a credit exception."
+    )
 
 
 def allergy_hits(order):
@@ -93,6 +131,7 @@ def dispense(*, order_id, quantity, staff, serials=None):
         raise PharmacyError("This medicine is given by a nurse, not dispensed.")
     if order.status not in ("ORDERED", "PARTIALLY_DONE"):
         raise PharmacyError("This order is no longer open.")
+    check_prepaid(order)
     check_allergies(order)
 
     done = _dispensed_total(order)
@@ -100,8 +139,6 @@ def dispense(*, order_id, quantity, staff, serials=None):
     if not (1 <= quantity <= remaining):
         raise PharmacyError(f"Enter a quantity between 1 and {remaining}.")
 
-    # take_doses is the pack 10 serial function. It is not in the live file supplied
-    # on 2026-10-21 and must be restored (QOL-2 preconditions).
     take_doses(medication=order.medication, doses=quantity, staff=staff,
                reason="DISPENSE", reference_id=order.id, serials=serials)
     Dispensation.objects.create(order=order, quantity=quantity, dispensed_by=staff)
@@ -120,13 +157,13 @@ def administer(*, order_id, nurse, dose_given_text, site="", notes="", serials=N
         raise PharmacyError("This order is no longer open.")
     if not dose_given_text.strip():
         raise PharmacyError("Record the dose that was given.")
+    check_prepaid(order)
     check_allergies(order)
 
     given = order.administrations.count()
     if given >= order.doses_total:
         raise PharmacyError("All doses for this order are already recorded.")
 
-    # Pack 10 path. Serial handling is restored with take_doses (QOL-2 preconditions).
     take_doses(medication=order.medication, doses=1, staff=nurse,
                reason="ADMINISTER", reference_id=order.id, serials=serials)
     NursingAdministration.objects.create(order=order, administered_by=nurse,

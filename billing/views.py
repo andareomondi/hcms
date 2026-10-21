@@ -47,6 +47,7 @@ def account_statement_view(request, account_id):
         "totals": totals, "people": list(people.values()),
     })
 
+
 @requires(Cap.TAKE_PAYMENT)
 @require_POST
 def take_payment_action(request, encounter_id):
@@ -55,7 +56,7 @@ def take_payment_action(request, encounter_id):
         messages.error(request, "Your account has no staff profile, so payments cannot be recorded.")
         return redirect("billing:encounter", encounter_id=encounter.id)
     try:
-        payment = payments.take_payment(
+        payment, cleared_now = payments.take_payment(
             encounter=encounter,
             method=request.POST.get("method", ""),
             amount_raw=request.POST.get("amount", ""),
@@ -70,6 +71,9 @@ def take_payment_action(request, encounter_id):
     log_action(request, AuditAction.PAYMENT_RECORDED,
                f"Recorded {payment.get_method_display()} payment KES {payment.amount} "
                f"({payment.receipt_number}) for {encounter.patient}.")
+    if cleared_now:
+        log_action(request, AuditAction.PREPAY_BYPASS_CLEARED,
+                   f"Emergency visit #{encounter.id} cleared by payment {payment.receipt_number}.")
     messages.success(request, f"Payment recorded. Receipt {payment.receipt_number}.")
     return redirect("billing:payment_receipt", payment_id=payment.id)
 

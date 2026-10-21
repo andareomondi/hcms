@@ -15,6 +15,7 @@ class BillingAccount(models.Model):
 
     history = HistoricalRecords()
 
+
 class Payment(models.Model):
     """
     Append-only. A payment is never edited or deleted. A mistake is corrected by a
@@ -28,7 +29,7 @@ class Payment(models.Model):
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="payments")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     method = models.CharField(max_length=10, choices=METHOD, db_index=True)
-    reference = models.CharField(max_length=60, blank=True)   # M-Pesa transaction code, or manual note
+    reference = models.CharField(max_length=60, blank=True)
     payer_phone = models.CharField(max_length=20, blank=True)
     recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="payments_taken")
     recorded_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -37,7 +38,6 @@ class Payment(models.Model):
         ordering = ["-recorded_at"]
         constraints = [
             models.CheckConstraint(check=Q(amount__gt=0), name="payment_amount_positive"),
-            # The same M-Pesa code cannot be recorded twice
             models.UniqueConstraint(fields=["reference"], condition=Q(method="MPESA"),
                                     name="uniq_mpesa_reference"),
         ]
@@ -45,11 +45,14 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.receipt_number} KES {self.amount} ({self.get_method_display()})"
 
+
 class Charge(models.Model):
     STATUS = [("PROVISIONAL", "Provisional hold"), ("POSTED", "Posted"),
               ("PAID", "Paid in full"), ("VOIDED", "Voided")]
     SOURCES = [("MEDICATION_ORDER", "Medication order"), ("BED_DAY", "Bed day"),
-               ("SCAN_ORDER", "Scan order"), ("CONSULTATION", "Consultation"), ("MANUAL", "Manual adjustment")]
+               ("SCAN_ORDER", "Scan order"), ("CONSULTATION", "Consultation"),
+               ("REGISTRATION", "Registration"), ("MANUAL", "Manual adjustment")]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="charges")
     treated_patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="+")
@@ -61,8 +64,23 @@ class Charge(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    reversal_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="reversals")
+    reversal_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT,
+                                    related_name="reversals")
     status = models.CharField(max_length=15, choices=STATUS, default="PROVISIONAL", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     posted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+
+
+class PaymentAllocation(models.Model):
+    """Append-only. Splits one payment across the charges it settles (QOL-2)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="allocations")
+    charge = models.ForeignKey(Charge, on_delete=models.PROTECT, related_name="allocations")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(check=Q(amount__gt=0), name="allocation_amount_positive"),
+        ]

@@ -12,15 +12,27 @@ class Encounter(models.Model):
         ("INPATIENT", "In-patient admission"),
     ]
     PAYER_CHOICES = [("SELF_PAY", "Self-pay"), ("INSURANCE", "Insurance (placeholder)")]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="encounters")
     encounter_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     payer_type = models.CharField(max_length=20, choices=PAYER_CHOICES, default="SELF_PAY")
     opened_at = models.DateTimeField(auto_now_add=True, db_index=True)
     closed_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=10, default="OPEN", choices=[("OPEN", "Open"), ("CLOSED", "Closed")], db_index=True)
+    status = models.CharField(max_length=10, default="OPEN",
+                              choices=[("OPEN", "Open"), ("CLOSED", "Closed")], db_index=True)
     opened_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     chief_complaint = models.TextField(blank=True, default="")
+
+    # Emergency pre-pay bypass (QOL-2). Set at triage with a reason; cleared by billing.
+    prepay_bypassed = models.BooleanField(default=False, db_index=True)
+    prepay_bypass_reason = models.TextField(blank=True)
+    prepay_bypass_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
+                                         null=True, blank=True, related_name="+")
+    prepay_bypass_at = models.DateTimeField(null=True, blank=True)
+    prepay_cleared_at = models.DateTimeField(null=True, blank=True)
+    prepay_cleared_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
+                                          null=True, blank=True, related_name="+")
 
 
 class TriageVitals(models.Model):
@@ -41,10 +53,12 @@ class TriageVitals(models.Model):
 class QueueEntry(models.Model):
     PRIORITY = [(1, "Routine"), (2, "Urgent"), (3, "Resuscitation")]
     STATUS = [
+        ("AWAITING_PAYMENT", "Awaiting payment"),
         ("WAITING", "Waiting"), ("IN_CONSULTATION", "In consultation"),
         ("IN_PROCEDURE", "In procedure / nursing"), ("DIAGNOSTICS", "At radiology / lab"),
         ("ADMITTED", "Admitted to ward"), ("DISCHARGED", "Discharged"),
     ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="queue_entries")
     assigned_doctor = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="queue_entries",

@@ -3,11 +3,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from billing import services as billing
-from billing.prices import CONSULTATION_FEE
-from notifications.services import notify_on_duty
+from billing.models import Charge
+from billing.prices import CONSULTATION_FEE, REGISTRATION_FEE
+from notifications.services import notify, notify_on_duty
 from wards.models import Admission
 
 from .models import QueueEntry
+
+PREPAY_FEE_SOURCES = ("REGISTRATION", "CONSULTATION")
 
 
 class FlowError(Exception):
@@ -29,25 +32,65 @@ def notify_billing_ready(encounter):
     )
 
 
-def _charge_consultation_fee(encounter, doctor):
+def notify_billing_ready_for_bypass(encounter):
+    notify_on_duty(
+        role="BILLING",
+        kind="SYSTEM",
+        message=f"Emergency treated before payment: {patient_label(encounter)}.",
+        link=reverse("billing:bypass_queue"),
+    )
+
+
+def charge_visit_fees(encounter, staff):
+    """Registration (once per patient, by key) and consultation (once per visit, by key)."""
     billing.add_charge(
-        encounter=encounter,
-        source_type="CONSULTATION",
-        description=f"Consultation: Dr. {doctor.user.get_full_name() or doctor.user.username}",
-        unit_price=CONSULTATION_FEE,
-        staff=doctor,
+        encounter=encounter, source_type="REGISTRATION",
+        description="Patient registration (one-time)",
+        unit_price=REGISTRATION_FEE, staff=staff,
+        key=f"reg:{encounter.patient_id}",
+    )
+    billing.add_charge(
+        encounter=encounter, source_type="CONSULTATION",
+        description="Consultation fee",
+        unit_price=CONSULTATION_FEE, staff=staff,
         key=f"consult:{encounter.id}",
     )
+
+
+def fees_covered(encounter):
+    """True when every pre-pay fee line for this visit is fully paid."""
+    fee_lines = (Charge.objects.filter(encounter=encounter, source_type__in=PREPAY_FEE_SOURCES)
+                 .exclude(status="VOIDED"))
+    return all(billing.charge_fully_paid(c) for c in fee_lines)
+
+
+@transaction.atomic
+def activate_visit(encounter):
+    """
+    Promote the queue entry from AWAITING_PAYMENT to WAITING once the fees are covered,
+    or at once for an emergency-bypassed encounter. Notifies the assigned doctor.
+    """
+    entry = (QueueEntry.objects.select_for_update()
+             .filter(encounter=encounter, status="AWAITING_PAYMENT").first())
+    if entry is None:
+        return None
+    if not (encounter.prepay_bypassed or fees_covered(encounter)):
+        return None
+    entry.status = "WAITING"
+    entry.save(update_fields=["status", "updated_at"])
+    notify([entry.assigned_doctor], kind="PATIENT_ASSIGNED",
+           message=f"Patient ready: {patient_label(encounter)} (priority {entry.priority}).",
+           link=reverse("doctors_portal:dashboard"))
+    return entry
 
 
 @transaction.atomic
 def close_consultation(encounter, doctor):
     """
-    Ends the doctor's consultation.
-    - If the patient is in a ward, the queue entry moves to ADMITTED and the encounter stays open
-      until the ward discharge.
-    - Otherwise the queue entry is DISCHARGED, the encounter is CLOSED, the consultation fee is
-      charged, and billing is notified.
+    Ends the doctor's consultation. The consultation fee is charged at visit open
+    (QOL-2), so closing does not charge it again.
+    - If the patient is in a ward, the queue entry moves to ADMITTED and the encounter stays open.
+    - Otherwise the queue entry is DISCHARGED, the encounter is CLOSED, and billing is notified.
     """
     entry = (QueueEntry.objects.select_for_update()
              .filter(encounter=encounter, status__in=["IN_CONSULTATION", "ADMITTED"]).first())
@@ -57,8 +100,6 @@ def close_consultation(encounter, doctor):
         raise FlowError("Only the assigned doctor can complete this consultation.")
     if not encounter.clinical_notes.exists():
         raise FlowError("Record a clinical note before completing the consultation.")
-
-    _charge_consultation_fee(encounter, doctor)
 
     if Admission.objects.filter(encounter=encounter, discharged_at__isnull=True).exists():
         entry.status = "ADMITTED"
@@ -85,6 +126,7 @@ def finish_encounter(encounter, staff):
         encounter.save(update_fields=["status", "closed_at"])
     notify_billing_ready(encounter)
 
+
 def consultation_mode(encounter, profile):
     """
     Works out what the viewing doctor may do on this visit.
@@ -102,6 +144,8 @@ def consultation_mode(encounter, profile):
         mode = "NOT_YOURS"
     elif entry.status == "WAITING":
         mode = "WAITING"
+    elif entry.status == "AWAITING_PAYMENT":
+        mode = "AWAITING_PAYMENT"
     elif entry.status == "IN_CONSULTATION":
         mode = "ACTIVE"
     elif entry.status == "ADMITTED" and encounter.status == "OPEN":

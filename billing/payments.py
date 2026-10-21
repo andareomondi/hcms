@@ -2,12 +2,12 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
-from django.utils import timezone
 
 from triage_queue.models import Encounter
+from triage_queue.services import activate_visit
 
 from . import services as billing
-from .models import Charge, Payment
+from .models import Payment
 
 MPESA_CODE = re.compile(r"^[A-Z0-9]{8,12}$")
 
@@ -18,11 +18,18 @@ class PaymentError(Exception):
 
 def _receipt_number():
     import uuid
+
+    from django.utils import timezone
     return f"RCP-{timezone.now():%y%m%d}-{uuid.uuid4().hex[:6].upper()}"
 
 
 @transaction.atomic
 def take_payment(*, encounter, method, amount_raw, reference, payer_phone, staff):
+    """
+    Records a payment and allocates it line by line (QOL-2).
+    Returns (payment, cleared_now). cleared_now is True when this payment settled an
+    emergency-bypassed visit, so the caller can audit the clearance.
+    """
     if method not in ("MANUAL", "MPESA"):
         raise PaymentError("Choose Manual or M-Pesa.")
     try:
@@ -43,12 +50,7 @@ def take_payment(*, encounter, method, amount_raw, reference, payer_phone, staff
     if reason:
         raise PaymentError(reason)
 
-    # Lock the visit so two cashiers cannot pay the same balance twice
     encounter = Encounter.objects.select_for_update().get(pk=encounter.pk)
-
-    # Provisional charges become payable once billing reviews them
-    billing.post_encounter_charges(encounter, staff)
-
     outstanding = billing.encounter_tally(encounter)["outstanding"]
     if outstanding <= 0:
         raise PaymentError("Nothing is outstanding on this visit.")
@@ -65,7 +67,24 @@ def take_payment(*, encounter, method, amount_raw, reference, payer_phone, staff
         payer_phone=(payer_phone or "")[:20],
         recorded_by=staff,
     )
+    try:
+        skipped = billing.allocate_payment(payment=payment, encounter=encounter,
+                                           amount=amount, staff=staff)
+    except ValueError as exc:
+        raise PaymentError(str(exc))
+    if skipped:
+        raise PaymentError("Some lines were created by you and cannot be posted by you: "
+                           + ", ".join(c.description for c in skipped)
+                           + ". Another billing officer must post them.")
 
-    if billing.encounter_tally(encounter)["outstanding"] == 0:
-        Charge.objects.filter(encounter=encounter, status="POSTED").update(status="PAID")
-    return payment
+    activate_visit(encounter)
+
+    cleared_now = False
+    if (encounter.prepay_bypassed and encounter.prepay_cleared_at is None
+            and billing.encounter_tally(encounter)["outstanding"] == 0):
+        from django.utils import timezone
+        encounter.prepay_cleared_at = timezone.now()
+        encounter.prepay_cleared_by = staff
+        encounter.save(update_fields=["prepay_cleared_at", "prepay_cleared_by"])
+        cleared_now = True
+    return payment, cleared_now
