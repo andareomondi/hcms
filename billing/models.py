@@ -19,9 +19,12 @@ class BillingAccount(models.Model):
 class Payment(models.Model):
     """
     Append-only. A payment is never edited or deleted. A mistake is corrected by a
-    new record. Every row keeps who took it and when.
+    new record. Every row keeps who took it, when, and who paid (QOL-4).
+
+    The bill belongs to the patient (billing_account). The payer is whoever hands over the money.
     """
     METHOD = [("MANUAL", "Manual (cash or other)"), ("MPESA", "M-Pesa")]
+    PAYER = [("SELF", "The patient"), ("GUARDIAN", "Registered guardian"), ("OTHER", "Other adult")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     receipt_number = models.CharField(max_length=24, unique=True)
@@ -34,6 +37,13 @@ class Payment(models.Model):
     recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="payments_taken")
     recorded_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
+    payer_type = models.CharField(max_length=10, choices=PAYER, default="SELF", db_index=True)
+    payer_patient = models.ForeignKey(Patient, on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name="payments_made")
+    payer_name = models.CharField(max_length=150, blank=True)
+    payer_relationship = models.CharField(max_length=60, blank=True)
+    payer_id_number = models.CharField(max_length=60, blank=True)
+
     class Meta:
         ordering = ["-recorded_at"]
         constraints = [
@@ -41,6 +51,15 @@ class Payment(models.Model):
             models.UniqueConstraint(fields=["reference"], condition=Q(method="MPESA"),
                                     name="uniq_mpesa_reference"),
         ]
+
+    @property
+    def payer_display(self):
+        if self.payer_type == "SELF":
+            return "The patient"
+        if self.payer_type == "GUARDIAN" and self.payer_patient_id:
+            return f"{self.payer_name} (guardian)"
+        rel = f" ({self.payer_relationship})" if self.payer_relationship else ""
+        return f"{self.payer_name}{rel}"
 
     def __str__(self):
         return f"{self.receipt_number} KES {self.amount} ({self.get_method_display()})"

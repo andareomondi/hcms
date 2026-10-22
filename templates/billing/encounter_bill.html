@@ -1,13 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Bill - {{ encounter.patient.last_name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6" x-data="{ showPay: false, method: 'MANUAL' }">
+    <div class="space-y-6"
+         x-data="{ showPay: false, method: 'MANUAL', payerType: 'SELF' }">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <a href="{% url 'billing:bills_ready' %}"
                    class="text-xs text-slate-500 hover:underline">← Bills</a>
                 <h1 class="text-2xl font-bold text-slate-900">{{ encounter.patient.last_name }}, {{ encounter.patient.first_name }}</h1>
                 <p class="text-sm text-slate-500">{{ encounter.get_encounter_type_display }} · {{ encounter.get_status_display }}{% if encounter.closed_at %} · closed {{ encounter.closed_at|date:"Y-m-d H:i" }}{% endif %}</p>
+                {% if encounter.prepay_bypassed %}
+                    <p class="text-xs font-bold text-amber-800 mt-1">Emergency: treated before payment. {{ encounter.prepay_bypass_reason }}</p>
+                {% endif %}
             </div>
             <div class="flex gap-2">
                 {% if tally.outstanding > 0 and "TAKE_PAYMENT" in caps %}
@@ -19,8 +23,8 @@
         {% if hold %}
             <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
                 <div>
-                    <p class="font-bold text-amber-900">Payment on hold</p>
-                    <p class="text-sm text-amber-800">{{ hold }}</p>
+                    <p class="font-bold text-amber-900">Bill is on the child's account</p>
+                    <p class="text-sm text-amber-800">{{ hold }} Payment can still be taken; record who is paying.</p>
                 </div>
                 <a href="{% url 'core_patients:family' encounter.patient.id %}"
                    class="min-h-10 inline-flex items-center px-4 rounded-xl bg-amber-600 text-white text-xs font-bold">Open family &amp; link guardian →</a>
@@ -89,7 +93,7 @@
                 </tbody>
             </table>
         </div>
-        <!-- Payments: who took each one -->
+        <!-- Payments: who paid, and who took it -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div class="p-4 bg-slate-50/50 border-b">
                 <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Payments</h2>
@@ -99,6 +103,7 @@
                     <tr>
                         <th class="p-3.5">Receipt</th>
                         <th class="p-3.5">When</th>
+                        <th class="p-3.5">Paid by</th>
                         <th class="p-3.5">Method</th>
                         <th class="p-3.5">Reference</th>
                         <th class="p-3.5">Amount</th>
@@ -111,16 +116,19 @@
                         <tr>
                             <td class="p-3.5 font-mono text-xs">{{ p.receipt_number }}</td>
                             <td class="p-3.5 text-xs">{{ p.recorded_at|date:"Y-m-d H:i" }}</td>
+                            <td class="p-3.5 text-xs">{{ p.payer_display }}</td>
                             <td class="p-3.5 text-xs font-semibold">{{ p.get_method_display }}</td>
                             <td class="p-3.5 text-xs font-mono">{{ p.reference|default:"—" }}</td>
                             <td class="p-3.5 font-bold">KES {{ p.amount|floatformat:2 }}</td>
                             <td class="p-3.5 text-xs">{{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}</td>
-                            <td class="p-3.5 text-right"><a href="{% url 'billing:payment_receipt' p.id %}"
-   class="text-teal-600 text-xs font-bold">Print</a></td>
+                            <td class="p-3.5 text-right">
+                                <a href="{% url 'billing:payment_receipt' p.id %}"
+                                   class="text-teal-600 text-xs font-bold">Print</a>
+                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="p-8 text-center text-slate-500 italic">No payments yet.</td>
+                            <td colspan="8" class="p-8 text-center text-slate-500 italic">No payments yet.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -131,7 +139,7 @@
              x-cloak
              style="display:none"
              class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5"
+            <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto"
                  @click.away="showPay = false">
                 <div class="flex justify-between items-center border-b pb-3">
                     <h3 class="font-bold text-slate-900 text-lg">Take payment</h3>
@@ -142,8 +150,84 @@
                       method="post"
                       class="space-y-4">
                     {% csrf_token %}
+                    <!-- Payer (QOL-4): who is handing over the money -->
                     <div>
-                        <p class="text-xs font-semibold uppercase text-slate-600 mb-2">How is the patient paying?</p>
+                        <p class="text-xs font-semibold uppercase text-slate-600 mb-2">Who is paying?</p>
+                        <div class="grid grid-cols-1 gap-2 text-sm">
+                            <label class="border rounded-xl p-3 cursor-pointer"
+                                   :class="payerType === 'SELF' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">
+                                <input type="radio"
+                                       name="payer_type"
+                                       value="SELF"
+                                       x-model="payerType"
+                                       class="mr-2">
+                                The patient ({{ encounter.patient.first_name }})
+                            </label>
+                            <label class="border rounded-xl p-3 cursor-pointer"
+                                   :class="payerType === 'GUARDIAN' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">
+                                <input type="radio"
+                                       name="payer_type"
+                                       value="GUARDIAN"
+                                       x-model="payerType"
+                                       class="mr-2">
+                                A registered guardian
+                            </label>
+                            <label class="border rounded-xl p-3 cursor-pointer"
+                                   :class="payerType === 'OTHER' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">
+                                <input type="radio"
+                                       name="payer_type"
+                                       value="OTHER"
+                                       x-model="payerType"
+                                       class="mr-2">
+                                Another adult
+                            </label>
+                        </div>
+                    </div>
+                    <!-- Guardian: choose from linked people only -->
+                    <div x-show="payerType === 'GUARDIAN'" class="space-y-1">
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Guardian *</label>
+                        <select name="payer_patient_id"
+                                :required="payerType === 'GUARDIAN'"
+                                class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                            <option value="">-- Choose --</option>
+                            {% for g in guardians %}
+                                <option value="{{ g.id }}">{{ g.name }} ({{ g.relationship }})</option>
+                            {% endfor %}
+                        </select>
+                        {% if not guardians %}
+                            <p class="text-xs text-slate-500">No linked guardians. Choose "Another adult", or link one on the Family page.</p>
+                        {% endif %}
+                    </div>
+                    <!-- Other adult: name, relationship and ID are required -->
+                    <div x-show="payerType === 'OTHER'" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Full name *</label>
+                            <input type="text"
+                                   name="payer_name"
+                                   :required="payerType === 'OTHER'"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Relationship *</label>
+                                <input type="text"
+                                       name="payer_relationship"
+                                       :required="payerType === 'OTHER'"
+                                       placeholder="e.g. Uncle, Friend"
+                                       class="w-full border rounded-xl px-3 py-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">ID number *</label>
+                                <input type="text"
+                                       name="payer_id_number"
+                                       :required="payerType === 'OTHER'"
+                                       class="w-full border rounded-xl px-3 py-2 text-sm">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Amount and method -->
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-slate-600 mb-2">How is it paid?</p>
                         <div class="grid grid-cols-2 gap-3">
                             <label class="border rounded-xl p-3 cursor-pointer"
                                    :class="method === 'MANUAL' ? 'border-teal-600 bg-teal-50' : 'border-slate-300'">

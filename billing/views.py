@@ -7,6 +7,7 @@ from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from core_patients.models import PatientRelationship
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, requires
@@ -22,6 +23,7 @@ def is_billing(user):
     profile = getattr(user, "staff_profile", None)
     return user.is_superuser or (profile is not None and profile.role in ("BILLING", "ADMIN"))
 
+
 @requires(Cap.VIEW_FINANCE)
 def account_statement_view(request, account_id):
     account = get_object_or_404(BillingAccount.objects.select_related("owner"), pk=account_id)
@@ -32,18 +34,18 @@ def account_statement_view(request, account_id):
                   .select_related("patient").order_by("-opened_at"))
     visits = [{"encounter": e, "tally": bill.encounter_tally(e)} for e in encounters]
 
-    payments = (Payment.objects.filter(billing_account=account)
-                .select_related("encounter__patient", "recorded_by__user").order_by("-recorded_at"))
+    payments_qs = (Payment.objects.filter(billing_account=account)
+                   .select_related("encounter__patient", "recorded_by__user").order_by("-recorded_at"))
 
     total = sum((row["tally"]["total"] for row in visits), Decimal(0))
-    paid = sum((p.amount for p in payments), Decimal(0))
+    paid = sum((p.amount for p in payments_qs), Decimal(0))
     totals = {"billed": total, "paid": paid, "outstanding": total - paid}
 
     people = {e.patient_id: e.patient for e in encounters}
     people[account.owner_id] = account.owner
 
     return render(request, "billing/account.html", {
-        "account": account, "visits": visits, "payments": payments,
+        "account": account, "visits": visits, "payments": payments_qs,
         "totals": totals, "people": list(people.values()),
     })
 
@@ -63,6 +65,11 @@ def take_payment_action(request, encounter_id):
             reference=request.POST.get("reference", ""),
             payer_phone=request.POST.get("payer_phone", ""),
             staff=request.staff_profile,
+            payer_type=request.POST.get("payer_type", ""),
+            payer_patient_id=request.POST.get("payer_patient_id", ""),
+            payer_name=request.POST.get("payer_name", ""),
+            payer_relationship=request.POST.get("payer_relationship", ""),
+            payer_id_number=request.POST.get("payer_id_number", ""),
         )
     except PaymentError as exc:
         messages.error(request, str(exc))
@@ -70,7 +77,8 @@ def take_payment_action(request, encounter_id):
 
     log_action(request, AuditAction.PAYMENT_RECORDED,
                f"Recorded {payment.get_method_display()} payment KES {payment.amount} "
-               f"({payment.receipt_number}) for {encounter.patient}.")
+               f"({payment.receipt_number}) on {encounter.patient}'s account, paid by "
+               f"{payment.payer_display}.")
     if cleared_now:
         log_action(request, AuditAction.PREPAY_BYPASS_CLEARED,
                    f"Emergency visit #{encounter.id} cleared by payment {payment.receipt_number}.")
@@ -88,6 +96,7 @@ def payment_receipt_view(request, payment_id):
         "tally": bill.encounter_tally(payment.encounter),
     })
 
+
 @requires(Cap.VIEW_FINANCE)
 def bills_ready_view(request):
     candidates = (Encounter.objects.filter(charges__isnull=False)
@@ -99,20 +108,37 @@ def bills_ready_view(request):
             rows.append((enc, tally))
     return render(request, "billing/bills_ready.html", {"rows": rows})
 
+
 @login_required
 @user_passes_test(is_billing)
 def encounter_bill_view(request, encounter_id):
     encounter = get_object_or_404(Encounter.objects.select_related("patient"), pk=encounter_id)
     charges = Charge.objects.filter(encounter=encounter).order_by("created_at")
-    payments = (Payment.objects.filter(encounter=encounter)
-                .select_related("recorded_by__user").order_by("-recorded_at"))
+    payments_qs = (Payment.objects.filter(encounter=encounter)
+                   .select_related("recorded_by__user", "payer_patient")
+                   .order_by("-recorded_at"))
+
+    links = (PatientRelationship.objects
+             .filter(is_active=True, patient=encounter.patient)
+             .select_related("related_patient"))
+    guardians = [
+        {
+            "id": link.related_patient.id,
+            "name": f"{link.related_patient.first_name} {link.related_patient.last_name}".strip(),
+            "relationship": link.get_relationship_display(),
+        }
+        for link in links
+    ]
+
     return render(request, "billing/encounter_bill.html", {
         "encounter": encounter,
         "charges": charges,
         "tally": bill.encounter_tally(encounter),
-        "payments": payments,
+        "payments": payments_qs,
         "hold": bill.billing_hold_reason(encounter.patient),
+        "guardians": guardians,
     })
+
 
 @login_required
 @user_passes_test(is_billing)
@@ -132,13 +158,13 @@ def post_encounter_bill_action(request, encounter_id):
     messages.success(request, f"Posted {count} charge(s).")
     return redirect("billing:encounter", encounter_id=encounter.id)
 
+
 @login_required
 def billing_dashboard_view(request):
     """Billing & financial dashboard with metrics, search, status filters, and pagination."""
     query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "").strip()
 
-    # Ensure treated_patient is explicitly selected
     charges_qs = Charge.objects.select_related("treated_patient", "billing_account", "encounter").order_by("-created_at")
 
     if query:
@@ -152,12 +178,9 @@ def billing_dashboard_view(request):
     if status_filter:
         charges_qs = charges_qs.filter(status=status_filter)
 
-    # Pagination (15 items per page)
     paginator = Paginator(charges_qs, 15)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginator.get_page(request.GET.get("page"))
 
-    # Metrics Calculations
     total_revenue = Charge.objects.filter(status__in=["POSTED", "PAID"]).aggregate(total=Sum("amount"))["total"] or 0
     provisional_total = Charge.objects.filter(status="PROVISIONAL").aggregate(total=Sum("amount"))["total"] or 0
     total_accounts = BillingAccount.objects.count()
@@ -196,7 +219,7 @@ def post_charge_action(request, charge_id):
 @login_required
 @require_POST
 def mark_charge_paid_action(request, charge_id):
-    """Mark a charge as fully paid."""
+    """Legacy. Marks a charge PAID directly. Superseded by allocation (QOL-2); kept for history."""
     charge = get_object_or_404(Charge, pk=charge_id)
     charge.status = "PAID"
     charge.save(update_fields=["status"])
