@@ -19,12 +19,15 @@ from duty.services import current_session
 from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder
 from radiology.models import ScanOrder
+from radiology.services import scan_cancellable, scan_charge_or_none
 from triage_queue.models import Encounter, QueueEntry
 from triage_queue.services import (
     FlowError,
     close_consultation,
     consultation_mode,
+    pause_for_results,
     require_active,
+    resume_consultation,
 )
 from wards import services as ward_services
 from wards.models import Admission, Ward
@@ -34,6 +37,7 @@ from .models import ClinicalNote
 
 def is_physician(user):
     return hasattr(user, "staff_profile") and user.staff_profile.role in ("DOCTOR", "ADMIN")
+
 
 @login_required
 @user_passes_test(is_physician)
@@ -49,6 +53,7 @@ def formulary_search_view(request, encounter_id):
                    .order_by("brand_name")[:15])
     return render(request, "doctors_portal/_formulary_results.html",
                   {"results": results, "q": q})
+
 
 @login_required
 @user_passes_test(is_physician)
@@ -77,8 +82,9 @@ def consultation_room_view(request, encounter_id):
         .order_by("-ordered_at")
     )
     for scan in scan_orders:
-        studies = list(scan.studies.all())   # uses the prefetched cache
+        studies = list(scan.studies.all())
         scan.latest_study = max(studies, key=lambda s: s.uploaded_at) if studies else None
+        scan.can_cancel = scan_cancellable(scan)
     allergies = (PatientAllergy.objects
                  .filter(patient=patient, status="ACTIVE")
                  .select_related("allergen"))
@@ -144,6 +150,7 @@ def add_clinical_note_action(request, encounter_id):
         messages.error(request, "Presenting complaint and diagnosis are required.")
 
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
 
 @login_required
 @user_passes_test(is_physician)
@@ -260,7 +267,6 @@ def _create_external(request, encounter, profile, route, frequency, dose_text, d
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
 
-
 @login_required
 @user_passes_test(is_physician)
 @require_POST
@@ -317,14 +323,20 @@ def doctor_dashboard_view(request):
     waiting_entries = QueueEntry.objects.filter(
         assigned_doctor=doctor_profile, status="WAITING"
     ).select_related("encounter__patient", "encounter").order_by("-priority", "joined_at")
-
     for entry in waiting_entries:
         entry.wait_duration_minutes = int((now - entry.joined_at).total_seconds() / 60)
+
+    awaiting_results = (QueueEntry.objects.filter(
+        assigned_doctor=doctor_profile, status="AWAITING_RESULTS")
+        .select_related("encounter__patient", "encounter")
+        .prefetch_related("encounter__scan_orders")
+        .order_by("joined_at"))
 
     context = {
         "session": session,
         "current_consultation": current_consultation,
         "waiting_entries": waiting_entries,
+        "awaiting_results": awaiting_results,
     }
     return render(request, "doctors_portal/dashboard.html", context)
 
@@ -339,13 +351,19 @@ def call_next_patient_action(request):
         messages.error(request, "Clock in before calling patients.")
         return redirect("doctors_portal:dashboard")
     if QueueEntry.objects.filter(assigned_doctor=profile, status="IN_CONSULTATION").exists():
-        messages.error(request, "Complete the current consultation before calling the next patient.")
+        messages.error(request, "Complete the current consultation, or send the patient for results, "
+                                "before calling the next patient.")
         return redirect("doctors_portal:dashboard")
 
     next_entry = (QueueEntry.objects.filter(assigned_doctor=profile, status="WAITING")
                   .select_related("encounter__patient").order_by("-priority", "joined_at").first())
     if next_entry is None:
-        messages.info(request, "No patients are waiting for you.")
+        waiting_pay = QueueEntry.objects.filter(assigned_doctor=profile,
+                                                status="AWAITING_PAYMENT").count()
+        msg = "No patients are waiting for you."
+        if waiting_pay:
+            msg += f" {waiting_pay} awaiting payment at the till."
+        messages.info(request, msg)
         return redirect("doctors_portal:dashboard")
 
     patient = next_entry.encounter.patient
@@ -405,10 +423,66 @@ def request_scan_action(request, encounter_id):
             unit_price=SCAN_PRICES[modality], staff=request.staff_profile,
             source_id=scan.id, key=f"scan:{scan.id}",
         )
+        paused = pause_for_results(encounter, request.staff_profile)
+
     log_action(request, AuditAction.ENCOUNTER_RECORD_VIEWED,
                f"Ordered {modality} ({body_part}) for {encounter.patient}.")
+    if paused:
+        messages.success(request, f"{modality} requested. The patient is awaiting results and "
+                                  "you are free to take the next patient.")
+        return redirect("doctors_portal:dashboard")
     messages.success(request, f"{modality} requested for {body_part}.")
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+
+@login_required
+@user_passes_test(is_physician)
+@require_POST
+def resume_consultation_action(request, encounter_id):
+    encounter = get_object_or_404(Encounter, pk=encounter_id)
+    try:
+        resume_consultation(encounter, request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
+        return redirect("doctors_portal:dashboard")
+    log_action(request, AuditAction.ENCOUNTER_RECORD_VIEWED,
+               f"Resumed consultation for {encounter.patient}.")
+    return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
+
+@login_required
+@user_passes_test(is_physician)
+@require_POST
+def cancel_scan_action(request, scan_id):
+    """
+    Cancels a scan that has not been performed and has no payment against it.
+    A scan with any payment on it needs a refund through billing first.
+    """
+    scan = get_object_or_404(ScanOrder.objects.select_related("encounter__patient"), pk=scan_id)
+    if scan.ordered_by_id != request.staff_profile.id:
+        messages.error(request, "Only the doctor who ordered this scan can cancel it.")
+        return redirect("doctors_portal:consultation_room", encounter_id=scan.encounter_id)
+    reason = request.POST.get("reason", "").strip()
+    if not reason:
+        messages.error(request, "Give a reason for cancelling the scan.")
+        return redirect("doctors_portal:consultation_room", encounter_id=scan.encounter_id)
+
+    with transaction.atomic():
+        scan = ScanOrder.objects.select_for_update().get(pk=scan.pk)
+        if not scan_cancellable(scan):
+            messages.error(request, "This scan cannot be cancelled. It has been performed, or money has been "
+                                    "paid against it. A payment needs a refund through billing.")
+            return redirect("doctors_portal:consultation_room", encounter_id=scan.encounter_id)
+        charge = scan_charge_or_none(scan)
+        if charge is not None:
+            billing_services.void_or_reverse(charge, request.staff_profile)
+        scan.status = "CANCELLED"
+        scan.save(update_fields=["status"])
+
+    log_action(request, AuditAction.ENCOUNTER_RECORD_VIEWED,
+               f"Cancelled {scan.modality} ({scan.body_part}) for {scan.encounter.patient}: {reason}")
+    messages.success(request, "Scan cancelled. The visit can be completed once nothing else is outstanding.")
+    return redirect("doctors_portal:consultation_room", encounter_id=scan.encounter_id)
 
 
 @login_required

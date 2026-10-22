@@ -28,6 +28,21 @@
                 <a href="{% url 'doctors_portal:dashboard' %}"
                    class="bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Go to dashboard</a>
             </div>
+        {% elif mode == "AWAITING_RESULTS" %}
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <p class="font-bold text-amber-900">Waiting for results</p>
+                    <p class="text-sm text-amber-800">
+                        The scan has been requested. Resume this consultation when you are ready to continue.
+                        Notes, prescriptions and new scans are available after you resume. The visit cannot be completed while a scan is outstanding.
+                    </p>
+                </div>
+                <form method="post" action="{% url 'doctors_portal:resume' encounter.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-700">Resume consultation</button>
+                </form>
+            </div>
         {% elif mode == "NOT_YOURS" %}
             <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                 <p class="font-bold text-amber-900">This patient is assigned to another doctor</p>
@@ -293,6 +308,19 @@
                                 <td class="p-3 text-xs font-bold">{{ scan.get_status_display }}</td>
                                 <td class="p-3 text-right">
                                     {% with study=scan.latest_study %}
+                                        {% if scan.can_cancel %}
+                                            <form method="post"
+                                                  action="{% url 'doctors_portal:cancel_scan' scan.id %}"
+                                                  class="mt-2 flex gap-2 justify-end"
+                                                  onsubmit="return confirm('Cancel this scan? Its charge will be voided.');">
+                                                {% csrf_token %}
+                                                <input name="reason"
+                                                       required
+                                                       placeholder="Reason"
+                                                       class="border rounded-lg px-2 py-1 text-xs w-32">
+                                                <button class="text-xs font-bold text-red-700">Cancel scan</button>
+                                            </form>
+                                        {% endif %}
                                         {% if study and study.file %}
                                             <a href="{% url 'radiology:study_file' study.id %}"
                                                target="_blank"

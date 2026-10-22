@@ -19,22 +19,37 @@
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
                 {% for order in pending_orders %}
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="p-3.5 text-xs text-slate-500 font-mono">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
-                        <td class="p-3.5 font-bold text-slate-900">
-                            <a href="{% url 'core_patients:detail' order.encounter.patient.id %}"
-                               class="text-teal-600 hover:underline">{{ order.encounter.patient }}</a>
+                    <tr class="hover:bg-slate-50 transition {% if not order.prepaid %}bg-slate-50 text-slate-400{% endif %}">
+                        <td class="p-3.5 text-xs font-mono">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3.5 font-bold">
+                            {% if order.prepaid %}
+                                <a href="{% url 'core_patients:detail' order.encounter.patient.id %}"
+                                   class="text-teal-600 hover:underline">{{ order.encounter.patient }}</a>
+                            {% else %}
+                                {{ order.encounter.patient }}
+                            {% endif %}
                         </td>
-                        <td class="p-3.5 font-semibold text-slate-700">
+                        <td class="p-3.5 font-semibold">
                             {{ order.modality }}
-                            <span class="text-xs font-normal text-slate-500">({{ order.body_part }})</span>
+                            <span class="text-xs font-normal">({{ order.body_part }})</span>
                         </td>
-                        <td class="p-3.5 text-xs text-slate-600">{{ order.clinical_indication }}</td>
+                        <td class="p-3.5 text-xs">{{ order.clinical_indication }}</td>
                         <td class="p-3.5 text-right">
-                            <button @click="showReportModal = true; selectedOrderId = '{{ order.id }}'; selectedPatientName = '{{ order.encounter.patient|escapejs }} ({{ order.modality }})'"
-                                    class="bg-cyan-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-cyan-700 transition shadow-sm">
-                                Upload Report →
-                            </button>
+                            {% if order.prepaid %}
+                                <button type="button"
+                                        @click="showReportModal = true; selectedOrderId = '{{ order.id }}'; selectedPatientName = '{{ order.encounter.patient|escapejs }} ({{ order.modality }})'"
+                                        class="bg-cyan-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-cyan-700 transition shadow-sm">
+                                    Upload Report →
+                                </button>
+                            {% else %}
+                                <span class="inline-block text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full mb-1">Awaiting payment</span>
+                                <br>
+                                <button type="button"
+                                        disabled
+                                        class="bg-slate-200 text-slate-500 px-3 py-1.5 rounded-xl text-xs font-bold cursor-not-allowed">
+                                    Upload Report
+                                </button>
+                            {% endif %}
                         </td>
                     </tr>
                 {% empty %}
@@ -46,7 +61,6 @@
                 {% endfor %}
             </tbody>
         </table>
-        <!-- Pending Pagination Controls -->
         {% if pending_orders.has_other_pages %}
             <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs">
                 {% if pending_orders.has_previous %}
@@ -79,8 +93,7 @@
          class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center">
             <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Recently Reported Studies</h3>
-            <span class="text-xs text-slate-500">Page {{ completed_studies.number }} of {{
-            completed_studies.paginator.num_pages }}</span>
+            <span class="text-xs text-slate-500">Page {{ completed_studies.number }} of {{ completed_studies.paginator.num_pages }}</span>
         </div>
         <table class="w-full text-left border-collapse">
             <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
@@ -101,7 +114,7 @@
                         <td class="p-3.5 text-xs text-slate-800">{{ study.report }}</td>
                         <td class="p-3.5 text-right">
                             {% if study.file %}
-                                <a href="{{ study.file.url }}"
+                                <a href="{% url 'radiology:study_file' study.id %}"
                                    target="_blank"
                                    class="text-cyan-600 hover:text-cyan-800 text-xs font-bold bg-cyan-50 px-3 py-1.5 rounded-xl transition">View File →</a>
                             {% else %}
@@ -118,7 +131,6 @@
                 {% endfor %}
             </tbody>
         </table>
-        <!-- Completed Pagination Controls -->
         {% if completed_studies.has_other_pages %}
             <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center text-xs">
                 {% if completed_studies.has_previous %}
@@ -131,8 +143,7 @@
                 {% else %}
                     <span class="px-3 py-1.5 text-slate-300 border border-transparent">← Previous Page</span>
                 {% endif %}
-                <span class="font-medium text-slate-600">Showing {{ completed_studies.start_index }} - {{ completed_studies.end_index }} of {{ completed_studies.paginator.count
-                }} items</span>
+                <span class="font-medium text-slate-600">Showing {{ completed_studies.start_index }} - {{ completed_studies.end_index }} of {{ completed_studies.paginator.count }} items</span>
                 {% if completed_studies.has_next %}
                     <button hx-get="{% url 'radiology:dashboard' %}?page={{ completed_studies.next_page_number }}&q={{ query }}"
                             hx-target="#worklist-container"

@@ -22,3 +22,11 @@ def check_scan_prepaid(scan):
     if not scan_prepaid(scan):
         raise ScanPrepayError("Awaiting payment. The patient must pay for this scan at billing "
                               "before the report can be submitted.")
+
+def scan_cancellable(scan):
+    """A scan can be cancelled only if it is still ordered, has no image,
+    and nothing at all has been paid against it."""
+    if scan.status != "ORDERED" or scan.studies.exists():
+        return False
+    charge = scan_charge_or_none(scan)
+    return charge is None or billing.paid_amount(charge) == 0

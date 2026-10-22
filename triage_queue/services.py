@@ -6,11 +6,13 @@ from billing import services as billing
 from billing.models import Charge
 from billing.prices import CONSULTATION_FEE, REGISTRATION_FEE
 from notifications.services import notify, notify_on_duty
+from radiology.models import ScanOrder
 from wards.models import Admission
 
 from .models import QueueEntry
 
 PREPAY_FEE_SOURCES = ("REGISTRATION", "CONSULTATION")
+OUTSTANDING_SCAN_STATUSES = ("ORDERED", "PERFORMED")
 
 
 class FlowError(Exception):
@@ -67,8 +69,8 @@ def fees_covered(encounter):
 @transaction.atomic
 def activate_visit(encounter):
     """
-    Promote the queue entry from AWAITING_PAYMENT to WAITING once the fees are covered,
-    or at once for an emergency-bypassed encounter. Notifies the assigned doctor.
+    Promote AWAITING_PAYMENT to WAITING once the fees are covered, or at once for an
+    emergency-bypassed encounter. Notifies the assigned doctor.
     """
     entry = (QueueEntry.objects.select_for_update()
              .filter(encounter=encounter, status="AWAITING_PAYMENT").first())
@@ -84,11 +86,60 @@ def activate_visit(encounter):
     return entry
 
 
+def outstanding_scans(encounter):
+    return ScanOrder.objects.filter(encounter=encounter, status__in=OUTSTANDING_SCAN_STATUSES)
+
+
+@transaction.atomic
+def pause_for_results(encounter, doctor):
+    """
+    The doctor sends the patient for a scan. The entry leaves IN_CONSULTATION so the doctor
+    is free to take the next patient. Returns the entry, or None if nothing was paused.
+    """
+    entry = (QueueEntry.objects.select_for_update()
+             .filter(encounter=encounter, assigned_doctor=doctor, status="IN_CONSULTATION").first())
+    if entry is None:
+        return None
+    entry.status = "AWAITING_RESULTS"
+    entry.save(update_fields=["status", "updated_at"])
+    return entry
+
+
+@transaction.atomic
+def resume_consultation(encounter, doctor):
+    """
+    The doctor returns to a patient who is awaiting results. Only allowed when the doctor
+    has no other consultation in progress.
+    """
+    if QueueEntry.objects.filter(assigned_doctor=doctor, status="IN_CONSULTATION").exists():
+        raise FlowError("Finish your current consultation before resuming this one.")
+    entry = (QueueEntry.objects.select_for_update()
+             .filter(encounter=encounter, assigned_doctor=doctor, status="AWAITING_RESULTS").first())
+    if entry is None:
+        raise FlowError("This patient is not waiting for results.")
+    entry.status = "IN_CONSULTATION"
+    entry.save(update_fields=["status", "updated_at"])
+    return entry
+
+
+def notify_results_ready(encounter):
+    """Called when the last outstanding scan on a visit is reported. Tells the ordering doctor."""
+    if outstanding_scans(encounter).exists():
+        return
+    entry = (QueueEntry.objects.filter(encounter=encounter, status="AWAITING_RESULTS")
+             .select_related("assigned_doctor").first())
+    if entry is None:
+        return
+    notify([entry.assigned_doctor], kind="SYSTEM",
+           message=f"Results ready for {patient_label(encounter)}. Resume from your dashboard.",
+           link=reverse("doctors_portal:dashboard"))
+
+
 @transaction.atomic
 def close_consultation(encounter, doctor):
     """
-    Ends the doctor's consultation. The consultation fee is charged at visit open
-    (QOL-2), so closing does not charge it again.
+    Ends the doctor's consultation. The consultation fee is charged at visit open (QOL-2).
+    Blocked while any scan is outstanding (ordered or performed but not reported).
     - If the patient is in a ward, the queue entry moves to ADMITTED and the encounter stays open.
     - Otherwise the queue entry is DISCHARGED, the encounter is CLOSED, and billing is notified.
     """
@@ -100,6 +151,9 @@ def close_consultation(encounter, doctor):
         raise FlowError("Only the assigned doctor can complete this consultation.")
     if not encounter.clinical_notes.exists():
         raise FlowError("Record a clinical note before completing the consultation.")
+    if outstanding_scans(encounter).exists():
+        raise FlowError("A scan is still outstanding. Wait for the report, or cancel the scan "
+                        "with a reason, before completing the visit.")
 
     if Admission.objects.filter(encounter=encounter, discharged_at__isnull=True).exists():
         entry.status = "ADMITTED"
@@ -146,6 +200,8 @@ def consultation_mode(encounter, profile):
         mode = "WAITING"
     elif entry.status == "AWAITING_PAYMENT":
         mode = "AWAITING_PAYMENT"
+    elif entry.status == "AWAITING_RESULTS":
+        mode = "AWAITING_RESULTS"
     elif entry.status == "IN_CONSULTATION":
         mode = "ACTIVE"
     elif entry.status == "ADMITTED" and encounter.status == "OPEN":

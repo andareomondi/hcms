@@ -24,7 +24,6 @@ class Encounter(models.Model):
     opened_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     chief_complaint = models.TextField(blank=True, default="")
 
-    # Emergency pre-pay bypass (QOL-2). Set at triage with a reason; cleared by billing.
     prepay_bypassed = models.BooleanField(default=False, db_index=True)
     prepay_bypass_reason = models.TextField(blank=True)
     prepay_bypass_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
@@ -54,7 +53,9 @@ class QueueEntry(models.Model):
     PRIORITY = [(1, "Routine"), (2, "Urgent"), (3, "Resuscitation")]
     STATUS = [
         ("AWAITING_PAYMENT", "Awaiting payment"),
-        ("WAITING", "Waiting"), ("IN_CONSULTATION", "In consultation"),
+        ("WAITING", "Waiting"),
+        ("IN_CONSULTATION", "In consultation"),
+        ("AWAITING_RESULTS", "Awaiting results"),
         ("IN_PROCEDURE", "In procedure / nursing"), ("DIAGNOSTICS", "At radiology / lab"),
         ("ADMITTED", "Admitted to ward"), ("DISCHARGED", "Discharged"),
     ]
@@ -70,3 +71,4 @@ class QueueEntry(models.Model):
 
     class Meta:
         ordering = ["-priority", "joined_at"]
+
