@@ -3,68 +3,144 @@
      hx-get="{% url 'triage_queue:board_fragment' %}"
      hx-trigger="every 10s"
      hx-swap="outerHTML">
-    <div class="flex justify-between items-center">
+    <!-- Top Header Banner -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900">Live Triage & Waiting Queue Board</h1>
-            <p class="text-sm text-slate-500">Real-time patient flow and priority queue monitoring</p>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Live Triage & Waiting Queue Board</h1>
+            <p class="text-sm text-slate-500 mt-0.5">Real-time patient flow, acuity levels, and priority queue monitoring</p>
         </div>
-        <span class="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-full font-medium flex items-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Auto-polling every 10s</span>
-        </span>
+        <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Auto-polling every 10s</span>
+            </span>
+        </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Resuscitation Column (Priority 3) -->
-        <div class="bg-red-50/70 border border-red-200 rounded-2xl p-4 space-y-4 shadow-sm">
+    <!-- Triage Priority Columns -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Resuscitation Column (Priority 3 / Red) -->
+        <div class="bg-red-50/60 border border-red-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm flex flex-col">
             <div class="flex justify-between items-center border-b border-red-200 pb-3">
-                <h2 class="font-bold text-red-900 uppercase text-xs tracking-wider">Resuscitation (Priority 3)</h2>
-                <span class="bg-red-200 text-red-800 text-xs px-2 py-0.5 rounded-full font-bold">{{ resuscitation_entries|length }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span>
+                    <h2 class="font-bold text-red-900 uppercase text-xs tracking-wider">Resuscitation (Level 3)</h2>
+                </div>
+                <span class="bg-red-200 text-red-900 text-xs px-2.5 py-0.5 rounded-full font-bold shadow-sm">
+                    {{ resuscitation_entries|length }}
+                </span>
             </div>
-            <div class="space-y-3">
+            <div class="space-y-3 flex-1">
                 {% for entry in resuscitation_entries %}
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-600 space-y-1.5 hover:shadow transition">
-                        <p class="font-bold text-slate-900 text-sm">{{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}</p>
-                        <p class="text-xs text-slate-500">Doctor: Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</p>
-                        <p class="text-xs text-red-600 font-semibold pt-1">Wait: {{ entry.wait_duration_minutes }} mins</p>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-red-100 border-l-4 border-l-red-600 space-y-2.5 hover:shadow-md transition-all group">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                                   class="font-bold text-slate-900 text-sm hover:text-teal-600 transition group-hover:underline">
+                                    {{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}
+                                </a>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Doctor:
+                                    <span class="font-medium text-slate-700">Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</span>
+                                </p>
+                            </div>
+                            <span class="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">
+                                STAT
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                            <span class="text-red-700 font-semibold flex items-center gap-1">
+                                <span>⏱️</span> Wait: {{ entry.wait_duration_minutes }} mins
+                            </span>
+                            <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                               class="text-teal-600 font-bold hover:text-teal-800 transition">View File →</a>
+                        </div>
                     </div>
                 {% empty %}
-                    <p class="text-xs text-slate-500 text-center py-6">No patients in resuscitation queue.</p>
+                    <div class="bg-white/50 border border-dashed border-red-200 rounded-xl p-8 text-center">
+                        <p class="text-xs text-slate-400 font-medium">No patients in resuscitation queue.</p>
+                    </div>
                 {% endfor %}
             </div>
         </div>
-        <!-- Urgent Column (Priority 2) -->
-        <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-4 shadow-sm">
+        <!-- Urgent Column (Priority 2 / Amber) -->
+        <div class="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm flex flex-col">
             <div class="flex justify-between items-center border-b border-amber-200 pb-3">
-                <h2 class="font-bold text-amber-900 uppercase text-xs tracking-wider">Urgent (Priority 2)</h2>
-                <span class="bg-amber-200 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">{{ urgent_entries|length }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <h2 class="font-bold text-amber-900 uppercase text-xs tracking-wider">Urgent (Level 2)</h2>
+                </div>
+                <span class="bg-amber-200 text-amber-900 text-xs px-2.5 py-0.5 rounded-full font-bold shadow-sm">
+                    {{ urgent_entries|length }}
+                </span>
             </div>
-            <div class="space-y-3">
+            <div class="space-y-3 flex-1">
                 {% for entry in urgent_entries %}
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500 space-y-1.5 hover:shadow transition">
-                        <p class="font-bold text-slate-900 text-sm">{{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}</p>
-                        <p class="text-xs text-slate-500">Doctor: Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</p>
-                        <p class="text-xs text-amber-600 font-semibold pt-1">Wait: {{ entry.wait_duration_minutes }} mins</p>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 border-l-4 border-l-amber-500 space-y-2.5 hover:shadow-md transition-all group">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                                   class="font-bold text-slate-900 text-sm hover:text-teal-600 transition group-hover:underline">
+                                    {{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}
+                                </a>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Doctor:
+                                    <span class="font-medium text-slate-700">Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                            <span class="text-amber-700 font-semibold flex items-center gap-1">
+                                <span>⏱️</span> Wait: {{ entry.wait_duration_minutes }} mins
+                            </span>
+                            <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                               class="text-teal-600 font-bold hover:text-teal-800 transition">View File →</a>
+                        </div>
                     </div>
                 {% empty %}
-                    <p class="text-xs text-slate-500 text-center py-6">No patients in urgent queue.</p>
+                    <div class="bg-white/50 border border-dashed border-amber-200 rounded-xl p-8 text-center">
+                        <p class="text-xs text-slate-400 font-medium">No patients in urgent queue.</p>
+                    </div>
                 {% endfor %}
             </div>
         </div>
-        <!-- Routine Column (Priority 1) -->
-        <div class="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 space-y-4 shadow-sm">
+        <!-- Routine Column (Priority 1 / Blue) -->
+        <div class="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm flex flex-col">
             <div class="flex justify-between items-center border-b border-blue-200 pb-3">
-                <h2 class="font-bold text-blue-900 uppercase text-xs tracking-wider">Routine (Priority 1)</h2>
-                <span class="bg-blue-200 text-blue-800 text-xs px-2 py-0.5 rounded-full font-bold">{{ routine_entries|length }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <h2 class="font-bold text-blue-900 uppercase text-xs tracking-wider">Routine (Level 1)</h2>
+                </div>
+                <span class="bg-blue-200 text-blue-900 text-xs px-2.5 py-0.5 rounded-full font-bold shadow-sm">
+                    {{ routine_entries|length }}
+                </span>
             </div>
-            <div class="space-y-3">
+            <div class="space-y-3 flex-1">
                 {% for entry in routine_entries %}
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 space-y-1.5 hover:shadow transition">
-                        <p class="font-bold text-slate-900 text-sm">{{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}</p>
-                        <p class="text-xs text-slate-500">Doctor: Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</p>
-                        <p class="text-xs text-blue-600 font-semibold pt-1">Wait: {{ entry.wait_duration_minutes }} mins</p>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-blue-100 border-l-4 border-l-blue-500 space-y-2.5 hover:shadow-md transition-all group">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                                   class="font-bold text-slate-900 text-sm hover:text-teal-600 transition group-hover:underline">
+                                    {{ entry.encounter.patient.last_name }}, {{ entry.encounter.patient.first_name }}
+                                </a>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    Doctor:
+                                    <span class="font-medium text-slate-700">Dr. {{ entry.assigned_doctor.user.get_full_name|default:"Unassigned" }}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                            <span class="text-blue-700 font-semibold flex items-center gap-1">
+                                <span>⏱️</span> Wait: {{ entry.wait_duration_minutes }} mins
+                            </span>
+                            <a href="{% url 'core_patients:detail' entry.encounter.patient.id %}"
+                               class="text-teal-600 font-bold hover:text-teal-800 transition">View File →</a>
+                        </div>
                     </div>
                 {% empty %}
-                    <p class="text-xs text-slate-500 text-center py-6">No patients in routine queue.</p>
+                    <div class="bg-white/50 border border-dashed border-blue-200 rounded-xl p-8 text-center">
+                        <p class="text-xs text-slate-400 font-medium">No patients in routine queue.</p>
+                    </div>
                 {% endfor %}
             </div>
         </div>

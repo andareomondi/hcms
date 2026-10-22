@@ -2,94 +2,71 @@
 {% block title %}Pharmacy - HCMS{% endblock %}
 {% block content %}
     <div class="space-y-6">
+        <!-- Header & Action Buttons -->
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900">Pharmacy</h1>
-                <p class="text-sm text-slate-500">Formulary, stock, and what is waiting to be dispensed or given.</p>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Pharmacy</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Formulary, stock, and what is waiting to be dispensed or given.</p>
             </div>
             <div class="flex flex-wrap gap-2">
                 {% if can_dispense %}
                     <a href="{% url 'pharmacy:dispense_queue' %}"
-                       class="min-h-11 inline-flex items-center px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Dispense queue ({{ dispense_pending }})</a>
+                       class="min-h-11 inline-flex items-center px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-sm transition">
+                        Dispense queue ({{ dispense_pending }})
+                    </a>
                 {% endif %}
                 {% if can_manage %}
                     <a href="{% url 'pharmacy:medication_create' %}"
-                       class="min-h-11 inline-flex items-center px-4 rounded-xl bg-teal-600 text-white text-sm font-bold">+ Add medicine</a>
+                       class="min-h-11 inline-flex items-center px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold shadow-sm transition">
+                        + Add medicine
+                    </a>
                 {% endif %}
             </div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="bg-white rounded-2xl border p-4">
-                <p class="text-xs uppercase font-bold text-slate-500">Medicines</p>
-                <p class="text-2xl font-extrabold">{{ page_obj.paginator.count }}</p>
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+                <p class="text-xs uppercase font-bold tracking-wider text-slate-500">Medicines</p>
+                <p class="text-2xl font-extrabold text-slate-900 mt-1">{{ page_obj.paginator.count }}</p>
             </div>
-            <div class="bg-white rounded-2xl border p-4">
-                <p class="text-xs uppercase font-bold text-slate-500">Low stock</p>
-                <p class="text-2xl font-extrabold text-amber-600">{{ low_count }}</p>
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+                <p class="text-xs uppercase font-bold tracking-wider text-slate-500">Low stock</p>
+                <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ low_count }}</p>
             </div>
-            <div class="bg-white rounded-2xl border p-4">
-                <p class="text-xs uppercase font-bold text-slate-500">Out of stock</p>
-                <p class="text-2xl font-extrabold text-red-600">{{ out_count }}</p>
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+                <p class="text-xs uppercase font-bold tracking-wider text-slate-500">Out of stock</p>
+                <p class="text-2xl font-extrabold text-red-600 mt-1">{{ out_count }}</p>
             </div>
-            <div class="bg-white rounded-2xl border p-4">
-                <p class="text-xs uppercase font-bold text-slate-500">Waiting to give</p>
-                <p class="text-2xl font-extrabold text-blue-600">{{ nurse_pending }}</p>
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+                <p class="text-xs uppercase font-bold tracking-wider text-slate-500">Waiting to give</p>
+                <p class="text-2xl font-extrabold text-blue-600 mt-1">{{ nurse_pending }}</p>
             </div>
         </div>
         {% if low_stock %}
-            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                <p class="font-bold text-amber-900 mb-2">At or below reorder level</p>
-                <ul class="text-sm space-y-1">
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <p class="font-bold text-amber-900 mb-2 text-sm">At or below reorder level</p>
+                <ul class="text-sm space-y-1.5">
                     {% for s in low_stock %}
-                        <li class="flex justify-between"><span>{{ s.medication.brand_name }} {{ s.medication.strength }}</span><strong>{{ s.quantity }} left (reorder at {{ s.reorder_level }})</strong></li>
+                        <li class="flex flex-col sm:flex-row sm:justify-between text-slate-700 gap-1">
+                            <span>{{ s.medication.brand_name }} {{ s.medication.strength }}</span>
+                            <strong class="text-amber-900">{{ s.quantity }} left (reorder at {{ s.reorder_level }})</strong>
+                        </li>
                     {% endfor %}
                 </ul>
             </div>
         {% endif %}
-        <form method="get" class="flex gap-2">
+        <!-- Search Form with HTMX Live Search -->
+        <div class="flex gap-2">
             <input type="text"
                    name="q"
                    value="{{ query }}"
                    placeholder="Search brand or generic"
-                   class="flex-1 min-h-11 border rounded-xl px-3 text-sm">
-            <button class="min-h-11 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Search</button>
-        </form>
-        <div class="bg-white rounded-2xl border overflow-hidden">
-            <table class="w-full text-left text-sm">
-                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                    <tr>
-                        <th class="p-3">Medicine</th>
-                        <th class="p-3">Form</th>
-                        <th class="p-3">Allergy classes</th>
-                        <th class="p-3">Stock</th>
-                        <th class="p-3">Price</th>
-                        <th class="p-3"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    {% for m in medications %}
-                        <tr>
-                            <td class="p-3 font-bold">{{ m.brand_name }} <span class="font-normal text-slate-500">({{ m.generic_name }} {{ m.strength }})</span></td>
-                            <td class="p-3 text-xs">{{ m.form }}</td>
-                            <td class="p-3 text-xs">
-                                {% for c in m.allergen_classes.all %}<span class="inline-block bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5 mr-1">{{ c.name }}</span>{% empty %}<span class="text-slate-400">none</span>{% endfor %}
-                            </td>
-                            <td class="p-3 font-bold {% if m.stock.quantity <= 0 %}text-red-600{% elif m.stock.quantity <= m.stock.reorder_level %}text-amber-600{% endif %}">
-                                {{ m.stock.quantity|default:0 }}
-                            </td>
-                            <td class="p-3 text-xs">KES {{ m.unit_price|floatformat:2 }}</td>
-                            <td class="p-3 text-right">
-                                {% if can_manage %}<a href="{% url 'pharmacy:medication_edit' m.id %}"
-   class="text-teal-700 text-xs font-bold">Edit / stock</a>{% endif %}
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="6" class="p-8 text-center text-slate-500 italic">No medicines match.</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                   hx-get="{% url 'pharmacy:dashboard' %}"
+                   hx-target="#pharmacy-results"
+                   hx-trigger="keyup changed delay:300ms"
+                   class="flex-1 min-h-11 border border-slate-300 rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
         </div>
+        <!-- Search Results Container / Target -->
+        <div id="pharmacy-results">{% include "pharmacy/_dashboard_results.html" %}</div>
     </div>
 {% endblock %}

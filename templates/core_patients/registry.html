@@ -10,6 +10,7 @@
         <div class="bg-white p-4 rounded shadow">
             <input type="text"
                    name="q"
+                   value="{{ query }}"
                    placeholder="Search by name, ID number..."
                    hx-get="{% url 'core_patients:search' %}"
                    hx-target="#search-results"

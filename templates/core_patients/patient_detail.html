@@ -3,64 +3,67 @@
 {% block content %}
     <div class="space-y-6" x-data="{ activeTab: 'overview' }">
         <!-- Top Header & Demographics Summary -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div class="flex items-center space-x-4">
-                <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-700 font-extrabold text-2xl flex items-center justify-center border border-teal-100 shadow-inner">
+        <div class="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+            <div class="flex items-center space-x-4 min-w-0">
+                <div class="w-16 h-16 rounded-2xl bg-teal-50 text-teal-700 font-extrabold text-2xl flex items-center justify-center border border-teal-100 shadow-inner shrink-0">
                     {{ patient.first_name|slice:":1" }}{{ patient.last_name|slice:":1" }}
                 </div>
-                <div>
-                    <div class="flex items-center space-x-3">
-                        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ patient.last_name }}, {{ patient.first_name }}</h1>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">{{ patient.last_name }}, {{ patient.first_name }}</h1>
                         <span class="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">ID: {{ patient.id_number|default:"N/A" }}</span>
                     </div>
-                    <p class="text-sm text-slate-500 mt-1">
-                        Gender: <span class="font-semibold text-slate-700">{{ patient.get_sex_display|default:patient.sex }}</span> •
-                        DOB: <span class="font-semibold text-slate-700">{{ patient.date_of_birth|default:"Not specified" }}</span> •
-                        Phone: <span class="font-semibold text-slate-700">{{ patient.phone|default:"N/A" }}</span>
+                    <p class="text-xs sm:text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>Gender: <strong class="text-slate-700">{{ patient.get_sex_display|default:patient.sex }}</strong></span>
+                        <span class="hidden sm:inline">•</span>
+                        <span>DOB: <strong class="text-slate-700">{{ patient.date_of_birth|default:"Not specified" }}</strong></span>
+                        <span class="hidden sm:inline">•</span>
+                        <span>Phone: <strong class="text-slate-700">{{ patient.phone|default:"N/A" }}</strong></span>
                     </p>
                 </div>
             </div>
-            <div class="flex items-center space-x-2">
+            <!-- Responsive Action Buttons Toolbar -->
+            <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                 <a href="{% url 'core_patients:registry' %}"
-                   class="bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 transition">← Back to Patients</a>
+                   class="bg-slate-100 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 transition">← Patients</a>
                 <a href="{% url 'core_patients:record' patient.id %}"
-                   class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800">Open full record &amp; print</a>
+                   class="bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition">Print Full File</a>
                 <a href="{% url 'core_patients:family' patient.id %}"
-                   class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Family</a>
+                   class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Family</a>
                 <a href="{% url 'maternity:child' patient.id %}"
-                   class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Child health</a>
+                   class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Child health</a>
                 <a href="{% url 'core_patients:consent' patient.id %}"
-                   class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Consent</a>
+                   class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Consent</a>
                 {% if "PATIENT_MERGE" in caps %}
                     <a href="{% url 'core_patients:merge' patient.id %}"
-                       class="bg-white border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">Merge duplicate</a>
+                       class="bg-white border border-amber-300 text-amber-800 px-3 py-2 rounded-xl text-xs font-bold hover:bg-amber-50 transition">Merge</a>
                 {% endif %}
             </div>
         </div>
         {% include "core_patients/_allergy_banner.html" %}
         <!-- Financial & Operational Metrics Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Billed</span>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h3 class="text-2xl font-extrabold text-slate-900">KES {{ total_billed|floatformat:2 }}</h3>
-                    <span class="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">Cumulative</span>
+                    <h3 class="text-xl sm:text-2xl font-extrabold text-slate-900">KES {{ total_billed|floatformat:2 }}</h3>
+                    <span class="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">Cumulative</span>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">All recorded hospital service charges.</p>
             </div>
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Amount Paid</span>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h3 class="text-2xl font-extrabold text-emerald-600">KES {{ total_paid|floatformat:2 }}</h3>
-                    <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Settled</span>
+                    <h3 class="text-xl sm:text-2xl font-extrabold text-emerald-600">KES {{ total_paid|floatformat:2 }}</h3>
+                    <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Settled</span>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Successfully cleared payments.</p>
             </div>
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Provisional Charges</span>
                 <div class="mt-3 flex items-baseline justify-between">
-                    <h3 class="text-2xl font-extrabold text-amber-600">KES {{ total_provisional|floatformat:2 }}</h3>
-                    <span class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Pending Review</span>
+                    <h3 class="text-xl sm:text-2xl font-extrabold text-amber-600">KES {{ total_provisional|floatformat:2 }}</h3>
+                    <span class="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Pending</span>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Unposted provisional items.</p>
             </div>
@@ -69,11 +72,11 @@
                 <div class="mt-3 flex items-baseline justify-between">
                     {% with active_admission=admissions.first %}
                         {% if active_admission and not active_admission.discharged_at %}
-                            <h3 class="text-lg font-extrabold text-blue-600">Admitted</h3>
-                            <span class="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{{ active_admission.bed.ward.name }}</span>
+                            <h3 class="text-base sm:text-lg font-extrabold text-blue-600">Admitted</h3>
+                            <span class="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full truncate max-w-[100px]">{{ active_admission.bed.ward.name }}</span>
                         {% else %}
-                            <h3 class="text-lg font-extrabold text-slate-600">Outpatient / Discharged</h3>
-                            <span class="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Not in Ward</span>
+                            <h3 class="text-base sm:text-lg font-extrabold text-slate-600">Outpatient</h3>
+                            <span class="text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">Not in Ward</span>
                         {% endif %}
                     {% endwith %}
                 </div>
@@ -81,13 +84,13 @@
             </div>
         </div>
         <!-- Navigation Tabs -->
-        <div class="flex border-b border-slate-200 space-x-6">
+        <div class="flex border-b border-slate-200 space-x-6 overflow-x-auto">
             <button @click="activeTab = 'overview'"
                     :class="activeTab === 'overview' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
-                    class="pb-3 border-b-2 font-bold text-sm transition">📋 Admission &amp; Encounter History</button>
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap">📋 Admission &amp; Encounter History</button>
             <button @click="activeTab = 'billing'"
                     :class="activeTab === 'billing' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
-                    class="pb-3 border-b-2 font-bold text-sm transition">💳 Financial Ledger &amp; Charges</button>
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap">💳 Financial Ledger &amp; Charges</button>
         </div>
         <!-- TAB 1: ADMISSIONS, ENCOUNTERS & RADIOLOGY -->
         <div x-show="activeTab === 'overview'" class="space-y-6">
@@ -96,203 +99,209 @@
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Clinical Encounters &amp; Visits</h3>
                 </div>
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Opened</th>
-                            <th class="p-3.5">Type</th>
-                            <th class="p-3.5">Chief complaint</th>
-                            <th class="p-3.5">Latest vitals</th>
-                            <th class="p-3.5">Status</th>
-                            <th class="p-3.5 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for row in encounter_summaries %}
-                            {% with enc=row.encounter v=row.latest_vitals %}
-                                <tr class="hover:bg-slate-50 align-top">
-                                    <td class="p-3.5 text-xs font-mono">{{ enc.opened_at|date:"Y-m-d H:i" }}</td>
-                                    <td class="p-3.5 font-semibold">{{ enc.get_encounter_type_display }}</td>
-                                    <td class="p-3.5 text-xs">{{ enc.chief_complaint|default:"—" }}</td>
-                                    <td class="p-3.5 text-xs">
-                                        {% if v %}
-                                            T {{ v.temperature_c|default:"—" }}°C · P {{ v.pulse_bpm|default:"—" }} ·
-                                            BP {% if v.systolic_mmhg %}{{ v.systolic_mmhg }}/{{ v.diastolic_mmhg }}{% else %}—{% endif %} ·
-                                            SpO2 {{ v.spo2_percent|default:"—" }}% · Wt {{ v.weight_kg|default:"—" }} kg
-                                            {% if v.notes %}<div class="text-slate-500 mt-1">{{ v.notes }}</div>{% endif %}
-                                        {% else %}
-                                            <span class="text-slate-400 italic">None recorded</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="p-3.5">
-                                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if enc.status == 'CLOSED' %}bg-slate-100 text-slate-700{% else %}bg-teal-100 text-teal-800{% endif %}">{{ enc.status|title }}</span>
-                                    </td>
-                                    <td class="p-3.5 text-right">
-                                        <a href="{% url 'doctors_portal:consultation_room' enc.id %}"
-                                           class="text-teal-600 text-xs font-bold bg-teal-50 px-3 py-1.5 rounded-xl">Open record →</a>
-                                    </td>
-                                </tr>
-                            {% endwith %}
-                        {% empty %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <td colspan="6"
-                                    class="p-8 text-center text-slate-500 italic">No clinical encounters recorded for this patient.</td>
+                                <th class="p-3.5">Opened</th>
+                                <th class="p-3.5">Type</th>
+                                <th class="p-3.5">Chief complaint</th>
+                                <th class="p-3.5">Latest vitals</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5 text-right">Actions</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for row in encounter_summaries %}
+                                {% with enc=row.encounter v=row.latest_vitals %}
+                                    <tr class="hover:bg-slate-50 transition align-top">
+                                        <td class="p-3.5 text-xs font-mono whitespace-nowrap">{{ enc.opened_at|date:"Y-m-d H:i" }}</td>
+                                        <td class="p-3.5 font-semibold whitespace-nowrap">{{ enc.get_encounter_type_display }}</td>
+                                        <td class="p-3.5 text-xs text-slate-600 max-w-xs">{{ enc.chief_complaint|default:"—" }}</td>
+                                        <td class="p-3.5 text-xs whitespace-nowrap">
+                                            {% if v %}
+                                                T {{ v.temperature_c|default:"—" }}°C · P {{ v.pulse_bpm|default:"—" }} ·
+                                                BP {% if v.systolic_mmhg %}{{ v.systolic_mmhg }}/{{ v.diastolic_mmhg }}{% else %}—{% endif %} ·
+                                                SpO2 {{ v.spo2_percent|default:"—" }}%
+                                                {% if v.notes %}<div class="text-slate-500 mt-1">{{ v.notes }}</div>{% endif %}
+                                            {% else %}
+                                                <span class="text-slate-400 italic">None recorded</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="p-3.5 whitespace-nowrap">
+                                            <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if enc.status == 'CLOSED' %}bg-slate-100 text-slate-700{% else %}bg-teal-100 text-teal-800{% endif %}">{{ enc.status|title }}</span>
+                                        </td>
+                                        <td class="p-3.5 text-right whitespace-nowrap">
+                                            <a href="{% url 'doctors_portal:consultation_room' enc.id %}"
+                                               class="inline-flex items-center text-teal-700 text-xs font-bold bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-xl border border-teal-200 transition shadow-sm">Open record →</a>
+                                        </td>
+                                    </tr>
+                                {% endwith %}
+                            {% empty %}
+                                <tr>
+                                    <td colspan="6"
+                                        class="p-8 text-center text-slate-500 italic text-xs">No clinical encounters recorded for this patient.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <!-- Radiology & Imaging Scans Record -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Radiology &amp; Imaging Reports</h3>
                 </div>
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Modality &amp; Body Part</th>
-                            <th class="p-3.5">Ordered At</th>
-                            <th class="p-3.5">Clinical Indication</th>
-                            <th class="p-3.5">Report Findings</th>
-                            <th class="p-3.5 text-right">Scan File</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for encounter in patient.encounters.all %}
-                            {% for order in encounter.scan_orders.all %}
-                                <tr class="hover:bg-slate-50 transition">
-                                    <td class="p-3.5 font-bold text-slate-900">{{ order.modality }} <span class="text-xs font-normal text-slate-500">({{ order.body_part }})</span></td>
-                                    <td class="p-3.5 text-xs text-slate-600 font-mono">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
-                                    <td class="p-3.5 text-xs text-slate-700">{{ order.clinical_indication }}</td>
-                                    <td class="p-3.5 text-xs text-slate-800">
-                                        {% with study=order.studies.first %}
-                                            {% if study and study.report %}
-                                                <strong class="text-teal-700">Report:</strong> {{ study.report }}
-                                            {% else %}
-                                                <span class="text-amber-600 font-semibold">Pending Reporting...</span>
-                                            {% endif %}
-                                        {% endwith %}
-                                    </td>
-                                    <td class="p-3.5 text-right">
-                                        {% with study=order.studies.first %}
-                                            {% if study and study.file %}
-                                                <a href="{{ study.file.url }}"
-                                                   target="_blank"
-                                                   class="text-cyan-600 hover:text-cyan-800 text-xs font-bold bg-cyan-50 px-3 py-1.5 rounded-xl transition">View Scan →</a>
-                                            {% else %}
-                                                <span class="text-slate-400 text-xs italic">No file attached</span>
-                                            {% endif %}
-                                        {% endwith %}
-                                    </td>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="p-3.5">Modality &amp; Body Part</th>
+                                <th class="p-3.5">Ordered At</th>
+                                <th class="p-3.5">Clinical Indication</th>
+                                <th class="p-3.5">Report Findings</th>
+                                <th class="p-3.5 text-right">Scan File</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for encounter in patient.encounters.all %}
+                                {% for order in encounter.scan_orders.all %}
+                                    <tr class="hover:bg-slate-50 transition align-top">
+                                        <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">{{ order.modality }} <span class="text-xs font-normal text-slate-500">({{ order.body_part }})</span></td>
+                                        <td class="p-3.5 text-xs text-slate-600 font-mono whitespace-nowrap">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
+                                        <td class="p-3.5 text-xs text-slate-700">{{ order.clinical_indication }}</td>
+                                        <td class="p-3.5 text-xs text-slate-800">
+                                            {% with study=order.studies.first %}
+                                                {% if study and study.report %}
+                                                    <strong class="text-teal-700">Report:</strong> {{ study.report }}
+                                                {% else %}
+                                                    <span class="text-amber-600 font-semibold">Pending Reporting...</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                        <td class="p-3.5 text-right whitespace-nowrap">
+                                            {% with study=order.studies.first %}
+                                                {% if study and study.file %}
+                                                    <a href="{{ study.file.url }}"
+                                                       target="_blank"
+                                                       class="inline-flex items-center text-cyan-700 hover:text-cyan-900 text-xs font-bold bg-cyan-50 hover:bg-cyan-100 px-3 py-1.5 rounded-xl border border-cyan-200 transition">View Scan →</a>
+                                                {% else %}
+                                                    <span class="text-slate-400 text-xs italic">No file attached</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5"
+                                        class="p-8 text-center text-slate-500 italic text-xs">No radiology scan orders recorded for this patient.</td>
                                 </tr>
                             {% endfor %}
-                        {% empty %}
-                            <tr>
-                                <td colspan="5"
-                                    class="p-8 text-center text-slate-500 italic">No radiology scan orders recorded for this patient.</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <!-- Ward Admissions & Bed Allocation Record -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Ward Admissions &amp; Bed Allocation Record</h3>
                 </div>
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Ward &amp; Bed</th>
-                            <th class="p-3.5">Admission Timestamp</th>
-                            <th class="p-3.5">Discharge Timestamp</th>
-                            <th class="p-3.5">Duration</th>
-                            <th class="p-3.5">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for admission in admissions %}
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 font-bold text-slate-900">
-                                    {{ admission.bed.ward.name }} <span class="text-slate-500 font-normal">({{ admission.bed.code }})</span>
-                                </td>
-                                <td class="p-3.5 text-xs text-slate-600 font-mono">{{ admission.admitted_at|date:"Y-m-d H:i" }}</td>
-                                <td class="p-3.5 text-xs text-slate-600 font-mono">
-                                    {% if admission.discharged_at %}
-                                        {{ admission.discharged_at|date:"Y-m-d H:i" }}
-                                    {% else %}
-                                        <span class="text-teal-600 font-semibold">Still Admitted</span>
-                                    {% endif %}
-                                </td>
-                                <td class="p-3.5 text-xs font-semibold text-slate-700">
-                                    {% if admission.discharged_at %}
-                                        {{ admission.admitted_at|timesince:admission.discharged_at }}
-                                    {% else %}
-                                        Admitted for {{ admission.admitted_at|timesince }}
-                                    {% endif %}
-                                </td>
-                                <td class="p-3.5">
-                                    {% if admission.discharged_at %}
-                                        <span class="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">Discharged</span>
-                                    {% else %}
-                                        <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Active Stay</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[640px]">
+                        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <td colspan="5"
-                                    class="p-8 text-center text-slate-500 italic">No recorded ward admissions for this patient.</td>
+                                <th class="p-3.5">Ward &amp; Bed</th>
+                                <th class="p-3.5">Admission Timestamp</th>
+                                <th class="p-3.5">Discharge Timestamp</th>
+                                <th class="p-3.5">Duration</th>
+                                <th class="p-3.5">Status</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for admission in admissions %}
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">
+                                        {{ admission.bed.ward.name }} <span class="text-slate-500 font-normal">({{ admission.bed.code }})</span>
+                                    </td>
+                                    <td class="p-3.5 text-xs text-slate-600 font-mono whitespace-nowrap">{{ admission.admitted_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="p-3.5 text-xs text-slate-600 font-mono whitespace-nowrap">
+                                        {% if admission.discharged_at %}
+                                            {{ admission.discharged_at|date:"Y-m-d H:i" }}
+                                        {% else %}
+                                            <span class="text-teal-600 font-semibold">Still Admitted</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="p-3.5 text-xs font-semibold text-slate-700 whitespace-nowrap">
+                                        {% if admission.discharged_at %}
+                                            {{ admission.admitted_at|timesince:admission.discharged_at }}
+                                        {% else %}
+                                            Admitted for {{ admission.admitted_at|timesince }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="p-3.5 whitespace-nowrap">
+                                        {% if admission.discharged_at %}
+                                            <span class="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">Discharged</span>
+                                        {% else %}
+                                            <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Active Stay</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5"
+                                        class="p-8 text-center text-slate-500 italic text-xs">No recorded ward admissions for this patient.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         <!-- TAB 2: FINANCIAL LEDGER -->
-        <div x-show="activeTab === 'billing'"
-             class="space-y-6"
-             style="display: none">
+        <div x-show="activeTab === 'billing'" class="space-y-6" x-cloak>
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center">
+                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Itemized Billing Ledger</h3>
                     <span class="text-xs font-semibold text-slate-500">Account ID: {{ billing_account.id|default:"Unregistered Ledger" }}</span>
                 </div>
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
-                        <tr>
-                            <th class="p-3.5">Date</th>
-                            <th class="p-3.5">Source Type</th>
-                            <th class="p-3.5">Description</th>
-                            <th class="p-3.5">Amount (KES)</th>
-                            <th class="p-3.5">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        {% for charge in charges %}
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 text-xs text-slate-500 font-mono">{{ charge.created_at|date:"Y-m-d H:i" }}</td>
-                                <td class="p-3.5 font-bold text-slate-800">{{ charge.get_source_type_display|default:charge.source_type }}</td>
-                                <td class="p-3.5 text-xs text-slate-600">{{ charge.description }}</td>
-                                <td class="p-3.5 font-extrabold text-slate-900">KES {{ charge.amount }}</td>
-                                <td class="p-3.5">
-                                    {% if charge.status == "PROVISIONAL" %}
-                                        <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Provisional</span>
-                                    {% elif charge.status == "POSTED" %}
-                                        <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">Posted</span>
-                                    {% else %}
-                                        <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Paid</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[640px]">
+                        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <td colspan="5"
-                                    class="p-8 text-center text-slate-500 italic">No financial charges recorded for this patient.</td>
+                                <th class="p-3.5">Date</th>
+                                <th class="p-3.5">Source Type</th>
+                                <th class="p-3.5">Description</th>
+                                <th class="p-3.5">Amount (KES)</th>
+                                <th class="p-3.5">Status</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for charge in charges %}
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="p-3.5 text-xs text-slate-500 font-mono whitespace-nowrap">{{ charge.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="p-3.5 font-bold text-slate-800 whitespace-nowrap">{{ charge.get_source_type_display|default:charge.source_type }}</td>
+                                    <td class="p-3.5 text-xs text-slate-600">{{ charge.description }}</td>
+                                    <td class="p-3.5 font-extrabold text-slate-900 whitespace-nowrap">KES {{ charge.amount }}</td>
+                                    <td class="p-3.5 whitespace-nowrap">
+                                        {% if charge.status == "PROVISIONAL" %}
+                                            <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Provisional</span>
+                                        {% elif charge.status == "POSTED" %}
+                                            <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">Posted</span>
+                                        {% else %}
+                                            <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Paid</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5"
+                                        class="p-8 text-center text-slate-500 italic text-xs">No financial charges recorded for this patient.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

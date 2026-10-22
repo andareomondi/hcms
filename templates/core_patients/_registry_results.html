@@ -1,43 +1,92 @@
-<div class="bg-white rounded shadow overflow-hidden">
-    <table class="w-full text-left border-collapse">
-        <thead class="bg-slate-100 text-slate-700 text-xs uppercase">
-            <tr>
-                <th class="p-3">Name</th>
-                <th class="p-3">DOB</th>
-                <th class="p-3">Sex</th>
-                <th class="p-3">ID Number</th>
-                <th class="p-3">Status</th>
-                <th class="p-3 text-right">Actions</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200 text-sm">
-            {% for patient in patients %}
-                <tr class="hover:bg-slate-50">
-                    <td class="p-3 font-medium">{{ patient.last_name }}, {{ patient.first_name }}</td>
-                    <td class="p-3">{{ patient.date_of_birth|default:"Unknown" }}</td>
-                    <td class="p-3">{{ patient.get_sex_display }}</td>
-                    <td class="p-3">{{ patient.id_number|default:"None" }}</td>
-                    <td class="p-3">
-                        {% if patient.is_provisional %}
-                            <span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">Provisional</span>
-                        {% else %}
-                            <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-bold">Verified</span>
-                        {% endif %}
-                    </td>
-                    <td class="p-3 text-right space-x-2">
-                        <a href="{% url 'core_patients:detail' patient.id %}"
-                           class="text-slate-600 hover:text-slate-900 text-xs font-bold bg-slate-100 px-3 py-1.5 rounded-xl transition">View File</a>
-                        <a href="{% url 'triage_queue:encounter_create' patient.id %}"
-                           class="inline-block text-teal-600 hover:text-teal-800 text-xs font-bold bg-teal-50 px-3 py-1.5 rounded-xl transition shadow-sm">
-                            + Triage &amp; Visit →
-                        </a>
-                    </td>
-                </tr>
-            {% empty %}
+<div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[640px]">
+            <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                    <td colspan="6" class="p-4 text-center text-slate-500">No patients found matching your search.</td>
+                    <th scope="col" class="px-4 py-3.5">Name</th>
+                    <th scope="col" class="px-4 py-3.5">DOB</th>
+                    <th scope="col" class="px-4 py-3.5">Sex</th>
+                    <th scope="col" class="px-4 py-3.5">ID Number</th>
+                    <th scope="col" class="px-4 py-3.5">Status</th>
+                    <th scope="col" class="px-4 py-3.5 text-right">Actions</th>
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for patient in patients %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">
+                            {{ patient.last_name }}, {{ patient.first_name }}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ patient.date_of_birth|default:"Unknown" }}</td>
+                        <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ patient.get_sex_display }}</td>
+                        <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ patient.id_number|default:"None" }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if patient.is_provisional %}
+                                <span class="inline-flex items-center bg-amber-50 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold border border-amber-200">
+                                    Provisional
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center bg-emerald-50 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold border border-emerald-200">
+                                    Verified
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <div class="inline-flex items-center justify-end gap-2">
+                                <a href="{% url 'core_patients:detail' patient.id %}"
+                                   class="inline-flex items-center justify-center text-slate-700 hover:text-slate-900 text-xs font-bold bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition">
+                                    View File
+                                </a>
+                                <a href="{% url 'triage_queue:encounter_create' patient.id %}"
+                                   class="inline-flex items-center justify-center text-teal-700 hover:text-teal-800 text-xs font-bold bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-xl border border-teal-200 transition shadow-sm">
+                                    + Triage &amp; Visit →
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-slate-500 text-sm">No patients found matching your search.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- Pagination Footer -->
+    {% if page_obj.has_other_pages %}
+        <div class="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-200 gap-3 text-xs text-slate-600">
+            <div>
+                Showing <span class="font-bold text-slate-900">{{ page_obj.start_index }}</span> to <span class="font-bold text-slate-900">{{ page_obj.end_index }}</span> of <span class="font-bold text-slate-900">{{ page_obj.paginator.count }}</span> results
+            </div>
+            <div class="inline-flex items-center gap-1.5">
+                {% if page_obj.has_previous %}
+                    <a href="{% url 'core_patients:search' %}?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}"
+                       hx-get="{% url 'core_patients:search' %}?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}"
+                       hx-target="#search-results"
+                       class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">
+                        Previous
+                    </a>
+                {% else %}
+                    <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">
+                        Previous
+                    </span>
+                {% endif %}
+                <span class="px-3 py-1.5 font-bold text-slate-700">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                    <a href="{% url 'core_patients:search' %}?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}"
+                       hx-get="{% url 'core_patients:search' %}?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}"
+                       hx-target="#search-results"
+                       class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">
+                        Next
+                    </a>
+                {% else %}
+                    <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">
+                        Next
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
 </div>

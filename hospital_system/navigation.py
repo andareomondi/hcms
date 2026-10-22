@@ -39,6 +39,8 @@ GROUPS = [
              "caps": [Cap.PHARMACY_MANAGE]},
             {"label": "Stock units", "url": "pharmacy:units", "icon": "🏷️",
              "caps": [Cap.VIEW_PHARMACY]},
+            {"label": "Radiology", "url": "radiology:dashboard", "icon": "🩺",
+             "caps": [Cap.RADIOLOGY_REPORT]},
         ],
     },
     {

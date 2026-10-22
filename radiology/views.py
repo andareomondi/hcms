@@ -65,8 +65,8 @@ def radiology_dashboard_view(request):
             Q(report__icontains=query)
         )
 
-    pending_page = Paginator(pending_qs, 15).get_page(page_number)
-    completed_page = Paginator(completed_qs, 15).get_page(page_number)
+    pending_page = Paginator(pending_qs, 30).get_page(page_number)
+    completed_page = Paginator(completed_qs, 30).get_page(page_number)
 
     for scan in pending_page.object_list:
         scan.prepaid = scan_prepaid(scan)

@@ -6,6 +6,7 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse, HttpResponseForbidden
@@ -265,36 +266,43 @@ def staff_request_decline_view(request, request_id):
 
 
 
+
 @login_required
 def patient_registry_search(request):
     """
-    Live search endpoint triggered via htmx.
+    Live search endpoint triggered via htmx with pagination support.
     Shows recent patients by default when query is empty,
     and filters dynamically as the user types.
     """
     query = request.GET.get("q", "").strip()
+    page_number = request.GET.get("page", 1)
 
     # Start with all patients, ordered by newest first
-    patients = Patient.objects.filter(merged_into__isnull=True).select_related("created_by").order_by("-created_at")
+    patients_qs = Patient.objects.filter(merged_into__isnull=True).select_related("created_by").order_by("-created_at")
 
     # Apply filters only if a search query is provided
     if query:
-        patients = patients.filter(
+        patients_qs = patients_qs.filter(
             Q(last_name__icontains=query) |
             Q(first_name__icontains=query) |
             Q(id_number__icontains=query)
         )
 
-    # Cap results to prevent heavy DOM rendering loads
-    patients = patients[:50]
+    # Paginate results (30 patients per page)
+    paginator = Paginator(patients_qs, 30)
+    page_obj = paginator.get_page(page_number)
 
-    context = {"patients": patients, "query": query}
+    context = {
+        "patients": page_obj.object_list,
+        "page_obj": page_obj,
+        "query": query,
+    }
 
-    # If requested via htmx, return only the table fragment
+    # If requested via htmx, return only the table fragment / results partial
     if request.headers.get("HX-Request"):
         return render(request, "core_patients/_registry_results.html", context)
 
-    # Otherwise, render the full registry page with the initial/filtered records
+    # Otherwise, render the full registry page
     return render(request, "core_patients/registry.html", context)
 
 

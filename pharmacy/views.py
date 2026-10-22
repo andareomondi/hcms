@@ -56,11 +56,13 @@ def pharmacy_dashboard_view(request):
     meds = Medication.objects.select_related("stock").prefetch_related("allergen_classes").order_by("brand_name")
     if query:
         meds = meds.filter(Q(brand_name__icontains=query) | Q(generic_name__icontains=query))
-    page_obj = Paginator(meds, 20).get_page(request.GET.get("page"))
+    
+    page_obj = Paginator(meds, 30).get_page(request.GET.get("page"))
 
     stocks = list(StockItem.objects.select_related("medication"))
     low = sorted([s for s in stocks if s.quantity <= s.reorder_level], key=lambda s: s.quantity)
-    return render(request, "pharmacy/dashboard.html", {
+    
+    context = {
         "page_obj": page_obj,
         "medications": page_obj.object_list,
         "query": query,
@@ -75,8 +77,13 @@ def pharmacy_dashboard_view(request):
             status__in=["ORDERED", "PARTIALLY_DONE"]).count(),
         "can_manage": Cap.PHARMACY_MANAGE in caps_for(request.user),
         "can_dispense": Cap.DISPENSE in caps_for(request.user),
-    })
+    }
 
+    # If requested via htmx, return only the results partial fragment
+    if request.headers.get("HX-Request"):
+        return render(request, "pharmacy/_dashboard_results.html", context)
+
+    return render(request, "pharmacy/dashboard.html", context)
 
 @requires(Cap.PHARMACY_MANAGE)
 def medication_create_or_edit_view(request, medication_id=None):
@@ -197,13 +204,20 @@ def dispense_action(request, order_id):
 
 @requires(Cap.NURSE_ADMINISTER)
 def nurse_worklist_view(request):
-    orders = (MedicationOrder.objects
-              .filter(source="FORMULARY", fulfilment="NURSE_ADMINISTER",
-                      status__in=["ORDERED", "PARTIALLY_DONE"])
-              .select_related("encounter__patient", "medication", "ordered_by__user")
-              .prefetch_related("dispensations", "administrations")
-              .order_by("ordered_at"))
-    return render(request, "pharmacy/nurse_worklist.html", {"orders": _annotate(orders)})
+    orders_qs = (MedicationOrder.objects
+                 .filter(source="FORMULARY", fulfilment="NURSE_ADMINISTER",
+                         status__in=["ORDERED", "PARTIALLY_DONE"])
+                 .select_related("encounter__patient", "medication", "ordered_by__user")
+                 .prefetch_related("dispensations", "administrations")
+                 .order_by("ordered_at"))
+    
+    paginator = Paginator(orders_qs, 30)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    return render(request, "pharmacy/nurse_worklist.html", {
+        "page_obj": page_obj,
+        "orders": _annotate(page_obj.object_list),
+    })
 
 
 @requires(Cap.NURSE_ADMINISTER)

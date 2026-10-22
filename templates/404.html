@@ -1,0 +1,43 @@
+{% extends "base.html" %} {% block title %}Page Not Found - HCMS{% endblock %}
+{% block content %}
+    <div class="min-h-[70vh] flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center space-y-5">
+            <!-- Icon & Status Code -->
+            <div class="relative inline-block">
+                <span class="text-6xl block select-none">🔍</span>
+                <span class="absolute -bottom-2 -right-2 bg-slate-900 text-white text-xs font-bold px-2 py-0.5 rounded-full border-2 border-white">
+                    404
+                </span>
+            </div>
+            <!-- Main Heading & Message -->
+            <div class="space-y-2">
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Page not found</h1>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    The page or resource you are looking for doesn't exist, has been
+                    removed, or moved to a different location.
+                </p>
+            </div>
+            <!-- Quick Help Links -->
+            <div class="bg-slate-50 p-4 rounded-xl text-left border border-slate-100 text-xs space-y-2">
+                <p class="font-semibold text-slate-700 uppercase tracking-wider text-[10px]">What can you do?</p>
+                <ul class="list-disc list-inside text-slate-600 space-y-1">
+                    <li>Check the URL for spelling errors</li>
+                    <li>Verify your permissions with your administrator</li>
+                    <li>Navigate back using the navigation menu</li>
+                </ul>
+            </div>
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+                <button type="button"
+                        onclick="window.history.back()"
+                        class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                    ← Go back
+                </button>
+                <a href="{% url 'dashboard:overview' %}"
+                   class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 transition shadow-sm">
+                    Return to Overview
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
