@@ -169,7 +169,7 @@ def ward_occupancy_view(request):
             stays = stays.filter(admitted_at__lt=day_end).filter(
                 Q(discharged_at__isnull=True) | Q(discharged_at__gt=day_start))
 
-    page_obj = Paginator(stays, 50).get_page(request.GET.get("page"))
+    page_obj = Paginator(stays, 30).get_page(request.GET.get("page"))
     return render(request, "wards/occupancy.html", {
         "page_obj": page_obj,
         "wards": Ward.objects.order_by("name"),

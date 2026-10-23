@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -136,41 +137,41 @@ def _render_form(request, medication, stock, classes, selected_ids):
     })
 
 
-@requires(Cap.PHARMACY_MANAGE)
-@require_POST
-def stock_receive_action(request, medication_id):
-    medication = get_object_or_404(Medication, pk=medication_id)
-    try:
-        qty = _int(request.POST.get("quantity"), "Quantity")
-        services.receive_stock(medication=medication, quantity=qty, staff=_profile(request))
-    except PharmacyError as exc:
-        messages.error(request, str(exc))
-        return redirect("pharmacy:medication_edit", medication_id=medication.id)
-
-    log_action(request, AuditAction.STOCK_RECEIVED,
-               f"Received {qty} of {medication.brand_name} {medication.strength}.")
-    messages.success(request, f"Received {qty} unit(s).")
-    return redirect("pharmacy:medication_edit", medication_id=medication.id)
-
-
-@requires(Cap.PHARMACY_MANAGE)
-@require_POST
-def stock_adjust_action(request, medication_id):
-    medication = get_object_or_404(Medication, pk=medication_id)
-    note = request.POST.get("note", "").strip()
-    try:
-        delta = _int(request.POST.get("delta"), "Adjustment")
-        if not note:
-            raise PharmacyError("Give a reason for the adjustment.")
-        services.adjust_stock(medication=medication, delta=delta, staff=_profile(request))
-    except PharmacyError as exc:
-        messages.error(request, str(exc))
-        return redirect("pharmacy:medication_edit", medication_id=medication.id)
-
-    log_action(request, AuditAction.STOCK_ADJUSTED,
-               f"Adjusted {medication.brand_name} by {delta:+d}: {note}")
-    messages.success(request, f"Stock adjusted by {delta:+d}.")
-    return redirect("pharmacy:medication_edit", medication_id=medication.id)
+# @requires(Cap.PHARMACY_MANAGE)
+# @require_POST
+# def stock_receive_action(request, medication_id):
+#     medication = get_object_or_404(Medication, pk=medication_id)
+#     try:
+#         qty = _int(request.POST.get("quantity"), "Quantity")
+#         services.receive_stock(medication=medication, quantity=qty, staff=_profile(request))
+#     except PharmacyError as exc:
+#         messages.error(request, str(exc))
+#         return redirect("pharmacy:medication_edit", medication_id=medication.id)
+#
+#     log_action(request, AuditAction.STOCK_RECEIVED,
+#                f"Received {qty} of {medication.brand_name} {medication.strength}.")
+#     messages.success(request, f"Received {qty} unit(s).")
+#     return redirect("pharmacy:medication_edit", medication_id=medication.id)
+#
+#
+# @requires(Cap.PHARMACY_MANAGE)
+# @require_POST
+# def stock_adjust_action(request, medication_id):
+#     medication = get_object_or_404(Medication, pk=medication_id)
+#     note = request.POST.get("note", "").strip()
+#     try:
+#         delta = _int(request.POST.get("delta"), "Adjustment")
+#         if not note:
+#             raise PharmacyError("Give a reason for the adjustment.")
+#         services.adjust_stock(medication=medication, delta=delta, staff=_profile(request))
+#     except PharmacyError as exc:
+#         messages.error(request, str(exc))
+#         return redirect("pharmacy:medication_edit", medication_id=medication.id)
+#
+#     log_action(request, AuditAction.STOCK_ADJUSTED,
+#                f"Adjusted {medication.brand_name} by {delta:+d}: {note}")
+#     messages.success(request, f"Stock adjusted by {delta:+d}.")
+#     return redirect("pharmacy:medication_edit", medication_id=medication.id)
 
 
 @requires(Cap.DISPENSE)
@@ -268,18 +269,67 @@ def receive_view(request):
     return render(request, "pharmacy/receive.html", {"medications": medications, "form": {}})
 
 
+UNIT_EXPIRY_FILTERS = [
+    ("", "Any expiry"),
+    ("expired", "Expired"),
+    ("soon", "Expires within 30 days"),
+    ("ok", "In date, beyond 30 days"),
+]
+
+
 @requires(Cap.VIEW_PHARMACY)
 def units_view(request):
-    query = request.GET.get("serial", "").strip().upper()
-    units = StockUnit.objects.select_related("medication", "batch").order_by("batch__expiry_date", "serial")
-    if query:
-        units = units.filter(serial__icontains=query)
-    page_obj = Paginator(units, 50).get_page(request.GET.get("page"))
-    return render(request, "pharmacy/units.html", {
-        "page_obj": page_obj, "query": query,
+    today = timezone.localdate()
+    soon_cutoff = today + timedelta(days=30)
+
+    filters = {
+        "serial": request.GET.get("serial", "").strip().upper(),
+        "medicine": request.GET.get("medicine", "").strip(),
+        "batch": request.GET.get("batch", "").strip().upper(),
+        "status": request.GET.get("status", "").strip(),
+        "expiry": request.GET.get("expiry", "").strip(),
+    }
+
+    units = StockUnit.objects.select_related("medication", "batch")
+    if filters["serial"]:
+        units = units.filter(serial__icontains=filters["serial"])
+    if filters["medicine"]:
+        units = units.filter(
+            Q(medication__brand_name__icontains=filters["medicine"])
+            | Q(medication__generic_name__icontains=filters["medicine"])
+        )
+    if filters["batch"]:
+        units = units.filter(batch__batch_number__icontains=filters["batch"])
+    if filters["status"] in dict(StockUnit.STATUS):
+        units = units.filter(status=filters["status"])
+    if filters["expiry"] == "expired":
+        units = units.filter(batch__expiry_date__lt=today)
+    elif filters["expiry"] == "soon":
+        units = units.filter(batch__expiry_date__gte=today, batch__expiry_date__lte=soon_cutoff)
+    elif filters["expiry"] == "ok":
+        units = units.filter(batch__expiry_date__gt=soon_cutoff)
+
+    units = units.order_by("batch__expiry_date", "serial")
+    page_obj = Paginator(units, 25).get_page(request.GET.get("page"))
+
+    # Keeps the filters when the user moves to another page.
+    kept = {k: v for k, v in request.GET.items() if k != "page" and v}
+
+    context = {
+        "page_obj": page_obj,
+        "filters": filters,
+        "query_string": urlencode(kept),
+        "status_choices": StockUnit.STATUS,
+        "expiry_choices": UNIT_EXPIRY_FILTERS,
+        "today": today,
+        "soon_cutoff": soon_cutoff,
         "can_manage": Cap.PHARMACY_MANAGE in caps_for(request.user),
-        "today": timezone.localdate(),
-    })
+    }
+
+    # Typing in a filter asks only for the results block, not the whole page.
+    if request.headers.get("HX-Request"):
+        return render(request, "pharmacy/_units_results.html", context)
+    return render(request, "pharmacy/units.html", context)
 
 
 @requires(Cap.PHARMACY_MANAGE)

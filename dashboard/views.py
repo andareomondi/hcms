@@ -15,7 +15,7 @@ from billing.models import Charge, Payment
 from core_patients.models import Patient, StaffProfile, StaffRegistrationRequest
 from duty.services import on_duty_staff
 from hospital_system.permissions import caps_for
-from pharmacy.models import Medication, MedicationOrder
+from pharmacy.models import MedicationOrder
 from radiology.models import ScanOrder
 from triage_queue.models import Encounter, QueueEntry
 from wards.models import Bed, Ward
@@ -72,29 +72,33 @@ def role_guide_view(request):
         "caps": caps_for(request.user),
     })
 
+
 @user_passes_test(is_system_admin, login_url='/accounts/login/')
 @login_required
 def admin_master_dashboard_view(request):
-    """Unified System Administrator Master Dashboard for hospital-wide CRUD and device management."""
+    """Unified System Administrator Master Dashboard for hospital-wide CRUD and device management with pagination."""
     tab = request.GET.get("tab", "wards")
     
-    wards = Ward.objects.prefetch_related("beds").all()
-    beds = Bed.objects.select_related("ward").all()
-    medications = Medication.objects.all().order_by("brand_name")
-    staff_members = StaffProfile.objects.select_related("user").all()
+    # Eagerly load wards and beds to optimize performance
+    wards = Ward.objects.prefetch_related("beds").order_by("name")
     
-    # Audit logs for the admin panel tab
-    audit_logs = AuditLog.objects.select_related("actor").filter(
+    # Paginate staff members (20 per page)
+    staff_qs = StaffProfile.objects.select_related("user").order_by("user__username")
+    staff_page = Paginator(staff_qs, 30).get_page(request.GET.get("staff_page"))
+    
+    # Paginate audit logs for the master tab stream (25 per page)
+    audit_qs = AuditLog.objects.select_related("actor").filter(
         actor__isnull=False
-    ).exclude(actor__username="").order_by("-timestamp")[:50]
+    ).exclude(actor__username="").order_by("-timestamp")
+    audit_page = Paginator(audit_qs, 30).get_page(request.GET.get("audit_page"))
 
     context = {
         "active_tab": tab,
         "wards": wards,
-        "beds": beds,
-        "medications": medications,
-        "staff_members": staff_members,
-        "audit_logs": audit_logs,
+        "staff_page": staff_page,
+        "staff_members": staff_page.object_list,
+        "audit_page": audit_page,
+        "audit_logs": audit_page.object_list,
     }
     return render(request, "dashboard/admin_master.html", context)
 
@@ -182,7 +186,7 @@ def audit_log_view(request):
     today_logs = AuditLog.objects.filter(actor__isnull=False).exclude(actor__username="").filter(timestamp__date=timezone.now().date()).count()
     unique_actors_count = AuditLog.objects.filter(actor__isnull=False).exclude(actor__username="").values("actor").distinct().count()
 
-    paginator = Paginator(logs_qs, 25)
+    paginator = Paginator(logs_qs, 30)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 

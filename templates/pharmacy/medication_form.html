@@ -66,40 +66,5 @@
             </div>
             <button class="min-h-11 px-5 rounded-xl bg-slate-900 text-white text-sm font-bold">Save medicine</button>
         </form>
-        {% if medication and stock %}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <form method="post"
-                      action="{% url 'pharmacy:stock_receive' medication.id %}"
-                      class="bg-white rounded-2xl border p-5 space-y-3">
-                    {% csrf_token %}
-                    <h2 class="font-bold">Receive stock</h2>
-                    <p class="text-xs text-slate-500">On hand: <strong>{{ stock.quantity }}</strong></p>
-                    <input name="quantity"
-                           type="number"
-                           min="1"
-                           required
-                           placeholder="Quantity received"
-                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
-                    <button class="min-h-11 w-full rounded-xl bg-emerald-600 text-white text-sm font-bold">Record receipt</button>
-                </form>
-                <form method="post"
-                      action="{% url 'pharmacy:stock_adjust' medication.id %}"
-                      class="bg-white rounded-2xl border p-5 space-y-3">
-                    {% csrf_token %}
-                    <h2 class="font-bold">Adjust stock</h2>
-                    <p class="text-xs text-slate-500">Use a negative number for losses, expiry, or breakage.</p>
-                    <input name="delta"
-                           type="number"
-                           required
-                           placeholder="e.g. -5"
-                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
-                    <input name="note"
-                           required
-                           placeholder="Reason (required)"
-                           class="w-full min-h-11 border rounded-xl px-3 text-sm">
-                    <button class="min-h-11 w-full rounded-xl bg-amber-600 text-white text-sm font-bold">Record adjustment</button>
-                </form>
-            </div>
-        {% endif %}
     </div>
 {% endblock %}

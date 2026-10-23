@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.db.models import Q, Sum, Value
+from django.db.models import IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -17,7 +17,7 @@ from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from duty.services import current_session
 from notifications.services import notify_on_duty
-from pharmacy.models import Medication, MedicationOrder
+from pharmacy.models import Medication, MedicationOrder, StockItem
 from radiology.models import ScanOrder
 from radiology.services import scan_cancellable, scan_charge_or_none
 from triage_queue.models import Encounter, QueueEntry
@@ -42,18 +42,21 @@ def is_physician(user):
 @login_required
 @user_passes_test(is_physician)
 def formulary_search_view(request, encounter_id):
+    get_object_or_404(Encounter, pk=encounter_id)
     q = request.GET.get("q", "").strip()
-    results = []
-    if len(q) >= 2:
-        results = (Medication.objects.filter(is_active=True)
-                   .filter(Q(brand_name__icontains=q) | Q(generic_name__icontains=q))
-                   .annotate(stock_quantity=Coalesce(
-                       Sum("units__doses_remaining", filter=Q(units__status="IN_STOCK")),
-                       Value(0)))
-                   .order_by("brand_name")[:15])
+    results = Medication.objects.filter(is_active=True)
+
+    if q:
+        results = results.filter(Q(brand_name__icontains=q) | Q(generic_name__icontains=q))
+
+    stock_qty = StockItem.objects.filter(medication=OuterRef("pk")).values("quantity")[:1]
+    results = (results.annotate(stock_quantity=Coalesce(
+                    Subquery(stock_qty, output_field=IntegerField()),
+                    Value(0)))
+               .order_by("brand_name")[:20])
+
     return render(request, "doctors_portal/_formulary_results.html",
                   {"results": results, "q": q})
-
 
 @login_required
 @user_passes_test(is_physician)
@@ -71,7 +74,6 @@ def consultation_room_view(request, encounter_id):
                          .order_by("-ordered_at"))
     active_admission = (Admission.objects.filter(encounter=encounter, discharged_at__isnull=True)
                         .select_related("bed__ward").first())
-    medications = Medication.objects.all().order_by("brand_name")
     wards = Ward.objects.prefetch_related("beds").all()
 
     latest_vitals = encounter.vitals.order_by("-recorded_at").first()
@@ -97,7 +99,6 @@ def consultation_room_view(request, encounter_id):
         "clinical_notes": clinical_notes,
         "medication_orders": medication_orders,
         "active_admission": active_admission,
-        "medications": medications,
         "wards": wards,
         "latest_vitals": latest_vitals,
         "vitals_history": vitals_history,
@@ -188,7 +189,7 @@ def prescribe_medication_action(request, encounter_id):
 def _create_formulary(request, encounter, profile, route, frequency, dose_text, days, doses_total):
     medication = Medication.objects.filter(pk=request.POST.get("medication_id"), is_active=True).first()
     if medication is None:
-        messages.error(request, "Choose a medicine from the formulary search.")
+        messages.error(request, "Search the formulary and select a medicine before prescribing.")
         return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     override = request.POST.get("allergy_override_reason", "").strip()
