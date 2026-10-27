@@ -1,0 +1,138 @@
+{% extends "base.html" %} {% block title %}Laboratory - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Laboratory</h1>
+        <p class="text-sm text-slate-500">
+            Samples, results and release. Each test is processed only after it is paid
+            for.
+        </p>
+    </div>
+    <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <a href="?tab=awaiting_payment"
+           class="px-3 py-1.5 rounded-xl text-xs font-bold {% if tab == 'awaiting_payment' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700{% endif %}">Awaiting payment ({{ counts.awaiting_payment }})</a>
+        <a href="?tab=to_receive"
+           class="px-3 py-1.5 rounded-xl text-xs font-bold {% if tab == 'to_receive' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700{% endif %}">To receive ({{ counts.to_receive }})</a>
+        <a href="?tab=to_enter"
+           class="px-3 py-1.5 rounded-xl text-xs font-bold {% if tab == 'to_enter' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700{% endif %}">To enter results ({{ counts.to_enter }})</a>
+        <a href="?tab=to_verify"
+           class="px-3 py-1.5 rounded-xl text-xs font-bold {% if tab == 'to_verify' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700{% endif %}">Awaiting verification ({{ counts.to_verify }})</a>
+        <a href="?tab=released"
+           class="px-3 py-1.5 rounded-xl text-xs font-bold {% if tab == 'released' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700{% endif %}">Released ({{ counts.released }})</a>
+    </div>
+    {% if tab == "awaiting_payment" %}
+        <div class="bg-white rounded-2xl border overflow-hidden">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3">Patient</th>
+                        <th class="p-3">Test</th>
+                        <th class="p-3">Price</th>
+                        <th class="p-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for line in items %}
+                        <tr class="bg-slate-50 text-slate-400">
+                            <td class="p-3">{{ line.order.encounter.patient }}</td>
+                            <td class="p-3">{{ line.test.name }}</td>
+                            <td class="p-3">KES {{ line.price_snapshot|floatformat:2 }}</td>
+                            <td class="p-3">
+                                <span class="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full">Awaiting payment</span>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="p-6 text-center italic text-slate-500">Nothing awaiting payment.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% elif tab == "to_receive" %}
+        <ul class="space-y-3">
+            {% for order in items %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <p class="font-bold">{{ order.encounter.patient }}</p>
+                        <p class="text-xs text-slate-500">
+                            {{ order.lines.all|length }} test(s) · ordered {{ order.ordered_at|date:"Y-m-d H:i" }} by Dr. {{ order.ordered_by.user.get_full_name|default:order.ordered_by.user.username }}
+                        </p>
+                        <p class="text-xs text-slate-600 mt-1">
+                            {% for l in order.lines.all %}{% if l.status != "CANCELLED" %}{{ l.test.name }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}
+                        </p>
+                    </div>
+                    {% if can_receive %}
+                        <form method="post"
+                              action="{% url 'lab:receive' order.id %}"
+                              class="flex gap-2 items-center">
+                            {% csrf_token %}
+                            <input name="barcode"
+                                   placeholder="Sample barcode (optional)"
+                                   autocomplete="off"
+                                   class="border rounded-xl px-3 py-2 text-xs font-mono uppercase" />
+                            <button class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Receive sample</button>
+                        </form>
+                    {% endif %}
+                </li>
+            {% empty %}
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">No samples to receive.</li>
+            {% endfor %}
+        </ul>
+    {% elif tab == "to_enter" %}
+        <ul class="space-y-3">
+            {% for order in items %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <p class="font-bold">{{ order.encounter.patient }}</p>
+                        <p class="text-xs text-slate-500">Sample received · {{ order.lines.all|length }} test line(s)</p>
+                    </div>
+                    {% if can_enter %}<a href="{% url 'lab:results' order.id %}"
+   class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold text-center">Enter results</a>{% endif %}
+                </li>
+            {% empty %}
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">
+                    No results waiting to be entered.
+                </li>
+            {% endfor %}
+        </ul>
+    {% elif tab == "to_verify" %}
+        <ul class="space-y-3">
+            {% for order in items %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <p class="font-bold">{{ order.encounter.patient }}</p>
+                        <p class="text-xs text-slate-500">Report written · awaiting a second person</p>
+                    </div>
+                    {% if can_verify %}
+                        {% if order.viewer_is_entrant %}
+                            <span class="text-xs text-slate-500 italic">You entered this order. Another supervisor must verify it.</span>
+                        {% else %}
+                            <a href="{% url 'lab:verify' order.id %}"
+                               class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold text-center">Verify</a>
+                        {% endif %}
+                    {% endif %}
+                </li>
+            {% empty %}
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">
+                    Nothing awaiting verification.
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <ul class="space-y-3">
+            {% for order in items %}
+                <li class="bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <p class="font-bold">{{ order.encounter.patient }}</p>
+                        <p class="text-xs text-slate-500">Released {{ order.released_at|date:"Y-m-d H:i" }}</p>
+                    </div>
+                    <a href="{% url 'lab:print' order.id %}"
+                       class="text-teal-700 text-xs font-bold">Open report</a>
+                </li>
+            {% empty %}
+                <li class="bg-white rounded-2xl border p-8 text-center text-sm text-slate-500 italic">No released results yet.</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
+{% endblock %}

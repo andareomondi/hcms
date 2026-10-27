@@ -20,6 +20,7 @@ from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from dashboard.views import is_system_admin
 from hospital_system.permissions import Cap, caps_for, requires
+from lab.models import LabOrder
 from radiology.models import ImagingStudy
 from wards.models import Admission
 
@@ -421,6 +422,10 @@ def patient_detail_view(request, patient_id):
     context = {
         "patient": patient,
         "patient_allergies": patient_allergies,
+        "lab_orders": (LabOrder.objects.filter(encounter__patient=patient)
+               .select_related("encounter")
+               .prefetch_related("lines__test")
+               .order_by("-ordered_at")[:50]),
         "admissions": admissions,
         "billing_account": billing_account,
         "charges": charges,

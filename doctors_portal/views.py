@@ -16,6 +16,7 @@ from core_patients.models import PatientAllergy
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from duty.services import current_session
+from lab.models import LabTest
 from notifications.services import notify_on_duty
 from pharmacy.models import Medication, MedicationOrder, StockItem
 from radiology.models import ScanOrder
@@ -96,6 +97,7 @@ def consultation_room_view(request, encounter_id):
     context = {
         "encounter": encounter,
         "patient": patient,
+        "lab_tests": LabTest.objects.filter(is_active=True).order_by("section", "name"),
         "clinical_notes": clinical_notes,
         "medication_orders": medication_orders,
         "active_admission": active_admission,
@@ -109,6 +111,8 @@ def consultation_room_view(request, encounter_id):
         "mode": mode,
         "queue_entry": queue_entry,
         "can_act": mode in ("ACTIVE", "IN_WARD"),
+        "lab_orders": (encounter.lab_orders.prefetch_related("lines__test")
+               .order_by("-ordered_at")),
     }
     return render(request, "doctors_portal/consultation_room.html", context)
 

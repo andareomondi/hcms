@@ -22,7 +22,7 @@
                     </p>
                 </div>
             </div>
-            <!-- Responsive Action Buttons Toolbar -->
+            <!-- Action buttons -->
             <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                 <a href="{% url 'core_patients:registry' %}"
                    class="bg-slate-100 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-slate-200 transition">← Patients</a>
@@ -92,9 +92,9 @@
                     :class="activeTab === 'billing' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
                     class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap">💳 Financial Ledger &amp; Charges</button>
         </div>
-        <!-- TAB 1: ADMISSIONS, ENCOUNTERS & RADIOLOGY -->
+        <!-- TAB 1: VISITS, RADIOLOGY, LABORATORY, WARDS -->
         <div x-show="activeTab === 'overview'" class="space-y-6">
-            <!-- Clinical Encounters & Visits (with triage data) -->
+            <!-- Clinical Encounters & Visits -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Clinical Encounters &amp; Visits</h3>
@@ -147,7 +147,7 @@
                     </table>
                 </div>
             </div>
-            <!-- Radiology & Imaging Scans Record -->
+            <!-- Radiology & Imaging -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Radiology &amp; Imaging Reports</h3>
@@ -175,14 +175,14 @@
                                                 {% if study and study.report %}
                                                     <strong class="text-teal-700">Report:</strong> {{ study.report }}
                                                 {% else %}
-                                                    <span class="text-amber-600 font-semibold">Pending Reporting...</span>
+                                                    <span class="text-amber-600 font-semibold">{{ order.get_status_display }}</span>
                                                 {% endif %}
                                             {% endwith %}
                                         </td>
                                         <td class="p-3.5 text-right whitespace-nowrap">
                                             {% with study=order.studies.first %}
                                                 {% if study and study.file %}
-                                                    <a href="{{ study.file.url }}"
+                                                    <a href="{% url 'radiology:study_file' study.id %}"
                                                        target="_blank"
                                                        class="inline-flex items-center text-cyan-700 hover:text-cyan-900 text-xs font-bold bg-cyan-50 hover:bg-cyan-100 px-3 py-1.5 rounded-xl border border-cyan-200 transition">View Scan →</a>
                                                 {% else %}
@@ -202,7 +202,54 @@
                     </table>
                 </div>
             </div>
-            <!-- Ward Admissions & Bed Allocation Record -->
+            <!-- Laboratory (released results only) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Laboratory</h3>
+                    <span class="text-[10px] text-slate-500">Shows released results only</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="p-3.5">Ordered</th>
+                                <th class="p-3.5">Tests</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5">Released</th>
+                                <th class="p-3.5 text-right">Report</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-sm">
+                            {% for order in lab_orders %}
+                                <tr class="hover:bg-slate-50 transition align-top">
+                                    <td class="p-3.5 text-xs font-mono whitespace-nowrap">{{ order.ordered_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="p-3.5 text-xs text-slate-700">
+                                        {% for l in order.lines.all %}{% if l.status != "CANCELLED" %}{{ l.test.name }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}
+                                    </td>
+                                    <td class="p-3.5 whitespace-nowrap">
+                                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if order.status == 'RELEASED' %}bg-emerald-100 text-emerald-800{% else %}bg-amber-100 text-amber-800{% endif %}">{{ order.get_status_display }}</span>
+                                    </td>
+                                    <td class="p-3.5 text-xs font-mono whitespace-nowrap">{{ order.released_at|date:"Y-m-d H:i"|default:"—" }}</td>
+                                    <td class="p-3.5 text-right whitespace-nowrap">
+                                        {% if order.status == "RELEASED" %}
+                                            <a href="{% url 'lab:print' order.id %}"
+                                               class="inline-flex items-center text-teal-700 text-xs font-bold bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-xl border border-teal-200 transition">Open report →</a>
+                                        {% else %}
+                                            <span class="text-slate-400 text-xs italic">Not yet released</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5"
+                                        class="p-8 text-center text-slate-500 italic text-xs">No laboratory tests recorded for this patient.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Ward Admissions -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Ward Admissions &amp; Bed Allocation Record</h3>
@@ -288,6 +335,8 @@
                                             <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Provisional</span>
                                         {% elif charge.status == "POSTED" %}
                                             <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">Posted</span>
+                                        {% elif charge.status == "VOIDED" %}
+                                            <span class="bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">Voided</span>
                                         {% else %}
                                             <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Paid</span>
                                         {% endif %}

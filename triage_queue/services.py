@@ -5,7 +5,6 @@ from django.utils import timezone
 from billing import services as billing
 from billing.models import Charge
 from billing.prices import CONSULTATION_FEE, REGISTRATION_FEE
-from lab.services import outstanding_lab_orders
 from notifications.services import notify, notify_on_duty
 from radiology.models import ScanOrder
 from wards.models import Admission
@@ -86,8 +85,13 @@ def activate_visit(encounter):
            link=reverse("doctors_portal:dashboard"))
     return entry
 
+
 def outstanding_investigations(encounter):
     """True if any scan or lab order on this visit is still open."""
+    # Imported here, not at module level: lab.services imports this module,
+    # so a top-level import would be circular.
+    from lab.services import outstanding_lab_orders
+
     scans = ScanOrder.objects.filter(encounter=encounter,
                                      status__in=OUTSTANDING_SCAN_STATUSES).exists()
     labs = outstanding_lab_orders(encounter).exists()
@@ -97,8 +101,8 @@ def outstanding_investigations(encounter):
 @transaction.atomic
 def pause_for_results(encounter, doctor):
     """
-    The doctor sends the patient for a scan. The entry leaves IN_CONSULTATION so the doctor
-    is free to take the next patient. Returns the entry, or None if nothing was paused.
+    The doctor sends the patient for a scan or lab test. The entry leaves IN_CONSULTATION
+    so the doctor is free to take the next patient. Returns the entry, or None.
     """
     entry = (QueueEntry.objects.select_for_update()
              .filter(encounter=encounter, assigned_doctor=doctor, status="IN_CONSULTATION").first())
@@ -127,6 +131,7 @@ def resume_consultation(encounter, doctor):
 
 
 def notify_results_ready(encounter):
+    """Tells the ordering doctor when the last outstanding scan or lab order closes."""
     if outstanding_investigations(encounter):
         return
     entry = (QueueEntry.objects.filter(encounter=encounter, status="AWAITING_RESULTS")
@@ -142,7 +147,7 @@ def notify_results_ready(encounter):
 def close_consultation(encounter, doctor):
     """
     Ends the doctor's consultation. The consultation fee is charged at visit open (QOL-2).
-    Blocked while any scan is outstanding (ordered or performed but not reported).
+    Blocked while any scan or lab order is outstanding.
     - If the patient is in a ward, the queue entry moves to ADMITTED and the encounter stays open.
     - Otherwise the queue entry is DISCHARGED, the encounter is CLOSED, and billing is notified.
     """
@@ -154,8 +159,8 @@ def close_consultation(encounter, doctor):
         raise FlowError("Only the assigned doctor can complete this consultation.")
     if not encounter.clinical_notes.exists():
         raise FlowError("Record a clinical note before completing the consultation.")
-    if outstanding_investigations(encounter).exists():
-        raise FlowError("A scan or a lab test is still outstanding. Wait for the report, or cancel the scan "
+    if outstanding_investigations(encounter):
+        raise FlowError("A scan or a lab test is still outstanding. Wait for the result, or cancel it "
                         "with a reason, before completing the visit.")
 
     if Admission.objects.filter(encounter=encounter, discharged_at__isnull=True).exists():

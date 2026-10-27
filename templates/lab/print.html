@@ -1,0 +1,136 @@
+{% extends "base.html" %} {% block title %}Lab report - {{
+order.encounter.patient }}{% endblock %} {% block content %}
+<style>
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    main {
+      padding: 0 !important;
+    }
+  }
+</style>
+<div
+  class="max-w-3xl mx-auto bg-white p-8 rounded-2xl border space-y-6 text-sm"
+>
+  <div class="no-print flex justify-between">
+    <a
+      href="{% url 'lab:dashboard' %}?tab=released"
+      class="text-xs text-slate-500 hover:underline"
+      >← Laboratory</a
+    >
+    <button
+      onclick="window.print()"
+      class="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold"
+    >
+      Print
+    </button>
+  </div>
+
+  <div class="border-b pb-3">
+    <p class="text-xs uppercase tracking-widest text-slate-500">
+      Laboratory report
+    </p>
+    <p class="text-lg font-extrabold">{{ order.encounter.patient }}</p>
+    <p class="text-xs text-slate-500">
+      Ordered {{ order.ordered_at|date:"Y-m-d H:i" }} by Dr. {{
+      order.ordered_by.user.get_full_name|default:order.ordered_by.user.username
+      }} · Released {{ order.released_at|date:"Y-m-d H:i" }}
+    </p>
+    {% if order.sample_barcode %}
+    <p class="text-xs font-mono">Sample {{ order.sample_barcode }}</p>
+    {% endif %}
+  </div>
+
+  <table class="w-full text-left">
+    <thead class="text-xs uppercase tracking-wider text-slate-500 border-b">
+      <tr>
+        <th class="py-2">Test</th>
+        <th class="py-2">Result</th>
+        <th class="py-2">Reference</th>
+        <th class="py-2">Flag</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for line in lines %}
+      <tr>
+        <td class="py-2 font-semibold">{{ line.test.name }}</td>
+        <td class="py-2">
+          {{ line.value_number|default:line.value_text|default:"—" }} {{
+          line.test.unit }} {% for a in line.amendments.all %}
+          <div class="text-[11px] text-amber-800">
+            Corrected {{ a.amended_at|date:"Y-m-d H:i" }} from {{
+            a.previous_number|default:a.previous_text }} to {{
+            a.new_number|default:a.new_text }}. Reason: {{ a.reason }}
+          </div>
+          {% endfor %}
+        </td>
+        <td class="py-2 text-xs text-slate-600">
+          {% if line.test.result_type == "NUMERIC" %}{{
+          line.test.reference_low|default:"" }} – {{
+          line.test.reference_high|default:"" }}{% else %}{{
+          line.test.reference_text|default:"—" }}{% endif %}
+        </td>
+        <td class="py-2 text-xs font-bold">
+          {{ line.get_flag_display|default:"—" }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="space-y-1">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">
+      Report
+    </p>
+    <p class="whitespace-pre-line">{{ order.report }}</p>
+  </div>
+
+  <p class="text-xs text-slate-500 border-t pt-3">
+    Verified and released by {{
+    order.released_by.user.get_full_name|default:order.released_by.user.username
+    }} at {{ order.released_at|date:"Y-m-d H:i" }}.
+  </p>
+
+  {% if can_amend %}
+  <details class="no-print bg-amber-50 border border-amber-200 rounded-xl p-4">
+    <summary class="font-bold text-amber-900 cursor-pointer">
+      Amend a result (supervisor)
+    </summary>
+    <div class="space-y-3 mt-3">
+      {% for line in lines %}
+      <form
+        method="post"
+        action="{% url 'lab:amend' line.id %}"
+        class="flex flex-wrap gap-2 items-center"
+      >
+        {% csrf_token %}
+        <span class="text-xs font-bold w-40">{{ line.test.name }}</span>
+        <input
+          name="value"
+          placeholder="New value"
+          required
+          class="border rounded-lg px-2 py-1 text-xs w-32"
+        />
+        <input
+          name="reason"
+          placeholder="Reason (required)"
+          required
+          class="border rounded-lg px-2 py-1 text-xs flex-1"
+        />
+        <button
+          class="bg-amber-600 text-white px-3 py-1 rounded-lg text-xs font-bold"
+        >
+          Amend
+        </button>
+      </form>
+      {% endfor %}
+      <p class="text-xs text-amber-900">
+        The original value stays in the history. You cannot amend a result you
+        entered yourself.
+      </p>
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}
