@@ -40,6 +40,8 @@ def approve_credit_action(request, kind, object_id):
         model = MedicationOrder
     elif kind == "scan":
         model = ScanOrder
+    elif kind == "lab":
+        model = LabOrderLine
     else:
         raise Http404
     target = get_object_or_404(model, pk=object_id)

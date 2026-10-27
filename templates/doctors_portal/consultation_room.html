@@ -113,6 +113,8 @@
                             {% if mode == "IN_WARD" %}Finish consultation (stay continues){% else %}Complete &amp; close visit{% endif %}
                         </button>
                     </form>
+                    <button @click="showLab = true"
+                            class="bg-violet-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-violet-700">+ Order lab tests</button>
                 </div>
             {% endif %}
         </div>
@@ -543,6 +545,60 @@
                                 Issue Prescription
                             </button>
                         </div>
+                    </form>
+                </div>
+            </div>
+            <div x-show="showLab"
+                 x-cloak
+                 style="display:none"
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+                <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col"
+                     @click.away="showLab = false"
+                     x-data="{ picked: {}, total: 0, indication: '' }">
+                    <div class="flex justify-between items-center border-b pb-3">
+                        <h3 class="font-bold text-lg">Order laboratory tests</h3>
+                        <button type="button"
+                                @click="showLab = false"
+                                class="text-slate-400 font-bold">×</button>
+                    </div>
+                    <form action="{% url 'lab:order' encounter.id %}"
+                          method="post"
+                          class="flex flex-col gap-3 min-h-0">
+                        {% csrf_token %}
+                        <div class="overflow-y-auto space-y-4 pr-1" style="max-height: 45vh">
+                            {% regroup lab_tests by get_section_display as sections %}
+                            {% for section in sections %}
+                                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ section.grouper }}</p>
+                                {% for t in section.list %}
+                                    <label class="flex items-center justify-between gap-3 border rounded-xl p-2.5 cursor-pointer hover:bg-slate-50"
+                                           :class="picked['{{ t.id }}'] ? 'border-violet-600 bg-violet-50' : 'border-slate-200'">
+                                        <span class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox"
+                                                   name="test_ids"
+                                                   value="{{ t.id }}"
+                                                   x-model="picked['{{ t.id }}']"
+                                                   @change="total = Object.keys(picked).reduce((s, k) => s + (picked[k] ? {{ t.price|stringformat:'s' }}*1 * 0 + ({{ t.price }}) * 1 : 0) * 0 + (picked[k] ? 0 : 0), 0)">
+                                            <span class="font-semibold">{{ t.name }}</span>
+                                            <span class="text-xs text-slate-500">{{ t.specimen }}</span>
+                                        </span>
+                                        <span class="text-sm font-extrabold text-amber-700 whitespace-nowrap">KES {{ t.price|floatformat:0 }}</span>
+                                    </label>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Clinical indication *</label>
+                            <textarea name="indication"
+                                      rows="2"
+                                      required
+                                      x-model="indication"
+                                      class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+                        </div>
+                        <p class="text-xs text-slate-600">The patient pays each test at billing. Tests are processed after payment.</p>
+                        <button type="submit"
+                                class="bg-violet-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-violet-700">
+                            Send tests to the lab
+                        </button>
                     </form>
                 </div>
             </div>

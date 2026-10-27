@@ -69,7 +69,7 @@ class Charge(models.Model):
     STATUS = [("PROVISIONAL", "Provisional hold"), ("POSTED", "Posted"),
               ("PAID", "Paid in full"), ("VOIDED", "Voided")]
     SOURCES = [("MEDICATION_ORDER", "Medication order"), ("BED_DAY", "Bed day"),
-               ("SCAN_ORDER", "Scan order"), ("CONSULTATION", "Consultation"),
+               ("SCAN_ORDER", "Scan order"), ("LAB_TEST", "Laboratory test"), ("CONSULTATION", "Consultation"),
                ("REGISTRATION", "Registration"), ("MANUAL", "Manual adjustment")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

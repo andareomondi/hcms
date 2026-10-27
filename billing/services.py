@@ -11,7 +11,7 @@ from .models import BillingAccount, Charge, Payment, PaymentAllocation
 ZERO = Decimal("0.00")
 CENT = Decimal("0.01")
 
-BLOCKING_SOURCES = ("MEDICATION_ORDER", "SCAN_ORDER")
+BLOCKING_SOURCES = ("MEDICATION_ORDER", "SCAN_ORDER", "LAB_TEST")
 FEE_SOURCES = ("REGISTRATION", "CONSULTATION")
 
 
@@ -109,6 +109,10 @@ def medication_charge_or_none(order):
     return (Charge.objects.filter(idempotency_key=f"med:{order.id}")
             .exclude(status="VOIDED").first())
 
+
+def lab_charge_or_none(line):
+    return (Charge.objects.filter(idempotency_key=f"lab:{line.id}")
+            .exclude(status="VOIDED").first())
 
 # ---------- payment state per line ----------
 

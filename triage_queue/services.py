@@ -5,6 +5,7 @@ from django.utils import timezone
 from billing import services as billing
 from billing.models import Charge
 from billing.prices import CONSULTATION_FEE, REGISTRATION_FEE
+from lab.services import outstanding_lab_orders
 from notifications.services import notify, notify_on_duty
 from radiology.models import ScanOrder
 from wards.models import Admission
@@ -85,9 +86,12 @@ def activate_visit(encounter):
            link=reverse("doctors_portal:dashboard"))
     return entry
 
-
-def outstanding_scans(encounter):
-    return ScanOrder.objects.filter(encounter=encounter, status__in=OUTSTANDING_SCAN_STATUSES)
+def outstanding_investigations(encounter):
+    """True if any scan or lab order on this visit is still open."""
+    scans = ScanOrder.objects.filter(encounter=encounter,
+                                     status__in=OUTSTANDING_SCAN_STATUSES).exists()
+    labs = outstanding_lab_orders(encounter).exists()
+    return scans or labs
 
 
 @transaction.atomic
@@ -123,8 +127,7 @@ def resume_consultation(encounter, doctor):
 
 
 def notify_results_ready(encounter):
-    """Called when the last outstanding scan on a visit is reported. Tells the ordering doctor."""
-    if outstanding_scans(encounter).exists():
+    if outstanding_investigations(encounter):
         return
     entry = (QueueEntry.objects.filter(encounter=encounter, status="AWAITING_RESULTS")
              .select_related("assigned_doctor").first())
@@ -151,8 +154,8 @@ def close_consultation(encounter, doctor):
         raise FlowError("Only the assigned doctor can complete this consultation.")
     if not encounter.clinical_notes.exists():
         raise FlowError("Record a clinical note before completing the consultation.")
-    if outstanding_scans(encounter).exists():
-        raise FlowError("A scan is still outstanding. Wait for the report, or cancel the scan "
+    if outstanding_investigations(encounter).exists():
+        raise FlowError("A scan or a lab test is still outstanding. Wait for the report, or cancel the scan "
                         "with a reason, before completing the visit.")
 
     if Admission.objects.filter(encounter=encounter, discharged_at__isnull=True).exists():

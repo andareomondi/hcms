@@ -30,6 +30,8 @@ class StaffProfile(models.Model):
         ("RADIOLOGIST", "Radiologist"),
         ("BILLING", "Billing Officer"),
         ("ADMIN", "System Administrator"),
+        ("LAB_TECHNICIAN", "Laboratory technician"),
+        ("LAB_SUPERVISOR", "Laboratory supervisor"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="staff_profile")

@@ -34,6 +34,13 @@ class Cap:
     MATERNITY_RECORD = "MATERNITY_RECORD"    # record births and vaccinations
     CONSENT_RECORD = "CONSENT_RECORD"        # record and withdraw consent
     PATIENT_MERGE = "PATIENT_MERGE"          # merge duplicate patient records
+    LAB_ORDER = "LAB_ORDER"                  # doctors place orders
+    LAB_VIEW = "LAB_VIEW"                    # read-only lab worklists and reports
+    LAB_RECEIVE = "LAB_RECEIVE"              # receive samples
+    LAB_ENTER_RESULT = "LAB_ENTER_RESULT"    # enter results and the report
+    LAB_VERIFY = "LAB_VERIFY"                # verify and release
+    LAB_AMEND = "LAB_AMEND"                  # amend released results
+    LAB_CATALOGUE = "LAB_CATALOGUE"          # manage tests and prices
 
 
 # Collect every single capability defined in the Cap class
@@ -49,6 +56,7 @@ ADMIN_CAPS = ALL_CAPS - {
     Cap.NURSE_ADMINISTER, 
     Cap.DISPENSE,
     Cap.RADIOLOGY_REPORT,
+    Cap.LAB_VIEW,
 }
 
 ROLE_CAPS = {
@@ -62,7 +70,7 @@ ROLE_CAPS = {
     },
     "DOCTOR": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.VIEW_PHARMACY,
-        Cap.VIEW_RADIOLOGY, Cap.CLINICAL_ACTIONS, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE, Cap.MATERNITY_RECORD, Cap.CONSENT_RECORD, Cap.RADIOLOGY_REPORT,
+        Cap.VIEW_RADIOLOGY, Cap.CLINICAL_ACTIONS, Cap.WARD_VIEW, Cap.WARD_ACTIONS, Cap.DUTY_SELF, Cap.BED_MANAGE, Cap.ALLERGY_MANAGE, Cap.MATERNITY_RECORD, Cap.CONSENT_RECORD, Cap.RADIOLOGY_REPORT, Cap.LAB_ORDER, 
     },
     "NURSE": {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_CLINICAL, Cap.VIEW_PHARMACY,
@@ -80,6 +88,14 @@ ROLE_CAPS = {
         Cap.PATIENT_SEARCH, Cap.PATIENT_FILE, Cap.VIEW_FINANCE, Cap.POST_CHARGES,
         Cap.TAKE_PAYMENT, Cap.DUTY_SELF,
     },
+     "LAB_TECHNICIAN": {
+        Cap.LAB_VIEW, Cap.LAB_RECEIVE, Cap.LAB_ENTER_RESULT, 
+
+    },
+    "LAB_TECHNICIAN": {
+        Cap.LAB_VIEW, Cap.LAB_RECEIVE, Cap.LAB_ENTER_RESULT, Cap.LAB_VERIFY, Cap.LAB_AMEND, Cap.LAB_CATALOGUE, 
+
+    }, 
 }
 
 
