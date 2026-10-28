@@ -1,0 +1,123 @@
+{% extends "base.html" %} {% block title %}Triage - {{ patient.last_name }}{% endblock %} {% block content %}
+<div class="max-w-3xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Triage</h1>
+        <p class="text-sm text-slate-600">
+            Patient:
+            <strong>{{ patient.last_name }}, {{ patient.first_name }}</strong>
+            · Visit: {{ encounter.get_encounter_type_display }} · opened {{ encounter.opened_at|date:"Y-m-d H:i" }} by {{ encounter.opened_by.user.get_full_name|default:encounter.opened_by.user.username }}
+        </p>
+        <p class="text-xs mt-2 {% if fees_paid %}text-emerald-700{% else %}text-amber-700{% endif %}">
+            {% if fees_paid %}Fees are paid. The patient joins the doctor's queue when
+                you save. {% else %}Fees are not yet paid. The patient joins the doctor's
+                queue once the fees are paid.{% endif %}
+        </p>
+    </div>
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        <section class="space-y-4">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Complaint and priority</h2>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Chief complaint *</label>
+                <textarea name="chief_complaint" rows="2" required placeholder="e.g. Fever for 3 days, productive cough" class="w-full border rounded-xl px-3 py-2 text-sm">
+{{ encounter.chief_complaint }}</textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Priority *</label>
+                    <select name="priority"
+                            required
+                            class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="1">Routine</option>
+                        <option value="2">Urgent</option>
+                        <option value="3">Resuscitation (treated before payment)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Doctor on duty *</label>
+                    <select name="assigned_doctor_id"
+                            required
+                            class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="">-- Choose --</option>
+                        {% for doc in doctors %}
+                            <option value="{{ doc.id }}">Dr. {{ doc.user.get_full_name|default:doc.user.username }}</option>
+                        {% empty %}
+                            <option value="" disabled>No doctors are clocked in</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                    Emergency reason
+                    <span class="font-normal normal-case text-slate-500">(required for priority 3 or an emergency visit)</span>
+                </label>
+                <textarea name="prepay_bypass_reason"
+                          rows="2"
+                          placeholder="Why this patient is treated before payment"
+                          class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+            </div>
+        </section>
+        <section class="space-y-4">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Vital signs</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Temp (°C)</label>
+                    <input type="number"
+                           step="0.1"
+                           name="temperature_c"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Pulse (bpm)</label>
+                    <input type="number"
+                           name="pulse_bpm"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Resp. rate</label>
+                    <input type="number"
+                           name="respiratory_rate"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">SpO2 (%)</label>
+                    <input type="number"
+                           name="spo2_percent"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">BP systolic</label>
+                    <input type="number"
+                           name="systolic_mmhg"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">BP diastolic</label>
+                    <input type="number"
+                           name="diastolic_mmhg"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Weight (kg)</label>
+                    <input type="number"
+                           step="0.01"
+                           name="weight_kg"
+                           class="w-full border rounded-xl px-3 py-2 text-sm" />
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Triage notes</label>
+                <textarea name="triage_notes"
+                          rows="2"
+                          placeholder="Anything the doctor should know before seeing the patient"
+                          class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+            </div>
+        </section>
+        <button type="submit"
+                class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700">
+            Save triage and queue patient
+        </button>
+    </form>
+</div>
+{% endblock %}

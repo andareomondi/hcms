@@ -1,0 +1,43 @@
+{% extends "base.html" %} {% block title %}Open visit - {{ patient.last_name }}{% endblock %} {% block content %}
+<div class="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Open a visit</h1>
+        <p class="text-sm text-slate-600">
+            Patient:
+            <strong>{{ patient.last_name }}, {{ patient.first_name }}</strong>
+        </p>
+        <p class="text-xs text-slate-500 mt-2">
+            Reception opens the visit and the fees are charged now. The patient pays
+            at the till. Triage is done separately, by a triage nurse, and does not
+            wait for payment.
+        </p>
+    </div>
+    <form method="post" class="space-y-5">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Visit type *</label>
+            <select name="encounter_type"
+                    required
+                    class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                <option value="OUTPATIENT">Outpatient</option>
+                <option value="EMERGENCY">Emergency</option>
+                <option value="OBSERVATION">Observation</option>
+                <option value="MATERNITY">Maternity / delivery</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Who pays the bill *</label>
+            <select name="payer_type"
+                    required
+                    class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                <option value="SELF_PAY">Self-pay</option>
+                <option value="INSURANCE">Insurance (placeholder)</option>
+            </select>
+        </div>
+        <button type="submit"
+                class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700">
+            Open visit and charge fees
+        </button>
+    </form>
+</div>
+{% endblock %}

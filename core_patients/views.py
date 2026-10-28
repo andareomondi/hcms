@@ -413,7 +413,9 @@ def patient_detail_view(request, patient_id):
         for order in encounter.medication_orders.all():
             timeline_items.append({
                 "type": "ORDER", "get_type_display": "Medication Order", "timestamp": order.ordered_at,
-                "summary": f"{order.medication.brand_name or 'Unknown'} {order.dose_text} - {order.get_route_display()}",
+                # order.medication.brand_name is broken on the previous setup of the pharmacy app if extarnal medication was prescribed
+                # TODO: Look to fix this 
+                "summary": f"{order.medication.brand_name} {order.dose_text} - {order.get_route_display()}",
                 "author": order.ordered_by,
             })
     timeline_items.sort(key=lambda x: x["timestamp"], reverse=True)
