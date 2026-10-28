@@ -77,30 +77,37 @@ def order_tests(*, encounter, doctor, test_ids, indication, staff):
 @transaction.atomic
 def receive_order(*, order, staff, barcode=""):
     """
-    Receives the sample. Only paid (or credit-approved, or bypassed) lines are received.
-    Unpaid lines stay ORDERED and are shown on the lab dashboard as awaiting payment.
+    Receives every payable test that has not yet been received. Can be called again for a
+    test paid after the first receipt. Refused once results or a report exist.
     """
     order = LabOrder.objects.select_for_update().get(pk=order.pk)
     if order.status == "CANCELLED":
         raise LabError("This order has been cancelled.")
-    if order.status != "ORDERED":
-        raise LabError("This sample has already been received.")
+    if order.status not in ("ORDERED", "RECEIVED"):
+        raise LabError("Results are already in progress on this order. A test paid now needs a new order.")
 
-    payable = [l for l in _active_lines(order) if line_prepaid(l)]
-    if not payable:
+    newly = [l for l in _active_lines(order).filter(status="ORDERED") if line_prepaid(l)]
+    if not newly:
+        if order.status == "RECEIVED":
+            raise LabError("No further test on this order is paid for yet.")
         raise LabError("No test on this order is paid for yet. The patient must pay at billing first.")
 
     barcode = (barcode or "").strip().upper() or None
-    if barcode and LabOrder.objects.filter(sample_barcode=barcode).exclude(pk=order.pk).exists():
-        raise LabError("This sample barcode is already used on another order.")
+    if barcode:
+        if order.sample_barcode and order.sample_barcode != barcode:
+            raise LabError("This order already has a different sample barcode.")
+        if LabOrder.objects.filter(sample_barcode=barcode).exclude(pk=order.pk).exists():
+            raise LabError("This sample barcode is already used on another order.")
 
-    for line in payable:
+    for line in newly:
         line.status = "RECEIVED"
         line.save(update_fields=["status"])
+
+    if order.received_at is None:
+        order.received_by = staff
+        order.received_at = timezone.now()
     order.status = "RECEIVED"
-    order.received_by = staff
-    order.received_at = timezone.now()
-    order.sample_barcode = barcode or order.sample_barcode
+    order.sample_barcode = order.sample_barcode or barcode
     order.save(update_fields=["status", "received_by", "received_at", "sample_barcode"])
     return order
 
@@ -210,6 +217,8 @@ def verify_and_release(*, order, supervisor):
         raise LabError("Single-person release is not yet implemented. Keep second-person verification on.")
     if order.status != "RESULTED" or not order.report:
         raise LabError("This order needs every result and the written report before it can be released.")
+    if _active_lines(order).exclude(status="RESULTED").exists():
+        raise LabError("Every active test needs a result before release.")
 
     entrants = set(_active_lines(order).values_list("entered_by_id", flat=True)) | {order.report_by_id}
     if supervisor.id in entrants:

@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, requires
+from lab.models import LabOrder
 from pharmacy.models import MedicationOrder
 from radiology.models import ScanOrder
 from triage_queue.models import Encounter
@@ -41,7 +42,7 @@ def approve_credit_action(request, kind, object_id):
     elif kind == "scan":
         model = ScanOrder
     elif kind == "lab":
-        model = LabOrderLine
+        model = LabOrder
     else:
         raise Http404
     target = get_object_or_404(model, pk=object_id)

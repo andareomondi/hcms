@@ -76,8 +76,8 @@ def lab_dashboard_view(request):
 
     # Counts drive the tab labels. Payment is checked per line, so the counts are computed in Python.
     unpaid_lines = [l for l in base_lines.filter(status="ORDERED") if not lab.line_prepaid(l)]
-    receivable = [o for o in base_orders.filter(status="ORDERED")
-                  if any(lab.line_prepaid(l) for l in o.lines.exclude(status="CANCELLED"))]
+    receivable = [o for o in base_orders.filter(status__in=["ORDERED", "RECEIVED"])
+                  if any(lab.line_prepaid(l) for l in o.lines.filter(status="ORDERED"))]
     to_enter = list(base_orders.filter(status__in=["RECEIVED", "RESULTED"])
                     .filter(lines__status="RECEIVED").distinct())
     to_verify = list(base_orders.filter(status="RESULTED").exclude(report=""))

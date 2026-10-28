@@ -1,135 +1,110 @@
-{% extends "base.html" %} {% block title %}Enter results - HCMS{% endblock %} {%
-block content %}
-<div class="max-w-4xl mx-auto space-y-6">
-  <div>
-    <a
-      href="{% url 'lab:dashboard' %}?tab=to_enter"
-      class="text-xs text-slate-500 hover:underline"
-      >← Laboratory</a
-    >
-    <h1 class="text-2xl font-bold text-slate-900 mt-1">
-      {{ order.encounter.patient }}
-    </h1>
-    <p class="text-sm text-slate-500">Indication: {{ order.indication }}</p>
-  </div>
-
-  <form
-    method="post"
-    action="{% url 'lab:save_results' order.id %}"
-    class="bg-white rounded-2xl border p-5 space-y-4"
-  >
-    {% csrf_token %}
-    <table class="w-full text-left text-sm">
-      <thead
-        class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider"
-      >
-        <tr>
-          <th class="p-3">Test</th>
-          <th class="p-3">Reference</th>
-          <th class="p-3">Result</th>
-          <th class="p-3">Status</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for line in lines %}
-        <tr>
-          <td class="p-3 font-bold">
-            {{ line.test.name }}<br /><span
-              class="text-xs font-normal text-slate-500"
-              >{{ line.test.specimen }}</span
-            >
-          </td>
-          <td class="p-3 text-xs text-slate-600">
-            {% if line.test.result_type == "NUMERIC" %} {% if
-            line.test.reference_low is not None or line.test.reference_high is
-            not None %} {{ line.test.reference_low|default:"" }} – {{
-            line.test.reference_high|default:"" }} {{ line.test.unit }} {% else
-            %}—{% endif %} {% else %}{{ line.test.reference_text|default:"—"
-            }}{% endif %}
-          </td>
-          <td class="p-3">
-            {% if line.status == "RECEIVED" %} {% if line.test.result_type ==
-            "NUMERIC" %}
-            <input
-              type="number"
-              step="any"
-              name="value_{{ line.id }}"
-              class="border rounded-xl px-3 py-2 text-sm w-32"
-            />
-            <span class="text-xs text-slate-500">{{ line.test.unit }}</span>
-            {% elif line.test.result_type == "POSITIVE_NEGATIVE" %}
-            <select
-              name="value_{{ line.id }}"
-              class="border rounded-xl px-3 py-2 text-sm bg-white"
-            >
-              <option value="">—</option>
-              <option value="POSITIVE">Positive</option>
-              <option value="NEGATIVE">Negative</option>
-            </select>
-            {% else %}
-            <input
-              type="text"
-              name="value_{{ line.id }}"
-              maxlength="255"
-              class="border rounded-xl px-3 py-2 text-sm w-full"
-            />
-            {% endif %} {% else %}
-            <span class="font-bold"
-              >{{ line.value_number|default:line.value_text|default:"—" }}</span
-            >
-            {% if line.flag %}<span
-              class="text-xs font-bold ml-1 {% if line.flag == 'CRITICAL' %}text-red-700{% elif line.flag == 'NORMAL' %}text-slate-500{% else %}text-amber-700{% endif %}"
-              >{{ line.get_flag_display }}</span
-            >{% endif %} {% endif %}
-          </td>
-          <td class="p-3 text-xs font-bold">{{ line.get_status_display }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button
-      class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold"
-    >
-      Save results
-    </button>
-  </form>
-
-  <form
-    method="post"
-    action="{% url 'lab:submit_report' order.id %}"
-    class="bg-white rounded-2xl border p-5 space-y-3"
-    x-data="{ text: {{ order.report|default:''|escapejs|stringformat:'s' }}'' }"
-  >
-    {% csrf_token %}
-    <h2 class="font-bold text-slate-900">Written report</h2>
-    <p class="text-xs text-slate-500">
-      Interpretation of the results. At least 100 characters are needed before
-      this goes to verification.
-    </p>
-    <textarea
-      name="report"
-      rows="6"
-      x-model="text"
-      required
-      class="w-full border rounded-xl px-3 py-2 text-sm"
-    >
-{{ order.report }}</textarea
-    >
-    <div class="flex justify-between items-center">
-      <span
-        class="text-xs"
-        :class="text.trim().length >= 100 ? 'text-emerald-700' : 'text-amber-700'"
-      >
-        <span x-text="text.trim().length"></span> / 100 characters
-      </span>
-      <button
-        :disabled="text.trim().length < 100"
-        :class="text.trim().length < 100 ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white'"
-        class="px-5 py-2.5 rounded-xl text-sm font-bold"
-      >
-        Submit for verification
-      </button>
+{% extends "base.html" %}
+{% block title %}Enter results - HCMS{% endblock %}
+{% block content %}
+    <div class="max-w-4xl mx-auto space-y-6">
+        <div>
+            <a href="{% url 'lab:dashboard' %}?tab=to_enter"
+               class="text-xs text-slate-500 hover:underline">← Laboratory</a>
+            <h1 class="text-2xl font-bold text-slate-900 mt-1">{{ order.encounter.patient }}</h1>
+            <p class="text-sm text-slate-500">Indication: {{ order.indication }}</p>
+        </div>
+        <form method="post"
+              action="{% url 'lab:save_results' order.id %}"
+              class="bg-white rounded-2xl border p-5 space-y-4">
+            {% csrf_token %}
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3">Test</th>
+                        <th class="p-3">Reference</th>
+                        <th class="p-3">Result</th>
+                        <th class="p-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for line in lines %}
+                        <tr>
+                            <td class="p-3 font-bold">
+                                {{ line.test.name }}
+                                <br>
+                                <span class="text-xs font-normal text-slate-500">{{ line.test.specimen }}</span>
+                            </td>
+                            <td class="p-3 text-xs text-slate-600">
+                                {% if line.test.result_type == "NUMERIC" %}
+                                    {% if line.test.reference_low is not None or line.test.reference_high is not None %}
+                                        {{ line.test.reference_low|default:"" }} – {{ line.test.reference_high|default:"" }} {{ line.test.unit }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                {% else %}
+                                    {{ line.test.reference_text|default:"—" }}
+                                {% endif %}
+                            </td>
+                            <td class="p-3">
+                                {% if line.status == "RECEIVED" %}
+                                    {% if line.test.result_type == "NUMERIC" %}
+                                        <input type="number"
+                                               step="any"
+                                               name="value_{{ line.id }}"
+                                               class="border rounded-xl px-3 py-2 text-sm w-32">
+                                        <span class="text-xs text-slate-500">{{ line.test.unit }}</span>
+                                    {% elif line.test.result_type == "POSITIVE_NEGATIVE" %}
+                                        <select name="value_{{ line.id }}"
+                                                class="border rounded-xl px-3 py-2 text-sm bg-white">
+                                            <option value="">—</option>
+                                            <option value="POSITIVE">Positive</option>
+                                            <option value="NEGATIVE">Negative</option>
+                                        </select>
+                                    {% else %}
+                                        <input type="text"
+                                               name="value_{{ line.id }}"
+                                               maxlength="255"
+                                               class="border rounded-xl px-3 py-2 text-sm w-full">
+                                    {% endif %}
+                                {% else %}
+                                    <span class="font-bold">{{ line.value_number|default:line.value_text|default:"—" }}</span>
+                                    {% if line.flag %}
+                                        <span class="text-xs font-bold ml-1 {% if line.flag == 'CRITICAL' %}text-red-700{% elif line.flag == 'NORMAL' %}text-slate-500{% else %}text-amber-700{% endif %}">{{ line.get_flag_display }}</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-xs font-bold">{{ line.get_status_display }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4"
+                                class="p-6 text-center text-slate-500 italic">No tests are ready for results.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold">Save results</button>
+        </form>
+        <form method="post"
+              action="{% url 'lab:submit_report' order.id %}"
+              class="bg-white rounded-2xl border p-5 space-y-3"
+              x-data="{ text: '' }">
+            {% csrf_token %}
+            <h2 class="font-bold text-slate-900">Written report</h2>
+            <p class="text-xs text-slate-500">
+                Interpretation of the results. At least 100 characters are needed before this goes to verification.
+            </p>
+            <textarea name="report"
+                      rows="6"
+                      required
+                      x-model="text"
+                      x-init="text = $el.value"
+                      class="w-full border rounded-xl px-3 py-2 text-sm">{{ order.report }}</textarea>
+            <div class="flex justify-between items-center">
+                <span class="text-xs"
+                      :class="text.trim().length >= 100 ? 'text-emerald-700' : 'text-amber-700'">
+                    <span x-text="text.trim().length"></span> / 100 characters
+                </span>
+                <button type="submit"
+                        :disabled="text.trim().length < 100"
+                        :class="text.trim().length < 100 ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white'"
+                        class="px-5 py-2.5 rounded-xl text-sm font-bold">Submit for verification</button>
+            </div>
+        </form>
     </div>
-  </form>
-</div>
 {% endblock %}

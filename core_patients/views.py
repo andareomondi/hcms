@@ -41,6 +41,7 @@ from .ratelimit import too_many_attempts
 def patient_record_view(request, patient_id):
     """
     Full printable record. Each section appears only if the viewer's role allows it.
+    Laboratory results appear only once released.
     """
     patient = get_object_or_404(Patient.objects.select_related("created_by__user"), pk=patient_id)
     caps = caps_for(request.user)
@@ -48,6 +49,7 @@ def patient_record_view(request, patient_id):
         "clinical": Cap.VIEW_CLINICAL in caps,
         "pharmacy": Cap.VIEW_PHARMACY in caps,
         "radiology": Cap.VIEW_RADIOLOGY in caps,
+        "lab": Cap.VIEW_CLINICAL in caps,
         "finance": Cap.VIEW_FINANCE in caps,
     }
 
@@ -75,6 +77,12 @@ def patient_record_view(request, patient_id):
                     queryset=ImagingStudy.objects.select_related("uploaded_by__user", "reported_by__user")
                     .order_by("uploaded_at"))) \
                 .order_by("ordered_at")
+        if show["lab"]:
+            item["lab_orders"] = (enc.lab_orders
+                                  .filter(status="RELEASED")
+                                  .select_related("verified_by__user", "released_by__user")
+                                  .prefetch_related("lines__test", "lines__amendments__amended_by__user")
+                                  .order_by("ordered_at"))
         if show["finance"]:
             item["charges"] = enc.charges.select_related("created_by__user").order_by("created_at")
             item["payments"] = Payment.objects.filter(encounter=enc) \
@@ -93,6 +101,7 @@ def patient_record_view(request, patient_id):
         "finance_totals": billing_services.patient_totals(patient) if show["finance"] else None,
     }
     return render(request, "core_patients/patient_record.html", context)
+
 
 def staff_register_view(request):
     """
@@ -418,14 +427,17 @@ def patient_detail_view(request, patient_id):
         }
         for enc in patient.encounters.order_by("-opened_at")
     ]
+    lab_qs = (LabOrder.objects.filter(encounter__patient=patient)
+          .select_related("encounter")
+          .prefetch_related("lines__test")
+          .order_by("-ordered_at"))
+    if Cap.VIEW_CLINICAL not in caps_for(request.user):
+        lab_qs = lab_qs.filter(status="RELEASED")
 
     context = {
         "patient": patient,
         "patient_allergies": patient_allergies,
-        "lab_orders": (LabOrder.objects.filter(encounter__patient=patient)
-               .select_related("encounter")
-               .prefetch_related("lines__test")
-               .order_by("-ordered_at")[:50]),
+        "lab_orders": lab_qs[:50],
         "admissions": admissions,
         "billing_account": billing_account,
         "charges": charges,

@@ -2,7 +2,7 @@
 {% block title %}Consultation - {{ patient.first_name }} {{ patient.last_name }}{% endblock %}
 {% block content %}
     <div class="space-y-6"
-         x-data="{ tab: 'notes', showPrescribe: false, showScan: false, showAdmit: false }">
+         x-data="{ tab: 'notes', showPrescribe: false, showScan: false, showAdmit: false, showLab: false }">
         <!-- ===== Status banner: explains what the doctor can do ===== -->
         {% if mode == "CLOSED" %}
             <div class="bg-slate-100 border border-slate-300 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
@@ -28,13 +28,18 @@
                 <a href="{% url 'doctors_portal:dashboard' %}"
                    class="bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Go to dashboard</a>
             </div>
+        {% elif mode == "AWAITING_PAYMENT" %}
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <p class="font-bold text-amber-900">Awaiting payment at the till</p>
+                <p class="text-sm text-amber-800">The patient cannot be seen until the fees are paid.</p>
+            </div>
         {% elif mode == "AWAITING_RESULTS" %}
             <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
                 <div>
                     <p class="font-bold text-amber-900">Waiting for results</p>
                     <p class="text-sm text-amber-800">
-                        The scan has been requested. Resume this consultation when you are ready to continue.
-                        Notes, prescriptions and new scans are available after you resume. The visit cannot be completed while a scan is outstanding.
+                        A scan or lab test has been requested. Resume this consultation when you are ready to continue.
+                        Notes, prescriptions and new orders are available after you resume. The visit cannot be completed while a result is outstanding.
                     </p>
                 </div>
                 <form method="post" action="{% url 'doctors_portal:resume' encounter.id %}">
@@ -60,7 +65,7 @@
             <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
                 <p class="font-bold text-blue-900">Patient is admitted</p>
                 <p class="text-sm text-blue-800">
-                    You can still write notes, prescribe and order scans. When you finish the consultation, the stay continues.
+                    You can still write notes, prescribe and order tests or scans. When you finish the consultation, the stay continues.
                     The patient is discharged from the ward.
                 </p>
             </div>
@@ -79,8 +84,8 @@
                 <div>
                     <div class="flex items-center gap-3 flex-wrap">
                         <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ patient.last_name }}, {{ patient.first_name }}</h1>
-                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if mode == 'ACTIVE' %}bg-teal-100 text-teal-800 {% elif mode == 'IN_WARD' %}bg-blue-100 text-blue-800 {% elif mode == 'CLOSED' %}bg-slate-200 text-slate-700 {% else %}bg-amber-100 text-amber-800{% endif %}">
-                            {% if mode == "ACTIVE" %}In consultation{% elif mode == "IN_WARD" %}Admitted{% elif mode == "CLOSED" %}Closed{% elif mode == "WAITING" %}Waiting{% else %}Read-only{% endif %}
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if mode == 'ACTIVE' %}bg-teal-100 text-teal-800{% elif mode == 'IN_WARD' %}bg-blue-100 text-blue-800{% elif mode == 'CLOSED' %}bg-slate-200 text-slate-700{% else %}bg-amber-100 text-amber-800{% endif %}">
+                            {% if mode == "ACTIVE" %}In consultation{% elif mode == "IN_WARD" %}Admitted{% elif mode == "CLOSED" %}Closed{% elif mode == "WAITING" %}Waiting{% elif mode == "AWAITING_PAYMENT" %}Awaiting payment{% elif mode == "AWAITING_RESULTS" %}Awaiting results{% else %}Read-only{% endif %}
                         </span>
                     </div>
                     <p class="text-sm text-slate-500 mt-1">
@@ -96,6 +101,8 @@
                             class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700">+ Prescribe</button>
                     <button @click="showScan = true"
                             class="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-700">+ Request scan</button>
+                    <button @click="showLab = true"
+                            class="bg-violet-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-violet-700">+ Order lab tests</button>
                     {% if active_admission %}
                         <button disabled
                                 class="bg-slate-300 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold cursor-not-allowed">Already admitted</button>
@@ -113,8 +120,6 @@
                             {% if mode == "IN_WARD" %}Finish consultation (stay continues){% else %}Complete &amp; close visit{% endif %}
                         </button>
                     </form>
-                    <button @click="showLab = true"
-                            class="bg-violet-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-violet-700">+ Order lab tests</button>
                 </div>
             {% endif %}
         </div>
@@ -131,7 +136,7 @@
                     class="pb-3 border-b-2 font-bold text-sm">📝 Notes &amp; diagnosis</button>
             <button @click="tab = 'orders'"
                     :class="tab === 'orders' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500'"
-                    class="pb-3 border-b-2 font-bold text-sm">💊 Orders &amp; scans ({{ medication_orders|length }} / {{ scan_orders|length }})</button>
+                    class="pb-3 border-b-2 font-bold text-sm">💊 Orders, scans &amp; lab ({{ medication_orders|length }} / {{ scan_orders|length }} / {{ lab_orders|length }})</button>
         </div>
         <!-- ===== Notes tab ===== -->
         <div x-show="tab === 'notes'"
@@ -232,11 +237,12 @@
                 {% endfor %}
             </div>
         </div>
-        <!-- ===== Orders tab ===== -->
+        <!-- ===== Orders tab: prescriptions, scans, laboratory ===== -->
         <div x-show="tab === 'orders'"
              x-cloak
              style="display:none"
              class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Prescriptions -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b flex justify-between items-center">
                     <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Prescriptions</h2>
@@ -279,6 +285,7 @@
                     </tbody>
                 </table>
             </div>
+            <!-- Scans -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b">
                     <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Scans</h2>
@@ -303,19 +310,6 @@
                                 <td class="p-3 text-xs font-bold">{{ scan.get_status_display }}</td>
                                 <td class="p-3 text-right">
                                     {% with study=scan.latest_study %}
-                                        {% if scan.can_cancel %}
-                                            <form method="post"
-                                                  action="{% url 'doctors_portal:cancel_scan' scan.id %}"
-                                                  class="mt-2 flex gap-2 justify-end"
-                                                  onsubmit="return confirm('Cancel this scan? Its charge will be voided.');">
-                                                {% csrf_token %}
-                                                <input name="reason"
-                                                       required
-                                                       placeholder="Reason"
-                                                       class="border rounded-lg px-2 py-1 text-xs w-32">
-                                                <button class="text-xs font-bold text-red-700">Cancel scan</button>
-                                            </form>
-                                        {% endif %}
                                         {% if study and study.file %}
                                             <a href="{% url 'radiology:study_file' study.id %}"
                                                target="_blank"
@@ -327,12 +321,74 @@
                                             <span class="text-xs italic text-slate-400">Not uploaded</span>
                                         {% endif %}
                                     {% endwith %}
+                                    {% if scan.can_cancel %}
+                                        <form method="post"
+                                              action="{% url 'doctors_portal:cancel_scan' scan.id %}"
+                                              class="mt-2 flex gap-2 justify-end"
+                                              onsubmit="return confirm('Cancel this scan? Its charge will be voided.');">
+                                            {% csrf_token %}
+                                            <input name="reason"
+                                                   required
+                                                   placeholder="Reason"
+                                                   class="border rounded-lg px-2 py-1 text-xs w-32">
+                                            <button class="text-xs font-bold text-red-700">Cancel scan</button>
+                                        </form>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
                                 <td colspan="4"
                                     class="p-6 text-center text-slate-500 italic">No scans ordered for this visit.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- Laboratory -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
+                <div class="p-4 bg-slate-50/50 border-b">
+                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Laboratory</h2>
+                </div>
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3">Ordered</th>
+                            <th class="p-3">Tests</th>
+                            <th class="p-3">Status</th>
+                            <th class="p-3 text-right">Report</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for lo in lab_orders %}
+                            <tr class="align-top">
+                                <td class="p-3 text-xs font-mono">{{ lo.ordered_at|date:"Y-m-d H:i" }}</td>
+                                <td class="p-3 text-xs">
+                                    {% for l in lo.lines.all %}
+                                        {% if l.status != "CANCELLED" %}
+                                            <div class="flex justify-between gap-3 {% if l.status == 'RELEASED' %}font-semibold{% else %}text-slate-500{% endif %}">
+                                                <span>{{ l.test.name }}</span>
+                                                <span class="text-slate-400">{{ l.get_status_display }}</span>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td class="p-3 text-xs font-bold">{{ lo.get_status_display }}</td>
+                                <td class="p-3 text-right">
+                                    {% if lo.status == "RELEASED" and "LAB_VIEW" in caps %}
+                                        <a href="{% url 'lab:print' lo.id %}"
+                                           class="inline-flex items-center text-teal-700 text-xs font-bold bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-xl border border-teal-200">Open report</a>
+                                    {% elif lo.status == "RELEASED" %}
+                                        <span class="text-xs font-bold text-emerald-700">Released</span>
+                                    {% else %}
+                                        <span class="text-xs italic text-slate-400">Not yet released</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4"
+                                    class="p-6 text-center text-slate-500 italic">No laboratory tests for this visit.</td>
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -350,6 +406,7 @@
         {% endif %}
         <!-- ===== Modals: rendered only when the visit is open to changes ===== -->
         {% if can_act %}
+            <!-- PRESCRIBE -->
             <div x-show="showPrescribe"
                  x-cloak
                  style="display:none"
@@ -357,27 +414,26 @@
                  @click.self="showPrescribe = false">
                 <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto"
                      x-data="{
-             mode: 'formulary',
-             pickedId: '',
-             pickedLabel: '',
-             pickedStock: null,
-             ack: false,
-             pick(id, label, strength, stock) {
-                 this.pickedId = id;
-                 this.pickedLabel = label + (strength ? ' (' + strength + ')' : '');
-                 this.pickedStock = stock;
-             },
-             clearPick() {
-                 this.pickedId = '';
-                 this.pickedLabel = '';
-                 this.pickedStock = null;
-             }
-         }">
-                    <!-- Modal Header -->
+                         mode: 'formulary',
+                         pickedId: '',
+                         pickedLabel: '',
+                         pickedStock: null,
+                         ack: false,
+                         pick(id, label, strength, stock) {
+                             this.pickedId = id;
+                             this.pickedLabel = label + (strength ? ' (' + strength + ')' : '');
+                             this.pickedStock = stock;
+                         },
+                         clearPick() {
+                             this.pickedId = '';
+                             this.pickedLabel = '';
+                             this.pickedStock = null;
+                         }
+                     }">
                     <div class="flex items-start justify-between border-b border-slate-100 pb-3">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 tracking-tight">Prescribe Medicine</h3>
-                            <p class="text-xs text-slate-500 mt-0.5">Issue a prescription from hospital formulary or external purchase.</p>
+                            <p class="text-xs text-slate-500 mt-0.5">Issue a prescription from the hospital formulary or as an external purchase.</p>
                         </div>
                         <button type="button"
                                 @click="showPrescribe = false"
@@ -388,21 +444,20 @@
                           method="post"
                           class="space-y-4">
                         {% csrf_token %}
-                        <!-- Prescription Source Switcher -->
                         <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-bold">
                             <button type="button"
                                     @click="mode = 'formulary'"
                                     :class="mode === 'formulary' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
-                                    class="py-2 rounded-lg transition text-center">🏥 Hospital Formulary</button>
+                                    class="py-2 rounded-lg transition text-center">🏥 Hospital formulary</button>
                             <button type="button"
                                     @click="mode = 'external'"
                                     :class="mode === 'external' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'"
-                                    class="py-2 rounded-lg transition text-center">🛒 External Purchase</button>
+                                    class="py-2 rounded-lg transition text-center">🛒 External purchase</button>
                         </div>
                         <input type="hidden"
                                name="source"
                                :value="mode === 'formulary' ? 'FORMULARY' : 'EXTERNAL'">
-                        <!-- ===== FORMULARY SECTION ===== -->
+                        <!-- FORMULARY -->
                         <div x-show="mode === 'formulary'" class="space-y-3">
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Search hospital formulary</label>
@@ -412,42 +467,41 @@
                                        placeholder="Type brand or generic name..."
                                        @input="clearPick()"
                                        hx-get="{% url 'doctors_portal:formulary_search' encounter.id %}"
-                                       hx-trigger="load, input changed delay:250ms, search"
+                                       hx-trigger="input changed delay:250ms, search"
                                        hx-target="#formulary-results"
                                        hx-swap="innerHTML"
                                        class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
                             </div>
                             <div id="formulary-results"
-                                 class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white shadow-inner">
-                                <p class="p-3 text-xs text-slate-400 italic text-center">Loading available medications...</p>
+                                 class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white">
+                                <p class="p-3 text-xs text-slate-400 italic text-center">Type at least two letters to search.</p>
                             </div>
                             <input type="hidden" name="medication_id" :value="pickedId">
                             <div x-show="pickedId"
                                  x-cloak
                                  class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1">
-                                <p class="font-bold text-indigo-900">
-                                    Selected: <span class="text-indigo-700" x-text="pickedLabel"></span>
-                                </p>
+                                <p class="font-bold text-indigo-900">Selected: <span class="text-indigo-700"
+       x-text="pickedLabel"></span></p>
                                 <p x-show="pickedStock !== null && pickedStock <= 0"
                                    class="text-amber-700 font-semibold">⚠ Out of stock in pharmacy.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                                    Allergy Override Reason <span class="text-slate-400 font-normal">(Required if allergic)</span>
+                                    Allergy override reason <span class="text-slate-400 font-normal">(required if allergic)</span>
                                 </label>
                                 <textarea name="allergy_override_reason"
                                           rows="2"
-                                          placeholder="Explain why this medicine is safe to administer despite recorded allergies..."
+                                          placeholder="Why this medicine is safe despite a recorded allergy..."
                                           class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
                             </div>
                         </div>
-                        <!-- ===== EXTERNAL SECTION ===== -->
+                        <!-- EXTERNAL -->
                         <div x-show="mode === 'external'" x-cloak class="space-y-3">
                             <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Medicine Name *</label>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Medicine name *</label>
                                 <input type="text"
                                        name="external_name"
-                                       placeholder="e.g., Augmentin 625mg"
+                                       placeholder="e.g. Augmentin 625mg"
                                        class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                             </div>
                             <div class="grid grid-cols-2 gap-3">
@@ -462,15 +516,15 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Form</label>
                                     <input type="text"
                                            name="external_form"
-                                           placeholder="e.g. Tablet, Syrup"
+                                           placeholder="e.g. Tablet, syrup"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Reason for External Purchase</label>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Reason for external purchase</label>
                                 <textarea name="external_reason"
                                           rows="2"
-                                          placeholder="Reason (Required if medicine exists in hospital formulary)"
+                                          placeholder="Required if the medicine is in the hospital formulary"
                                           class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
                             </div>
                             <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
@@ -483,11 +537,11 @@
                                            value="1"
                                            x-model="ack"
                                            class="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500">
-                                    <span>I have verified patient allergies and accept clinical responsibility.</span>
+                                    <span>I have verified the patient's allergies and accept clinical responsibility.</span>
                                 </label>
                             </div>
                         </div>
-                        <!-- ===== SHARED DOSAGE CONTROLS ===== -->
+                        <!-- SHARED DOSAGE -->
                         <div class="pt-2 border-t border-slate-100 space-y-3">
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
@@ -495,9 +549,9 @@
                                     <select name="route"
                                             class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                         <option value="ORAL">Oral</option>
-                                        <option value="IM">Intramuscular (Nurse)</option>
-                                        <option value="IV">Intravenous (Nurse)</option>
-                                        <option value="SC">Subcutaneous (Nurse)</option>
+                                        <option value="IM">Intramuscular (nurse)</option>
+                                        <option value="IV">Intravenous (nurse)</option>
+                                        <option value="SC">Subcutaneous (nurse)</option>
                                         <option value="TOPICAL">Topical</option>
                                     </select>
                                 </div>
@@ -515,14 +569,14 @@
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Dose Text</label>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Dose text</label>
                                     <input type="text"
                                            name="dose_text"
                                            placeholder="e.g. 2 tablets"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Duration (Days)</label>
+                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Duration (days)</label>
                                     <input type="number"
                                            name="duration_days"
                                            min="1"
@@ -531,32 +585,30 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Actions -->
                         <div class="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-100">
                             <button type="button"
                                     @click="showPrescribe = false"
-                                    class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 transition">
-                                Cancel
-                            </button>
+                                    class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 transition">Cancel</button>
                             <button type="submit"
                                     :disabled="(mode === 'formulary' && !pickedId) || (mode === 'external' && !ack)"
                                     :class="(mode === 'formulary' && !pickedId) || (mode === 'external' && !ack) ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-sm'"
-                                    class="flex-1 text-white min-h-11 rounded-xl text-sm font-bold transition">
-                                Issue Prescription
-                            </button>
+                                    class="flex-1 text-white min-h-11 rounded-xl text-sm font-bold transition">Issue prescription</button>
                         </div>
                     </form>
                 </div>
             </div>
+            <!-- LABORATORY -->
             <div x-show="showLab"
                  x-cloak
                  style="display:none"
                  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
                 <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col"
-                     @click.away="showLab = false"
-                     x-data="{ picked: {}, total: 0, indication: '' }">
+                     @click.away="showLab = false">
                     <div class="flex justify-between items-center border-b pb-3">
-                        <h3 class="font-bold text-lg">Order laboratory tests</h3>
+                        <div>
+                            <h3 class="font-bold text-lg">Order laboratory tests</h3>
+                            <p class="text-xs text-slate-500">Each test is paid for at billing before the lab processes it.</p>
+                        </div>
                         <button type="button"
                                 @click="showLab = false"
                                 class="text-slate-400 font-bold">×</button>
@@ -570,19 +622,19 @@
                             {% for section in sections %}
                                 <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ section.grouper }}</p>
                                 {% for t in section.list %}
-                                    <label class="flex items-center justify-between gap-3 border rounded-xl p-2.5 cursor-pointer hover:bg-slate-50"
-                                           :class="picked['{{ t.id }}'] ? 'border-violet-600 bg-violet-50' : 'border-slate-200'">
+                                    <label class="flex items-center justify-between gap-3 border border-slate-200 rounded-xl p-2.5 cursor-pointer hover:bg-slate-50 has-[:checked]:border-violet-600 has-[:checked]:bg-violet-50">
                                         <span class="flex items-center gap-2 text-sm">
                                             <input type="checkbox"
                                                    name="test_ids"
                                                    value="{{ t.id }}"
-                                                   x-model="picked['{{ t.id }}']"
-                                                   @change="total = Object.keys(picked).reduce((s, k) => s + (picked[k] ? {{ t.price|stringformat:'s' }}*1 * 0 + ({{ t.price }}) * 1 : 0) * 0 + (picked[k] ? 0 : 0), 0)">
+                                                   class="rounded text-violet-600">
                                             <span class="font-semibold">{{ t.name }}</span>
                                             <span class="text-xs text-slate-500">{{ t.specimen }}</span>
                                         </span>
-                                        <span class="text-sm font-extrabold text-amber-700 whitespace-nowrap">KES {{ t.price|floatformat:0 }}</span>
+                                        <span class="text-sm font-extrabold text-amber-700 whitespace-nowrap bg-amber-50 px-2 py-0.5 rounded-lg">KES {{ t.price|floatformat:0 }}</span>
                                     </label>
+                                {% empty %}
+                                    <p class="text-sm text-slate-500 italic">No tests in the catalogue yet.</p>
                                 {% endfor %}
                             {% endfor %}
                         </div>
@@ -591,17 +643,14 @@
                             <textarea name="indication"
                                       rows="2"
                                       required
-                                      x-model="indication"
                                       class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
                         </div>
-                        <p class="text-xs text-slate-600">The patient pays each test at billing. Tests are processed after payment.</p>
                         <button type="submit"
-                                class="bg-violet-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-violet-700">
-                            Send tests to the lab
-                        </button>
+                                class="bg-violet-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-violet-700">Send tests to the lab</button>
                     </form>
                 </div>
             </div>
+            <!-- SCAN -->
             <div x-show="showScan"
                  x-cloak
                  style="display:none"
@@ -641,6 +690,7 @@
                     </form>
                 </div>
             </div>
+            <!-- ADMIT -->
             {% if not active_admission %}
                 <div x-show="showAdmit"
                      x-cloak
