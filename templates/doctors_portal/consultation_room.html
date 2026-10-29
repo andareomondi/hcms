@@ -406,7 +406,7 @@
         {% endif %}
         <!-- ===== Modals: rendered only when the visit is open to changes ===== -->
         {% if can_act %}
-            <!-- PRESCRIBE -->
+            <!-- PRESCRIBE: replaces the existing block in consultation_room_part2.html -->
             <div x-show="showPrescribe"
                  x-cloak
                  style="display:none"
@@ -414,22 +414,22 @@
                  @click.self="showPrescribe = false">
                 <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto"
                      x-data="{
-                         mode: 'formulary',
-                         pickedId: '',
-                         pickedLabel: '',
-                         pickedStock: null,
-                         ack: false,
-                         pick(id, label, strength, stock) {
-                             this.pickedId = id;
-                             this.pickedLabel = label + (strength ? ' (' + strength + ')' : '');
-                             this.pickedStock = stock;
-                         },
-                         clearPick() {
-                             this.pickedId = '';
-                             this.pickedLabel = '';
-                             this.pickedStock = null;
-                         }
-                     }">
+             mode: '{% if prefill %}external{% else %}formulary{% endif %}',
+             pickedId: '',
+             pickedLabel: '',
+             pickedStock: null,
+             ack: false,
+             pick(id, label, strength, stock) {
+                 this.pickedId = id;
+                 this.pickedLabel = label + (strength ? ' (' + strength + ')' : '');
+                 this.pickedStock = stock;
+             },
+             clearPick() {
+                 this.pickedId = '';
+                 this.pickedLabel = '';
+                 this.pickedStock = null;
+             }
+         }">
                     <div class="flex items-start justify-between border-b border-slate-100 pb-3">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 tracking-tight">Prescribe Medicine</h3>
@@ -440,6 +440,12 @@
                                 class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold text-lg flex items-center justify-center transition"
                                 aria-label="Close">×</button>
                     </div>
+                    {% if prefill %}
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
+                            The hospital could not supply this medicine, so the external prescription is filled in.
+                            Check the details, give the reason, and confirm the allergy check before issuing it.
+                        </div>
+                    {% endif %}
                     <form action="{% url 'doctors_portal:prescribe' encounter.id %}"
                           method="post"
                           class="space-y-4">
@@ -483,7 +489,7 @@
                                 <p class="font-bold text-indigo-900">Selected: <span class="text-indigo-700"
        x-text="pickedLabel"></span></p>
                                 <p x-show="pickedStock !== null && pickedStock <= 0"
-                                   class="text-amber-700 font-semibold">⚠ Out of stock in pharmacy.</p>
+                                   class="text-amber-700 font-semibold">⚠ Not enough stock for this quantity.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -501,6 +507,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Medicine name *</label>
                                 <input type="text"
                                        name="external_name"
+                                       value="{{ prefill.external_name|default:'' }}"
                                        placeholder="e.g. Augmentin 625mg"
                                        class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                             </div>
@@ -509,6 +516,7 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Strength</label>
                                     <input type="text"
                                            name="external_strength"
+                                           value="{{ prefill.external_strength|default:'' }}"
                                            placeholder="e.g. 500mg"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                                 </div>
@@ -516,6 +524,7 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Form</label>
                                     <input type="text"
                                            name="external_form"
+                                           value="{{ prefill.external_form|default:'' }}"
                                            placeholder="e.g. Tablet, syrup"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                                 </div>
@@ -525,7 +534,7 @@
                                 <textarea name="external_reason"
                                           rows="2"
                                           placeholder="Required if the medicine is in the hospital formulary"
-                                          class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                                          class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">{{ prefill.external_reason|default:'' }}</textarea>
                             </div>
                             <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
                                 <p class="text-xs text-amber-900 leading-relaxed">
@@ -548,22 +557,32 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Route</label>
                                     <select name="route"
                                             class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                        <option value="ORAL">Oral</option>
-                                        <option value="IM">Intramuscular (nurse)</option>
-                                        <option value="IV">Intravenous (nurse)</option>
-                                        <option value="SC">Subcutaneous (nurse)</option>
-                                        <option value="TOPICAL">Topical</option>
+                                        <option value="ORAL"
+                                                {% if prefill.route == "ORAL" %}selected{% endif %}>Oral</option>
+                                        <option value="IM"
+                                                {% if prefill.route == "IM" %}selected{% endif %}>Intramuscular (nurse)</option>
+                                        <option value="IV"
+                                                {% if prefill.route == "IV" %}selected{% endif %}>Intravenous (nurse)</option>
+                                        <option value="SC"
+                                                {% if prefill.route == "SC" %}selected{% endif %}>Subcutaneous (nurse)</option>
+                                        <option value="TOPICAL"
+                                                {% if prefill.route == "TOPICAL" %}selected{% endif %}>Topical</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Frequency</label>
                                     <select name="frequency"
                                             class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                        <option value="OD">Once daily (OD)</option>
-                                        <option value="BID">Twice daily (BID)</option>
-                                        <option value="TID">Three times daily (TID)</option>
-                                        <option value="QID">Four times daily (QID)</option>
-                                        <option value="STAT">Immediately (STAT)</option>
+                                        <option value="OD"
+                                                {% if prefill.frequency == "OD" %}selected{% endif %}>Once daily (OD)</option>
+                                        <option value="BID"
+                                                {% if prefill.frequency == "BID" %}selected{% endif %}>Twice daily (BID)</option>
+                                        <option value="TID"
+                                                {% if prefill.frequency == "TID" %}selected{% endif %}>Three times daily (TID)</option>
+                                        <option value="QID"
+                                                {% if prefill.frequency == "QID" %}selected{% endif %}>Four times daily (QID)</option>
+                                        <option value="STAT"
+                                                {% if prefill.frequency == "STAT" %}selected{% endif %}>Immediately (STAT)</option>
                                     </select>
                                 </div>
                             </div>
@@ -572,6 +591,7 @@
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Dose text</label>
                                     <input type="text"
                                            name="dose_text"
+                                           value="{{ prefill.dose_text|default:'' }}"
                                            placeholder="e.g. 2 tablets"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 </div>
@@ -580,7 +600,7 @@
                                     <input type="number"
                                            name="duration_days"
                                            min="1"
-                                           value="5"
+                                           value="{{ prefill.duration_days|default:5 }}"
                                            class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                 </div>
                             </div>

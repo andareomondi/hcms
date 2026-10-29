@@ -15,8 +15,9 @@ from triage_queue.models import Encounter
 
 from . import payments
 from . import services as bill
-from .models import BillingAccount, Charge, Payment
+from .models import BillingAccount, Charge, Payment, Refund
 from .payments import PaymentError
+from .refunds import RefundError, pay_refund
 
 
 def is_billing(user):
@@ -232,3 +233,28 @@ def mark_charge_paid_action(request, charge_id):
 
     messages.success(request, f"Charge '{charge.description}' marked as PAID.")
     return redirect("billing:dashboard")
+
+@requires(Cap.TAKE_PAYMENT)
+def refunds_view(request):
+    pending = Refund.objects.filter(status="PENDING").select_related(
+        "encounter__patient", "requested_by__user", "charge").order_by("requested_at")
+    paid = Refund.objects.filter(status="PAID").select_related(
+        "encounter__patient", "paid_by__user").order_by("-paid_at")[:100]
+    return render(request, "billing/refunds.html", {"pending": pending, "paid": paid})
+
+
+@requires(Cap.TAKE_PAYMENT)
+@require_POST
+def pay_refund_action(request, refund_id):
+    refund = get_object_or_404(Refund, pk=refund_id)
+    try:
+        pay_refund(refund=refund, staff=request.staff_profile,
+                   method=request.POST.get("method", ""), reference=request.POST.get("reference", ""))
+    except RefundError as exc:
+        messages.error(request, str(exc))
+        return redirect("billing:refunds")
+    log_action(request, AuditAction.PAYMENT_RECORDED,
+               f"Refund KES {refund.amount} paid out to {refund.encounter.patient} "
+               f"({refund.get_method_display()} {refund.reference}).")
+    messages.success(request, "Refund paid out and recorded.")
+    return redirect("billing:refunds")

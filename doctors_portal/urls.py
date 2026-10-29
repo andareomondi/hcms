@@ -17,4 +17,5 @@ urlpatterns = [
     path("workstation/<uuid:encounter_id>/", views.doctor_workstation_view, name="workstation"),
     path("workstation/<uuid:encounter_id>/note/", views.save_clinical_note, name="save_note"),
     path("call-next/", views.call_next_patient_action, name="call_next"),
+    path("prescription/<uuid:order_id>/cancel/", views.cancel_medication_order_action, name="cancel_prescription"),
 ]

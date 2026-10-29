@@ -19,7 +19,7 @@ from hospital_system.permissions import Cap, caps_for, requires
 from . import serials as serial_rules
 from . import services
 from .models import Medication, MedicationOrder, StockItem, StockUnit
-from .services import PharmacyError
+from .services import PharmacyError, StockShortError
 
 
 def _profile(request):
@@ -44,15 +44,22 @@ def _annotate(orders):
             o.stock_quantity = None
         else:
             o.allergy_hits = list(conflicts_for(o.encounter.patient, o.medication))
-            o.stock_quantity = (StockItem.objects.filter(medication=o.medication)
-                                .values_list("quantity", flat=True).first())
+            o.stock_quantity = services.usable_doses(o.medication)
+            # o.stock_quantity = (StockItem.objects.filter(medication=o.medication)
+            #                     .values_list("quantity", flat=True).first())
         o.dispensed_total = sum(d.quantity for d in o.dispensations.all())
         o.given_total = o.administrations.count()
     return rows
 
 
+def _refresh_expiry(request):
+    if request.staff_profile is not None:
+        services.expire_due_units(staff=request.staff_profile)
+
+
 @requires(Cap.VIEW_PHARMACY)
 def pharmacy_dashboard_view(request):
+    _refresh_expiry(request)
     query = request.GET.get("q", "").strip()
     meds = Medication.objects.select_related("stock").prefetch_related("allergen_classes").order_by("brand_name")
     if query:
@@ -137,45 +144,9 @@ def _render_form(request, medication, stock, classes, selected_ids):
     })
 
 
-# @requires(Cap.PHARMACY_MANAGE)
-# @require_POST
-# def stock_receive_action(request, medication_id):
-#     medication = get_object_or_404(Medication, pk=medication_id)
-#     try:
-#         qty = _int(request.POST.get("quantity"), "Quantity")
-#         services.receive_stock(medication=medication, quantity=qty, staff=_profile(request))
-#     except PharmacyError as exc:
-#         messages.error(request, str(exc))
-#         return redirect("pharmacy:medication_edit", medication_id=medication.id)
-#
-#     log_action(request, AuditAction.STOCK_RECEIVED,
-#                f"Received {qty} of {medication.brand_name} {medication.strength}.")
-#     messages.success(request, f"Received {qty} unit(s).")
-#     return redirect("pharmacy:medication_edit", medication_id=medication.id)
-#
-#
-# @requires(Cap.PHARMACY_MANAGE)
-# @require_POST
-# def stock_adjust_action(request, medication_id):
-#     medication = get_object_or_404(Medication, pk=medication_id)
-#     note = request.POST.get("note", "").strip()
-#     try:
-#         delta = _int(request.POST.get("delta"), "Adjustment")
-#         if not note:
-#             raise PharmacyError("Give a reason for the adjustment.")
-#         services.adjust_stock(medication=medication, delta=delta, staff=_profile(request))
-#     except PharmacyError as exc:
-#         messages.error(request, str(exc))
-#         return redirect("pharmacy:medication_edit", medication_id=medication.id)
-#
-#     log_action(request, AuditAction.STOCK_ADJUSTED,
-#                f"Adjusted {medication.brand_name} by {delta:+d}: {note}")
-#     messages.success(request, f"Stock adjusted by {delta:+d}.")
-#     return redirect("pharmacy:medication_edit", medication_id=medication.id)
-
-
 @requires(Cap.DISPENSE)
 def dispense_queue_view(request):
+    _refresh_expiry(request)
     orders = (MedicationOrder.objects
               .filter(source="FORMULARY", fulfilment="PHARMACY_DISPENSE",
                       status__in=["ORDERED", "PARTIALLY_DONE"])
@@ -193,6 +164,13 @@ def dispense_action(request, order_id):
         scanned = serial_rules.parse_list(request.POST.get("serials", ""))
         order = services.dispense(order_id=order_id, quantity=qty, staff=_profile(request),
                                   serials=scanned or None)
+    except StockShortError as exc:
+        services.mark_stock_short(order_id=order_id, staff=_profile(request),
+                                  reason=f"at dispensing: {exc}")
+        messages.error(request, f"{exc} The order is closed as stock not available. "
+                                "The doctor has been asked to prescribe an external purchase; any payment is "
+                                "now a refund for billing.")
+        return redirect("pharmacy:dispense_queue")
     except (PharmacyError, serial_rules.SerialError) as exc:
         messages.error(request, str(exc))
         return redirect("pharmacy:dispense_queue")
@@ -203,8 +181,10 @@ def dispense_action(request, order_id):
     return redirect("pharmacy:dispense_queue")
 
 
+
 @requires(Cap.NURSE_ADMINISTER)
 def nurse_worklist_view(request):
+    _refresh_expiry(request)
     orders_qs = (MedicationOrder.objects
                  .filter(source="FORMULARY", fulfilment="NURSE_ADMINISTER",
                          status__in=["ORDERED", "PARTIALLY_DONE"])
@@ -221,19 +201,24 @@ def nurse_worklist_view(request):
     })
 
 
+
 @requires(Cap.NURSE_ADMINISTER)
 @require_POST
 def administer_action(request, order_id):
     try:
         scanned = serial_rules.parse_list(request.POST.get("serials", ""))
         order = services.administer(
-            order_id=order_id,
-            nurse=_profile(request),
+            order_id=order_id, nurse=_profile(request),
             dose_given_text=request.POST.get("dose_given_text", ""),
-            site=request.POST.get("site", ""),
-            notes=request.POST.get("notes", ""),
+            site=request.POST.get("site", ""), notes=request.POST.get("notes", ""),
             serials=scanned or None,
         )
+    except StockShortError as exc:
+        services.mark_stock_short(order_id=order_id, staff=_profile(request),
+                                  reason=f"at administration: {exc}")
+        messages.error(request, f"{exc} The order is closed as stock not available. "
+                                "The doctor must prescribe an external purchase if the patient still needs it.")
+        return redirect("pharmacy:nurse_worklist")
     except (PharmacyError, serial_rules.SerialError) as exc:
         messages.error(request, str(exc))
         return redirect("pharmacy:nurse_worklist")
@@ -242,6 +227,7 @@ def administer_action(request, order_id):
                f"Administered {order.medication.brand_name} to {order.encounter.patient}.")
     messages.success(request, f"Recorded: {order.medication.brand_name} given.")
     return redirect("pharmacy:nurse_worklist")
+
 
 
 @requires(Cap.PHARMACY_MANAGE)
@@ -279,6 +265,7 @@ UNIT_EXPIRY_FILTERS = [
 
 @requires(Cap.VIEW_PHARMACY)
 def units_view(request):
+    _refresh_expiry(request)
     today = timezone.localdate()
     soon_cutoff = today + timedelta(days=30)
 

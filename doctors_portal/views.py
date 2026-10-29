@@ -1,8 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.db.models import IntegerField, OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,7 +17,9 @@ from dashboard.utils import log_action
 from duty.services import current_session
 from lab.models import LabTest
 from notifications.services import notify_on_duty
-from pharmacy.models import Medication, MedicationOrder, StockItem
+from pharmacy import services as pharmacy_services
+from pharmacy.models import Medication, MedicationOrder
+from pharmacy.services import PharmacyError, StockShortError
 from radiology.models import ScanOrder
 from radiology.services import scan_cancellable, scan_charge_or_none
 from triage_queue.models import Encounter, QueueEntry
@@ -45,19 +46,16 @@ def is_physician(user):
 def formulary_search_view(request, encounter_id):
     get_object_or_404(Encounter, pk=encounter_id)
     q = request.GET.get("q", "").strip()
-    results = Medication.objects.filter(is_active=True)
+    results = []
+    if len(q) >= 2:
+        results = list(Medication.objects.filter(is_active=True)
+                       .filter(Q(brand_name__icontains=q) | Q(generic_name__icontains=q))
+                       .order_by("brand_name")[:20])
+        for m in results:
+            m.available = pharmacy_services.available_to_prescribe(m)
+    return render(request, "doctors_portal/_formulary_results.html", {"results": results, "q": q})
 
-    if q:
-        results = results.filter(Q(brand_name__icontains=q) | Q(generic_name__icontains=q))
 
-    stock_qty = StockItem.objects.filter(medication=OuterRef("pk")).values("quantity")[:1]
-    results = (results.annotate(stock_quantity=Coalesce(
-                    Subquery(stock_qty, output_field=IntegerField()),
-                    Value(0)))
-               .order_by("brand_name")[:20])
-
-    return render(request, "doctors_portal/_formulary_results.html",
-                  {"results": results, "q": q})
 
 @login_required
 @user_passes_test(is_physician)
@@ -93,6 +91,7 @@ def consultation_room_view(request, encounter_id):
                  .select_related("allergen"))
     tally = billing_services.encounter_tally(encounter)
     mode, queue_entry = consultation_mode(encounter, request.staff_profile)
+    prefill = request.session.pop("prefill_external", None)
 
     context = {
         "encounter": encounter,
@@ -104,6 +103,7 @@ def consultation_room_view(request, encounter_id):
         "wards": wards,
         "latest_vitals": latest_vitals,
         "vitals_history": vitals_history,
+        "prefill": prefill,
         "scan_orders": scan_orders,
         "allergies": allergies,
         "tally": tally,
@@ -190,6 +190,7 @@ def prescribe_medication_action(request, encounter_id):
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
 
+
 def _create_formulary(request, encounter, profile, route, frequency, dose_text, days, doses_total):
     medication = Medication.objects.filter(pk=request.POST.get("medication_id"), is_active=True).first()
     if medication is None:
@@ -205,20 +206,28 @@ def _create_formulary(request, encounter, profile, route, frequency, dose_text, 
                        "Enter an override reason to prescribe anyway.")
         return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
-    fulfilment = "PHARMACY_DISPENSE" if route == "ORAL" else "NURSE_ADMINISTER"
-    with transaction.atomic():
-        order = MedicationOrder.objects.create(
-            encounter=encounter, ordered_by=profile, medication=medication, source="FORMULARY",
-            route=route, fulfilment=fulfilment, dose_text=dose_text or medication.strength,
-            frequency_text=frequency, duration_days=days, doses_total=doses_total,
-            status="ORDERED", allergy_override_reason=override if hits else "",
+    try:
+        order = pharmacy_services.create_formulary_order(
+            encounter=encounter, medication=medication, doctor=profile,
+            route=route, frequency=frequency, dose_text=dose_text, days=days,
+            doses_total=doses_total, override=override if hits else "", staff=profile,
         )
-        billing_services.add_charge(
-            encounter=encounter, source_type="MEDICATION_ORDER",
-            description=f"{medication.brand_name} {medication.strength} x{doses_total}",
-            unit_price=medication.unit_price, quantity=doses_total, staff=profile,
-            source_id=order.id, key=f"med:{order.id}",
-        )
+    except StockShortError as exc:
+        request.session["prefill_external"] = {
+            "external_name": medication.brand_name,
+            "external_strength": medication.strength,
+            "external_form": medication.form,
+            "external_reason": (f"Hospital stock not available at prescribing: {exc} "
+                                f"Prescribed as external to avoid a delay."),
+            "route": route,
+            "frequency": frequency,
+            "dose_text": dose_text,
+            "duration_days": days,
+        }
+        messages.error(request,
+                       f"{exc} The hospital cannot supply this prescription. The external prescription "
+                       "is filled in below. Review it, confirm the allergy check, and issue it.")
+        return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     if hits:
         names = ", ".join(h.allergen.display_name for h in hits)
@@ -226,9 +235,10 @@ def _create_formulary(request, encounter, profile, route, frequency, dose_text, 
                    f"Prescribed {medication.brand_name} despite recorded allergy to {names} "
                    f"for {encounter.patient}. Reason: {override}")
     log_action(request, AuditAction.MEDICATION_ORDERED,
-               f"Prescribed {medication.brand_name} ({fulfilment}) for {encounter.patient}.")
+               f"Prescribed {medication.brand_name} for {encounter.patient} ({doses_total} dose(s)).")
     messages.success(request, f"Prescribed {medication.brand_name}.")
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
+
 
 
 def _create_external(request, encounter, profile, route, frequency, dose_text, days, doses_total):
@@ -502,3 +512,24 @@ def doctor_workstation_view(request, encounter_id):
 @require_POST
 def save_clinical_note(request, encounter_id):
     return add_clinical_note_action(request, encounter_id)
+
+
+@login_required
+@user_passes_test(is_physician)
+@require_POST
+def cancel_medication_order_action(request, order_id):
+    order = get_object_or_404(MedicationOrder, pk=order_id)
+    if order.ordered_by_id != request.staff_profile.id:
+        messages.error(request, "Only the prescribing doctor can cancel this prescription.")
+        return redirect("doctors_portal:consultation_room", encounter_id=order.encounter_id)
+    try:
+        pharmacy_services.cancel_medication_order(
+            order_id=order.id, staff=request.staff_profile,
+            reason=request.POST.get("reason", ""))
+    except PharmacyError as exc:
+        messages.error(request, str(exc))
+    else:
+        log_action(request, AuditAction.MEDICATION_ORDERED,
+                   f"Cancelled prescription for {order.encounter.patient}: {request.POST.get('reason', '').strip()}")
+        messages.success(request, "Prescription cancelled. Any payment on it is now a refund for billing.")
+    return redirect("doctors_portal:consultation_room", encounter_id=order.encounter_id)

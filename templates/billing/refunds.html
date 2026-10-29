@@ -1,0 +1,95 @@
+{% extends "base.html" %} {% block title %}Refunds - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Refunds</h1>
+        <p class="text-sm text-slate-500">
+            Money owed back where the hospital could not supply a paid medicine or the
+            prescription was cancelled.
+        </p>
+    </div>
+    <div class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Pending payout</h2>
+        </div>
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Requested</th>
+                    <th class="p-3">Patient</th>
+                    <th class="p-3">Reason</th>
+                    <th class="p-3">Amount</th>
+                    <th class="p-3">Pay out</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for r in pending %}
+                    <tr class="align-top">
+                        <td class="p-3 text-xs font-mono">
+                            {{ r.requested_at|date:"Y-m-d H:i" }}
+                            <br />
+                            by {{ r.requested_by.user.get_full_name|default:r.requested_by.user.username }}
+                        </td>
+                        <td class="p-3 font-bold">{{ r.encounter.patient }}</td>
+                        <td class="p-3 text-xs">{{ r.reason }}</td>
+                        <td class="p-3 font-bold">KES {{ r.amount|floatformat:2 }}</td>
+                        <td class="p-3">
+                            <form method="post"
+                                  action="{% url 'billing:pay_refund' r.id %}"
+                                  class="flex flex-col gap-2"
+                                  onsubmit="return confirm('Confirm the payout has been made?');">
+                                {% csrf_token %}
+                                <select name="method"
+                                        required
+                                        class="border rounded-lg px-2 py-1 text-xs bg-white">
+                                    <option value="MANUAL">Manual (cash)</option>
+                                    <option value="MPESA">M-Pesa</option>
+                                </select>
+                                <input name="reference"
+                                       placeholder="M-Pesa code (if M-Pesa)"
+                                       class="border rounded-lg px-2 py-1 text-xs uppercase" />
+                                <button class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Record payout</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5"
+                            class="p-6 text-center italic text-slate-500">No refunds waiting for payout.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="bg-white rounded-2xl border overflow-hidden">
+        <div class="p-4 bg-slate-50/50 border-b">
+            <h2 class="font-bold text-xs uppercase tracking-wider text-slate-700">Paid out (latest 100)</h2>
+        </div>
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Paid</th>
+                    <th class="p-3">Patient</th>
+                    <th class="p-3">Amount</th>
+                    <th class="p-3">Method</th>
+                    <th class="p-3">Paid by</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for r in paid %}
+                    <tr>
+                        <td class="p-3 text-xs font-mono">{{ r.paid_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3">{{ r.encounter.patient }}</td>
+                        <td class="p-3 font-bold">KES {{ r.amount|floatformat:2 }}</td>
+                        <td class="p-3 text-xs">{{ r.get_method_display }} {{ r.reference }}</td>
+                        <td class="p-3 text-xs">{{ r.paid_by.user.get_full_name|default:r.paid_by.user.username }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="p-6 text-center italic text-slate-500">No refunds paid out yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

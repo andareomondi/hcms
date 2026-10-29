@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from billing.models import Refund
 from core_patients.models import PatientRelationship
 
 from .models import BillingAccount, Charge, Payment, PaymentAllocation
@@ -215,8 +216,10 @@ def allocate_payment(*, payment, encounter, amount, staff):
 
 def patient_totals(patient):
     charges = Charge.objects.filter(treated_patient=patient).exclude(status="VOIDED")
-    paid = Payment.objects.filter(encounter__patient=patient).aggregate(t=Sum("amount"))["t"] or ZERO
+    paid_in = Payment.objects.filter(encounter__patient=patient).aggregate(t=Sum("amount"))["t"] or ZERO
+    refunded = Refund.objects.filter(encounter__patient=patient).aggregate(t=Sum("amount"))["t"] or ZERO
     total = charges.aggregate(t=Sum("amount"))["t"] or ZERO
+    paid = paid_in - refunded
     return {"total": total, "paid": paid, "outstanding": total - paid}
 
 
@@ -224,15 +227,17 @@ def encounter_tally(encounter):
     charges = Charge.objects.filter(encounter=encounter).exclude(status="VOIDED")
     provisional = charges.filter(status="PROVISIONAL").aggregate(t=Sum("amount"))["t"] or ZERO
     posted = charges.filter(status__in=["POSTED", "PAID"]).aggregate(t=Sum("amount"))["t"] or ZERO
-    paid = Payment.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    paid_in = Payment.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    refunded = Refund.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    paid = paid_in - refunded
     return {
         "provisional": provisional,
         "posted": posted,
         "paid": paid,
+        "refunded": refunded,
         "total": provisional + posted,
         "outstanding": provisional + posted - paid,
     }
-
 
 def post_encounter_charges(encounter, staff):
     """

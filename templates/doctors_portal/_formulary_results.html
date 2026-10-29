@@ -1,28 +1,19 @@
-{% for med in results %}
-    <div @click="pick('{{ med.id }}', '{{ med.brand_name|escapejs }}', '{{ med.strength|escapejs }}', {{ med.stock_quantity|default:0 }})"
-         class="p-3 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-2">
-        <div>
-            <p class="font-bold text-slate-900 text-sm">{{ med.brand_name }} <span class="font-normal text-slate-500 text-xs">({{ med.strength }})</span></p>
-            <p class="text-xs text-slate-500">{{ med.generic_name }} · {{ med.form }}</p>
-        </div>
-        <div class="text-right shrink-0">
-            {% if med.stock_quantity > 10 %}
-                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {{ med.stock_quantity }} in stock
+<ul class="divide-y divide-slate-100">
+    {% for m in results %}
+        <li>
+            <button type="button"
+                    @click="pick('{{ m.id }}', '{{ m.brand_name|escapejs }}', '{{ m.strength|escapejs }}', {{ m.available }})"
+                    class="w-full text-left px-3 py-2.5 hover:bg-indigo-50 flex justify-between items-center gap-3">
+                <span>
+                    <span class="font-bold text-sm text-slate-900">{{ m.brand_name }}</span>
+                    <span class="text-xs text-slate-500">{{ m.generic_name }} · {{ m.strength }} · {{ m.form }}</span>
                 </span>
-            {% elif med.stock_quantity > 0 %}
-                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                    Low ({{ med.stock_quantity }})
+                <span class="text-xs font-bold whitespace-nowrap {% if m.available > 0 %}text-emerald-700{% else %}text-red-700{% endif %}">
+                    {% if m.available > 0 %}{{ m.available }} available to prescribe{% else %}Not available{% endif %}
                 </span>
-            {% else %}
-                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                    Out of stock
-                </span>
-            {% endif %}
-        </div>
-    </div>
-{% empty %}
-    <p class="p-4 text-xs text-slate-500 italic text-center">
-        {% if q %}No formulary medications found matching "{{ q }}".{% else %}No active medications in hospital formulary.{% endif %}
-    </p>
-{% endfor %}
+            </button>
+        </li>
+    {% empty %}
+        <li class="p-3 text-xs text-slate-500">No formulary match. Use External purchase below.</li>
+    {% endfor %}
+</ul>

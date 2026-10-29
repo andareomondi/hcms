@@ -4,7 +4,9 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from billing import refunds as billing_refunds
 from billing import services as billing
+from billing.prices import CONSULTATION_FEE  # noqa: F401  (kept for parity with other services)
 from billing.services import medication_charge_or_none
 from core_patients.allergy_services import conflicts_for
 
@@ -18,6 +20,8 @@ from .models import (
     StockUnit,
 )
 
+OPEN_ORDER_STATUSES = ("ORDERED", "PARTIALLY_DONE")
+
 
 class PharmacyError(Exception):
     """A rule staff must see. Shown as-is."""
@@ -25,6 +29,10 @@ class PharmacyError(Exception):
 
 class PrepayError(PharmacyError):
     """A medicine is not paid for. Shown as-is."""
+
+
+class StockShortError(PharmacyError):
+    """Not enough usable stock for the requested doses. The order can be marked short."""
 
 
 # ---------- helpers ----------
@@ -46,10 +54,64 @@ def _lock_order(order_id):
             .get(pk=order_id))
 
 
+def usable_doses(medication, today=None):
+    """Doses in unexpired, in-stock units. Use this for every stock figure shown to staff."""
+    today = today or timezone.localdate()
+    total = (StockUnit.objects
+             .filter(medication=medication, status="IN_STOCK", doses_remaining__gt=0,
+                     batch__expiry_date__gte=today)
+             .aggregate(t=Sum("doses_remaining"))["t"])
+    return total or 0
+
+
+def remaining_doses(order):
+    """Doses an open order still needs: prescribed, minus dispensed and given."""
+    dispensed = sum(d.quantity for d in order.dispensations.all())
+    given = len(order.administrations.all())
+    return max(0, order.doses_total - dispensed - given)
+
+
+def committed_doses(medication, exclude_order_id=None):
+    """Doses already promised to open formulary orders for this medicine."""
+    qs = (MedicationOrder.objects
+          .filter(medication=medication, source="FORMULARY", status__in=OPEN_ORDER_STATUSES)
+          .prefetch_related("dispensations", "administrations"))
+    if exclude_order_id:
+        qs = qs.exclude(pk=exclude_order_id)
+    return sum(remaining_doses(o) for o in qs)
+
+
+def available_to_prescribe(medication, today=None):
+    """Usable stock minus what open orders already need. Never negative."""
+    return max(0, usable_doses(medication, today) - committed_doses(medication))
+
+
+# ---------- expiry (automatic) ----------
+
+@transaction.atomic
+def expire_units(*, staff, today=None):
+    """
+    Writes off every in-stock unit whose batch expiry date is before today.
+    Idempotent: a unit is only touched while its status is IN_STOCK.
+    """
+    today = today or timezone.localdate()
+    expired = list(StockUnit.objects.select_for_update().select_related("medication", "batch")
+                   .filter(status="IN_STOCK", batch__expiry_date__lt=today))
+    for unit in expired:
+        if unit.doses_remaining:
+            consume_unit(unit=unit, doses=unit.doses_remaining, staff=staff, reason="EXPIRE")
+        unit.status = "EXPIRED"
+        unit.save(update_fields=["status"])
+    return expired
+
+
+def expire_due_units(*, staff, today=None):
+    return expire_units(staff=staff, today=today)
+
+
 # ---------- payment ----------
 
 def is_prepaid(order):
-    """True when the medicine may be released now."""
     if order.encounter.prepay_bypassed:
         return True
     if order.credit_approved_by_id:
@@ -59,10 +121,6 @@ def is_prepaid(order):
 
 
 def check_prepaid(order):
-    """
-    Pre-pay gate. A formulary medicine is released only when its charge is fully paid,
-    the visit is an emergency bypass, or billing approved a credit exception.
-    """
     _require_formulary(order)
     if is_prepaid(order):
         return
@@ -96,7 +154,6 @@ def check_allergies(order):
 # ---------- unit checks ----------
 
 def unit_problem(unit, today=None):
-    """Returns why a unit can't be used right now, or None if it can."""
     today = today or timezone.localdate()
     if unit.status != "IN_STOCK" or unit.doses_remaining <= 0:
         return "this pack or vial is no longer in stock"
@@ -106,6 +163,39 @@ def unit_problem(unit, today=None):
     if unit.opened_at and hours and timezone.now() > unit.opened_at + timedelta(hours=hours):
         return f"opened more than {hours} hour(s) ago and must be discarded"
     return None
+
+
+# ---------- prescribing ----------
+
+@transaction.atomic
+def create_formulary_order(*, encounter, medication, doctor, route, frequency, dose_text,
+                           days, doses_total, override, staff):
+    """
+    Creates a formulary order only if the hospital can supply every dose. The medicine's stock
+    row is locked for the duration, so two prescribers cannot both claim the same last doses.
+    Raises StockShortError otherwise; the caller then offers an external prescription.
+    """
+    StockItem.objects.select_for_update().filter(medication=medication).first()
+    available = available_to_prescribe(medication)
+    if doses_total > available:
+        raise StockShortError(
+            f"Only {available} dose(s) of {medication.brand_name} can be prescribed now; "
+            f"{doses_total} are needed."
+        )
+    fulfilment = "PHARMACY_DISPENSE" if route == "ORAL" else "NURSE_ADMINISTER"
+    order = MedicationOrder.objects.create(
+        encounter=encounter, ordered_by=doctor, medication=medication, source="FORMULARY",
+        route=route, fulfilment=fulfilment, dose_text=dose_text or medication.strength,
+        frequency_text=frequency, duration_days=days, doses_total=doses_total,
+        status="ORDERED", allergy_override_reason=override,
+    )
+    billing.add_charge(
+        encounter=encounter, source_type="MEDICATION_ORDER",
+        description=f"{medication.brand_name} {medication.strength} x{doses_total}",
+        unit_price=medication.unit_price, quantity=doses_total, staff=staff,
+        source_id=order.id, key=f"med:{order.id}",
+    )
+    return order
 
 
 # ---------- receiving ----------
@@ -136,11 +226,9 @@ def receive_batch(*, medication, batch_number, expiry_date, serials, doses_per_u
                   doses_total=per_unit, doses_remaining=per_unit)
         for s in serials
     ])
-
-    total = per_unit * len(units)
     stock, _ = (StockItem.objects.select_for_update()
-                .get_or_create(medication=medication, defaults={"quantity": 0, "reorder_level": 50}))
-    stock.quantity += total
+                .get_or_create(medication=medication, defaults={"quantity": 0, "reorder_level": 10}))
+    stock.quantity += per_unit * len(units)
     stock.save(update_fields=["quantity"])
     StockMovement.objects.bulk_create([
         StockMovement(medication=medication, unit=u, delta=per_unit, reason="RECEIPT", actor=staff)
@@ -152,7 +240,6 @@ def receive_batch(*, medication, batch_number, expiry_date, serials, doses_per_u
 # ---------- consuming ----------
 
 def consume_unit(*, unit, doses, staff, reason, reference_id=None):
-    """Takes doses from one locked unit and keeps the medicine total in step."""
     if doses < 1 or doses > unit.doses_remaining:
         raise PharmacyError(f"Cannot take {doses} dose(s) from {unit.serial}.")
     if unit.opened_at is None and unit.doses_total > 1:
@@ -173,11 +260,12 @@ def consume_unit(*, unit, doses, staff, reason, reference_id=None):
 
 def take_doses(*, medication, doses, staff, reason, reference_id, serials=None):
     """
-    Takes doses from scanned serials when given, otherwise picks from the earliest expiry.
-    Medicines marked requires_serial_scan (vaccines) must always be scanned.
+    Takes doses from scanned serials, or from the earliest expiry. Raises StockShortError when
+    the physical stock cannot cover the doses. Expired stock is written off first.
     """
     if doses < 1:
         raise PharmacyError("Quantity must be at least 1.")
+    expire_due_units(staff=staff)
     today = timezone.localdate()
 
     if serials:
@@ -195,7 +283,7 @@ def take_doses(*, medication, doses, staff, reason, reference_id, serials=None):
             units.append(unit)
         available = sum(u.doses_remaining for u in units)
         if available < doses:
-            raise PharmacyError(f"The scanned packs hold {available} dose(s); {doses} are needed.")
+            raise StockShortError(f"The scanned packs hold {available} dose(s); {doses} are needed.")
     else:
         if medication.requires_serial_scan:
             raise PharmacyError(f"Scan the vial or pack for {medication.brand_name}. "
@@ -207,7 +295,7 @@ def take_doses(*, medication, doses, staff, reason, reference_id, serials=None):
                      .order_by("batch__expiry_date", "received_at"))
         available = sum(u.doses_remaining for u in units)
         if available < doses:
-            raise PharmacyError(f"Only {available} dose(s) of {medication.brand_name} are in stock.")
+            raise StockShortError(f"Only {available} dose(s) of {medication.brand_name} are in stock.")
 
     remaining = doses
     for unit in units:
@@ -219,22 +307,7 @@ def take_doses(*, medication, doses, staff, reason, reference_id, serials=None):
     return doses
 
 
-@transaction.atomic
-def lock_unit_for_vaccine(*, serial, vaccine_code):
-    """Locks and checks the vial a vaccine is being taken from."""
-    unit = (StockUnit.objects.select_for_update().select_related("batch", "medication")
-            .filter(serial=serial).first())
-    if unit is None:
-        raise PharmacyError(f"{serial} is not in the system. Receive the vial first.")
-    if unit.medication.vaccine_code != vaccine_code:
-        raise PharmacyError(f"{serial} is {unit.medication.brand_name}, which is not this vaccine.")
-    problem = unit_problem(unit)
-    if problem:
-        raise PharmacyError(f"{serial}: {problem}.")
-    return unit
-
-
-# ---------- dispensing, administration, write-off ----------
+# ---------- dispensing, administration ----------
 
 @transaction.atomic
 def dispense(*, order_id, quantity, staff, serials=None):
@@ -242,13 +315,12 @@ def dispense(*, order_id, quantity, staff, serials=None):
     _require_formulary(order)
     if order.fulfilment != "PHARMACY_DISPENSE":
         raise PharmacyError("This medicine is given by a nurse, not dispensed.")
-    if order.status not in ("ORDERED", "PARTIALLY_DONE"):
+    if order.status not in OPEN_ORDER_STATUSES:
         raise PharmacyError("This order is no longer open.")
     check_prepaid(order)
     check_allergies(order)
 
-    done = _dispensed_total(order)
-    remaining = order.doses_total - done
+    remaining = remaining_doses(order)
     if not (1 <= quantity <= remaining):
         raise PharmacyError(f"Enter a quantity between 1 and {remaining}.")
 
@@ -266,13 +338,13 @@ def administer(*, order_id, nurse, dose_given_text, site="", notes="", serials=N
     _require_formulary(order)
     if order.fulfilment != "NURSE_ADMINISTER":
         raise PharmacyError("This medicine is dispensed by pharmacy, not given by a nurse.")
-    if order.status not in ("ORDERED", "PARTIALLY_DONE"):
+    if order.status not in OPEN_ORDER_STATUSES:
         raise PharmacyError("This order is no longer open.")
     if not dose_given_text.strip():
         raise PharmacyError("Record the dose that was given.")
     check_prepaid(order)
     check_allergies(order)
-    if order.administrations.count() >= order.doses_total:
+    if remaining_doses(order) < 1:
         raise PharmacyError("All doses for this order are already recorded.")
 
     take_doses(medication=order.medication, doses=1, staff=nurse,
@@ -280,9 +352,54 @@ def administer(*, order_id, nurse, dose_given_text, site="", notes="", serials=N
     NursingAdministration.objects.create(order=order, administered_by=nurse,
                                          dose_given_text=dose_given_text.strip(),
                                          site=site.strip(), notes=notes.strip())
-    given = order.administrations.count()
-    order.status = "COMPLETED" if given >= order.doses_total else "PARTIALLY_DONE"
+    order.status = "COMPLETED" if remaining_doses(order) == 0 else "PARTIALLY_DONE"
     order.save(update_fields=["status"])
+    return order
+
+
+# ---------- stock shortage after prescribing, and cancellation ----------
+
+@transaction.atomic
+def mark_stock_short(*, order_id, staff, reason):
+    """
+    The hospital cannot supply an open order. The order is closed as STOCK_SHORT. Its charge
+    is voided; any money already paid becomes a refund request for billing. The prescriber
+    must issue an external prescription if the patient still needs the medicine.
+    """
+    order = _lock_order(order_id)
+    if order.status not in OPEN_ORDER_STATUSES:
+        raise PharmacyError("This order is no longer open.")
+    order.status = "STOCK_SHORT"
+    order.cancelled_reason = f"Stock short: {reason}"[:2000]
+    order.save(update_fields=["status", "cancelled_reason"])
+    billing_refunds.close_order_charge(
+        charge=medication_charge_or_none(order), staff=staff,
+        reason=f"Medicine could not be supplied: {order.medication.brand_name}. {reason}",
+    )
+    return order
+
+
+@transaction.atomic
+def cancel_medication_order(*, order_id, staff, reason):
+    """
+    Cancels an open order before anything was dispensed or given. Committed doses are released
+    automatically because they are counted from open orders.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise PharmacyError("Give a reason for cancelling the prescription.")
+    order = _lock_order(order_id)
+    if order.status not in OPEN_ORDER_STATUSES:
+        raise PharmacyError("This order is no longer open.")
+    if remaining_doses(order) != order.doses_total:
+        raise PharmacyError("Part of this order has already been dispensed or given. It cannot be cancelled.")
+    order.status = "CANCELLED"
+    order.cancelled_reason = reason[:2000]
+    order.save(update_fields=["status", "cancelled_reason"])
+    billing_refunds.close_order_charge(
+        charge=medication_charge_or_none(order), staff=staff,
+        reason=f"Prescription cancelled: {order.medication.brand_name}. {reason}",
+    )
     return order
 
 
@@ -294,24 +411,10 @@ def write_off(*, serial, reason, staff):
             .filter(serial=serial).first())
     if unit is None:
         raise PharmacyError("Serial not found.")
-    if unit.status in ("EMPTY", "WRITTEN_OFF"):
+    if unit.status in ("EMPTY", "WRITTEN_OFF", "EXPIRED"):
         raise PharmacyError(f"{serial} is already closed ({unit.get_status_display().lower()}).")
     if unit.doses_remaining:
         consume_unit(unit=unit, doses=unit.doses_remaining, staff=staff, reason="WRITE_OFF")
     unit.status = "WRITTEN_OFF"
     unit.save(update_fields=["status"])
     return unit
-
-
-@transaction.atomic
-def expire_units(*, staff, today=None):
-    """Writes off every unit past its expiry date."""
-    today = today or timezone.localdate()
-    expired = list(StockUnit.objects.select_for_update().select_related("medication", "batch")
-                   .filter(status="IN_STOCK", batch__expiry_date__lt=today))
-    for unit in expired:
-        if unit.doses_remaining:
-            consume_unit(unit=unit, doses=unit.doses_remaining, staff=staff, reason="EXPIRE")
-        unit.status = "EXPIRED"
-        unit.save(update_fields=["status"])
-    return expired

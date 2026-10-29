@@ -68,6 +68,7 @@ GROUPS = [
              "caps": [Cap.VIEW_FINANCE]},
             {"label": "Charges ledger", "url": "billing:dashboard", "icon": "🧾",
              "caps": [Cap.VIEW_FINANCE]},
+            {"label": "Refunds", "url": "billing:refunds", "icon": "↩️", "caps": [Cap.TAKE_PAYMENT]},
             {"label": "Emergency bypass queue", "url": "billing:bypass_queue", "icon": "🚨",
              "caps": [Cap.VIEW_FINANCE]},
         ],

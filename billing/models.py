@@ -19,9 +19,7 @@ class BillingAccount(models.Model):
 class Payment(models.Model):
     """
     Append-only. A payment is never edited or deleted. A mistake is corrected by a
-    new record. Every row keeps who took it, when, and who paid (QOL-4).
-
-    The bill belongs to the patient (billing_account). The payer is whoever hands over the money.
+    new record. Every row keeps who took it, when, and who paid.
     """
     METHOD = [("MANUAL", "Manual (cash or other)"), ("MPESA", "M-Pesa")]
     PAYER = [("SELF", "The patient"), ("GUARDIAN", "Registered guardian"), ("OTHER", "Other adult")]
@@ -69,8 +67,9 @@ class Charge(models.Model):
     STATUS = [("PROVISIONAL", "Provisional hold"), ("POSTED", "Posted"),
               ("PAID", "Paid in full"), ("VOIDED", "Voided")]
     SOURCES = [("MEDICATION_ORDER", "Medication order"), ("BED_DAY", "Bed day"),
-               ("SCAN_ORDER", "Scan order"), ("LAB_TEST", "Laboratory test"), ("CONSULTATION", "Consultation"),
-               ("REGISTRATION", "Registration"), ("MANUAL", "Manual adjustment")]
+               ("SCAN_ORDER", "Scan order"), ("LAB_TEST", "Laboratory test"),
+               ("CONSULTATION", "Consultation"), ("REGISTRATION", "Registration"),
+               ("MANUAL", "Manual adjustment")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="charges")
@@ -92,7 +91,7 @@ class Charge(models.Model):
 
 
 class PaymentAllocation(models.Model):
-    """Append-only. Splits one payment across the charges it settles (QOL-2)."""
+    """Append-only. Splits one payment across the charges it settles."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="allocations")
     charge = models.ForeignKey(Charge, on_delete=models.PROTECT, related_name="allocations")
@@ -102,4 +101,35 @@ class PaymentAllocation(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(check=Q(amount__gt=0), name="allocation_amount_positive"),
+        ]
+
+
+class Refund(models.Model):
+    """
+    Money owed back to the patient when a paid service cannot be delivered (for example a
+    medicine the hospital could not supply). Append-only: the payment and the allocation are
+    never changed. Billing records the payout here.
+    """
+    STATUS = [("PENDING", "Pending payout"), ("PAID", "Paid out")]
+    METHOD = [("MANUAL", "Manual (cash or other)"), ("MPESA", "M-Pesa")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    charge = models.ForeignKey(Charge, on_delete=models.PROTECT, related_name="refunds")
+    encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="refunds")
+    billing_account = models.ForeignKey(BillingAccount, on_delete=models.PROTECT, related_name="refunds")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(max_length=10, choices=STATUS, default="PENDING", db_index=True)
+    requested_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    paid_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True,
+                                related_name="+")
+    paid_at = models.DateTimeField(null=True, blank=True)
+    method = models.CharField(max_length=10, choices=METHOD, blank=True)
+    reference = models.CharField(max_length=60, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        constraints = [
+            models.CheckConstraint(check=Q(amount__gt=0), name="refund_amount_positive"),
         ]

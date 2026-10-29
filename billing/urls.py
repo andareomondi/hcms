@@ -17,4 +17,6 @@ urlpatterns = [
     path("account/<uuid:account_id>/", views.account_statement_view, name="account"),
     path("credit/<str:kind>/<uuid:object_id>/", credit_views.approve_credit_action, name="approve_credit"),
     path("bypass/", credit_views.bypass_queue_view, name="bypass_queue"),
+    path("refunds/", views.refunds_view, name="refunds"),
+    path("refunds/<uuid:refund_id>/pay/", views.pay_refund_action, name="pay_refund"),
 ]

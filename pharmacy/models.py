@@ -77,7 +77,8 @@ class MedicationOrder(models.Model):
               ("SC", "Subcutaneous"), ("TOPICAL", "Topical"), ("OTHER", "Other")]
     FULFILMENT = [("PHARMACY_DISPENSE", "Pharmacy dispense"), ("NURSE_ADMINISTER", "Nurse administration")]
     STATUS = [("ORDERED", "Ordered"), ("PARTIALLY_DONE", "Partially done"),
-              ("COMPLETED", "Completed"), ("CANCELLED", "Cancelled")]
+              ("COMPLETED", "Completed"), ("CANCELLED", "Cancelled"),
+              ("STOCK_SHORT", "Stock not available")]
     SOURCE = [("FORMULARY", "Hospital formulary"), ("EXTERNAL", "External purchase")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -85,7 +86,6 @@ class MedicationOrder(models.Model):
     ordered_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+",
                                    limit_choices_to={"role": "DOCTOR"})
 
-    # Formulary orders have a medication. External orders have none (QOL-1).
     medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="orders",
                                    null=True, blank=True)
     source = models.CharField(max_length=12, choices=SOURCE, default="FORMULARY", db_index=True)
@@ -102,7 +102,6 @@ class MedicationOrder(models.Model):
     ordered_at = models.DateTimeField(auto_now_add=True)
     cancelled_reason = models.TextField(blank=True)
 
-    # External purchase fields (QOL-1)
     external_name = models.CharField(max_length=200, blank=True)
     external_strength = models.CharField(max_length=60, blank=True)
     external_form = models.CharField(max_length=60, blank=True)
@@ -112,7 +111,6 @@ class MedicationOrder(models.Model):
                                                       null=True, blank=True, related_name="+")
     allergy_check_acknowledged_at = models.DateTimeField(null=True, blank=True)
 
-    # Billing credit exception (QOL-2). Set only by a BILLING officer, with a reason.
     credit_approved_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
                                            null=True, blank=True, related_name="+")
     credit_approved_at = models.DateTimeField(null=True, blank=True)
