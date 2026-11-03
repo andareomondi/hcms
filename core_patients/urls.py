@@ -1,8 +1,6 @@
-from django.conf import settings
 from django.urls import path
 
 from core_patients import merge_views
-from core_patients.debug_views import url_explorer_view
 
 from . import allergy_recording_views, allergy_views, consent_views, family_views, views
 
@@ -56,8 +54,4 @@ urlpatterns = [
     path("<uuid:patient_id>/merge/submit/", merge_views.merge_action, name="merge_action"),
 ]
 
-# Development only. The URL explorer lists every route; never expose it in production.
-if settings.DEBUG:
-    urlpatterns += [
-        path("debug/", url_explorer_view, name="url_explorer"),
-    ]
+

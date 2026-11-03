@@ -1,5 +1,8 @@
 from django.urls import path
 
+from dashboard.debug_views import url_explorer_view
+from hospital_system import settings
+
 from . import admin_crud, views
 
 app_name = "dashboard"
@@ -19,3 +22,9 @@ urlpatterns = [
     path("admin-master/data/<str:app_label>/<str:model_name>/<str:pk>/delete/", admin_crud.crud_delete_view, name="crud_delete"),
     path("role-guide/", views.role_guide_view, name="role_guide"),
 ]
+
+# Development only. The URL explorer lists every route; never expose it in production.
+if settings.DEBUG:
+    urlpatterns += [
+        path("debug/", url_explorer_view, name="url_explorer"),
+    ]

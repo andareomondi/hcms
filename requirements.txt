@@ -1,0 +1,9 @@
+argon2-cffi==25.1.0
+django-otp==1.7.4
+django-simple-history==3.13.0
+pip==26.2.1
+psycopg==3.3.6
+psycopg-binary==3.3.6
+python-dotenv==1.2.4
+pyzipper==0.4.0
+whitenoise==6.12.0

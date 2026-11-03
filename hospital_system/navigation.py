@@ -1,7 +1,9 @@
 """
 Sidebar structure. Each group is a purpose, not a department.
 An item is shown only if the user has one of its capabilities (or is a superuser when marked).
+Items marked "debug_only" appear only when settings.DEBUG is True.
 """
+from django.conf import settings
 from django.urls import reverse
 
 from .permissions import Cap
@@ -93,6 +95,8 @@ GROUPS = [
              "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Audit log", "url": "dashboard:audit_logs", "icon": "📜",
              "caps": [Cap.ADMIN_CONFIG]},
+            {"label": "URL explorer", "url": "dashboard:url_explorer", "icon": "🔎",
+             "superuser": True, "debug_only": True},
         ],
     },
 ]
@@ -106,6 +110,8 @@ def build_nav(request, caps):
     for group in GROUPS:
         items = []
         for item in group["items"]:
+            if item.get("debug_only") and not settings.DEBUG:
+                continue
             if item.get("superuser") and not is_super:
                 continue
             if item.get("caps") and not any(c in caps for c in item["caps"]):
