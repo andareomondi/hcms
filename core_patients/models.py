@@ -120,11 +120,13 @@ class PatientRelationship(models.Model):
                                     name="one_active_guarantor"),
         ]
 
-
 class AllergenClass(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=150, unique=True)
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=120)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -132,34 +134,72 @@ class AllergenClass(models.Model):
 
 class Allergen(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=50, unique=True)
-    display_name = models.CharField(max_length=200)
-    allergen_class = models.ForeignKey(AllergenClass, on_delete=models.PROTECT, related_name="allergens",
-                                       null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    code = models.CharField(max_length=40, unique=True)
+    display_name = models.CharField(max_length=120, db_index=True)
+    # Making it null for now. This should be changed
+    allergen_class = models.ForeignKey(AllergenClass, on_delete=models.PROTECT, related_name="allergens")
+    is_active = models.BooleanField(default=True, db_index=True)
+    # Added by staff from the consultation room or registration (not from the seed).
+    added_by = models.ForeignKey("StaffProfile", on_delete=models.PROTECT, null=True, blank=True,
+                                 related_name="+")
+    needs_review = models.BooleanField(default=False, db_index=True,
+                                       help_text="Added by staff; confirm the name and class.")
+
+    class Meta:
+        ordering = ["display_name"]
 
     def __str__(self):
         return self.display_name
 
 
 class PatientAllergy(models.Model):
-    SEVERITY = [("MILD", "Mild"), ("MODERATE", "Moderate"), ("SEVERE", "Severe / anaphylaxis")]
-    STATUS = [("ACTIVE", "Active"), ("RESOLVED", "Resolved"), ("DISPUTED", "Disputed")]
+    SEVERITY = [("MILD", "Mild"), ("MODERATE", "Moderate"), ("SEVERE", "Severe")]
+    STATUS = [("ACTIVE", "Active"), ("DISPUTED", "Disputed"), ("RESOLVED", "Resolved")]
+    SOURCE = [
+        ("PATIENT_REPORTED", "Patient reported"),
+        ("PREVIOUS_RECORD", "From a previous record"),
+        ("OBSERVED", "Observed during this visit"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="allergies")
+    patient = models.ForeignKey("Patient", on_delete=models.PROTECT, related_name="allergies")
     allergen = models.ForeignKey(Allergen, on_delete=models.PROTECT, related_name="patient_allergies")
     severity = models.CharField(max_length=10, choices=SEVERITY)
+    reaction = models.CharField(max_length=300, blank=True,
+                                help_text="Brief description, e.g. rash, swelling, breathing difficulty.")
+    source = models.CharField(max_length=20, choices=SOURCE, default="PATIENT_REPORTED")
     status = models.CharField(max_length=10, choices=STATUS, default="ACTIVE", db_index=True)
-    recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
-    recorded_at = models.DateTimeField(auto_now_add=True)
-
+    status_reason = models.CharField(max_length=300, blank=True)
+    recorded_by = models.ForeignKey("StaffProfile", on_delete=models.PROTECT, related_name="+")
+    recorded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
 
     class Meta:
+        ordering = ["-recorded_at"]
         constraints = [
+            # One active entry per allergen per patient. A resolved entry does not block a new one.
             models.UniqueConstraint(fields=["patient", "allergen"], condition=Q(status="ACTIVE"),
                                     name="one_active_allergy_per_allergen"),
         ]
+
+    def __str__(self):
+        return f"{self.allergen.display_name} ({self.get_severity_display()})"
+
+
+
+class PatientAllergyStatement(models.Model):
+    """
+    The patient's allergy status as a whole: recorded entries, none known, or unknown.
+    One row per patient, updated when the status is confirmed. Every change is logged by the
+    audit log.
+    """
+    STATUS = [("RECORDED", "Allergies recorded"), ("NONE_KNOWN", "None known"), ("UNKNOWN", "Unknown")]
+
+    patient = models.OneToOneField("Patient", on_delete=models.PROTECT, related_name="allergy_statement")
+    status = models.CharField(max_length=12, choices=STATUS, default="UNKNOWN", db_index=True)
+    recorded_by = models.ForeignKey("StaffProfile", on_delete=models.PROTECT, related_name="+")
+    recorded_at = models.DateTimeField(auto_now=True)
 
 
 class AllergyObservation(models.Model):
@@ -263,3 +303,13 @@ class PatientMerge(models.Model):
 
     def __str__(self):
         return f"{self.duplicate} merged into {self.survivor}"
+
+class AllergyStatusChange(models.Model):
+    """Append-only history of every status change on an allergy entry."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    allergy = models.ForeignKey(PatientAllergy, on_delete=models.PROTECT, related_name="changes")
+    from_status = models.CharField(max_length=10)
+    to_status = models.CharField(max_length=10)
+    reason = models.CharField(max_length=300)
+    changed_by = models.ForeignKey("StaffProfile", on_delete=models.PROTECT, related_name="+")
+    changed_at = models.DateTimeField(auto_now_add=True, db_index=True)

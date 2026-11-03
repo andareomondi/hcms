@@ -10,11 +10,17 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
-                    <input type="text" name="first_name" class="w-full border rounded px-3 py-2" />
+                    <input type="text"
+                           name="first_name"
+                           value="{{ values.first_name }}"
+                           class="w-full border rounded px-3 py-2" />
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name *</label>
-                    <input type="text" name="last_name" class="w-full border rounded px-3 py-2" />
+                    <input type="text"
+                           name="last_name"
+                           value="{{ values.last_name }}"
+                           class="w-full border rounded px-3 py-2" />
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -22,27 +28,57 @@
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Date of Birth</label>
                     <input type="date"
                            name="date_of_birth"
+                           value="{{ values.date_of_birth }}"
                            class="w-full border rounded px-3 py-2" />
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Sex</label>
                     <select name="sex" class="w-full border rounded px-3 py-2">
-                        <option value="U">Unknown</option>
-                        <option value="M">Male</option>
-                        <option value="F">Female</option>
-                        <option value="X">Other</option>
+                        <option value="U"
+                                {% if values.sex == "U" or not values.sex %}selected{% endif %}>Unknown</option>
+                        <option value="M" {% if values.sex == "M" %}selected{% endif %}>Male</option>
+                        <option value="F" {% if values.sex == "F" %}selected{% endif %}>Female</option>
+                        <option value="X" {% if values.sex == "X" %}selected{% endif %}>Other</option>
                     </select>
                 </div>
             </div>
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Phone Number</label>
-                <input type="text" name="phone" class="w-full border rounded px-3 py-2" />
+                <input type="text"
+                       name="phone"
+                       value="{{ values.phone }}"
+                       class="w-full border rounded px-3 py-2" />
             </div>
             <div class="flex items-center space-x-2">
-                <input type="checkbox" name="is_provisional" value="true" id="prov" />
+                <input type="checkbox"
+                       name="is_provisional"
+                       value="true"
+                       id="prov"
+                       {% if is_provisional %}checked{% endif %} />
                 <label for="prov"
                        class="text-sm font-medium">Emergency / Provisional Registration (Unidentified)</label>
             </div>
+            <fieldset class="space-y-3">
+                <legend class="text-xs font-bold uppercase tracking-wider text-slate-600">Allergies *</legend>
+                <p class="text-xs text-slate-500">Record each allergy below. If there are none, choose one of the options. If nothing is recorded or chosen, the status is saved as Unknown.</p>
+                <div class="flex gap-4 text-sm">
+                    <label class="flex items-center gap-2">
+                        <input type="radio"
+                               name="allergy_statement"
+                               value="NONE_KNOWN"
+                               {% if allergy_statement == "NONE_KNOWN" %}checked{% endif %}>
+                        None known
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="radio"
+                               name="allergy_statement"
+                               value="UNKNOWN"
+                               {% if allergy_statement == "UNKNOWN" %}checked{% endif %}>
+                        Unknown
+                    </label>
+                </div>
+                {% include "core_patients/_allergy_entry_fields.html" %}
+            </fieldset>
             <button type="submit"
                     class="w-full bg-teal-600 text-white py-2 rounded font-semibold hover:bg-teal-700">
                 Save Patient Record

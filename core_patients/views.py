@@ -24,17 +24,71 @@ from lab.models import LabOrder
 from radiology.models import ImagingStudy
 from wards.models import Admission
 
-from .allergy_views import allergy_context
+from .allergy_recording import AllergyError, registration_allergy_status, set_statement
+from .allergy_recording_views import _entries_from_post, save_allergy_rows
+from .allergy_views import allergy_context, allergy_queryset
 from .duplicates import find_candidates
 from .models import (
     Allergen,
+    AllergenClass,
     Department,
     Patient,
-    PatientAllergy,
+    PatientAllergyStatement,
     StaffProfile,
     StaffRegistrationRequest,
 )
 from .ratelimit import too_many_attempts
+
+
+def _register_context(**extra):
+    """Context the registration form needs on every render, including error re-renders."""
+    context = {
+        "allergens": Allergen.objects.filter(is_active=True)
+                     .select_related("allergen_class").order_by("display_name"),
+        "allergen_classes": AllergenClass.objects.order_by("name"),
+        "values": {},
+        "is_provisional": False,
+        "allergy_statement": "",
+        "initial_rows": [],
+    }
+    context.update(extra)
+    return context
+ 
+def _form_state(request):
+    """What the registration form held when it was submitted, so an error re-renders it unchanged."""
+    rows = [
+        {
+            "allergen": row["allergen_id"],
+            "newName": row["new_name"],
+            "newClass": row["new_class"],
+            "severity": row["severity"] or "MILD",
+            "reaction": row["reaction"],
+            "source": row["source"] or "PATIENT_REPORTED",
+        }
+        for row in _entries_from_post(request)
+    ]
+    return {
+        "values": {k: request.POST.get(k, "").strip()
+                   for k in ["first_name", "last_name", "date_of_birth", "sex", "phone"]},
+        "is_provisional": request.POST.get("is_provisional") == "true",
+        "allergy_statement": request.POST.get("allergy_statement", ""),
+        "initial_rows": rows,
+    }
+ 
+
+def _save_registration_allergies(request, patient):
+    """
+    Records the allergy rows and the patient's allergy status.
+    Must run inside transaction.atomic (the caller provides it). Raises AllergyError on a bad row.
+    """
+    rows = _entries_from_post(request)
+    status = registration_allergy_status(entries=rows,
+                                         statement_choice=request.POST.get("allergy_statement", ""))
+    if status == "RECORDED":
+        save_allergy_rows(request, patient, rows)
+    set_statement(patient=patient, status=status, staff=request.staff_profile)
+    log_action(request, AuditAction.ALLERGY_STATEMENT_SET,
+               f"Allergy status for {patient}: {dict(PatientAllergyStatement.STATUS)[status]}.")
 
 
 @requires(Cap.PATIENT_FILE)
@@ -90,10 +144,11 @@ def patient_record_view(request, patient_id):
             item["tally"] = billing_services.encounter_tally(enc)
         visits.append(item)
 
-    allergies = patient.allergies.filter(status="ACTIVE").select_related("allergen")
     context = {
         "patient": patient,
-        "allergies": allergies,
+        # Every allergy entry, all statuses, with its history. Same queryset the other allergy views use.
+        "allergies": allergy_queryset(patient),
+        "statement": PatientAllergyStatement.objects.filter(patient=patient).first(),
         "visits": visits,
         "show": show,
         "printed_by": request.user.get_full_name() or request.user.username,
@@ -185,6 +240,7 @@ def _is_uuid(value):
     except ValueError:
         return False
 
+
 @login_required
 @user_passes_test(is_system_admin, login_url="/accounts/login/")
 def staff_requests_view(request):
@@ -275,8 +331,6 @@ def staff_request_decline_view(request, request_id):
     return redirect("core_patients:staff_requests")
 
 
-
-
 @login_required
 def patient_registry_search(request):
     """
@@ -326,10 +380,11 @@ def patient_register_view(request):
         dob_raw = request.POST.get("date_of_birth") or None
         dob = date.fromisoformat(dob_raw) if dob_raw else None
         id_number = (request.POST.get("id_number") or "").strip() or None
-
+ 
         if not is_provisional and not last_name:
-            return render(request, "core_patients/register.html", {"error": "Last name is required."})
-
+            return render(request, "core_patients/register.html",
+                          _register_context(error="Last name is required.", **_form_state(request)))
+ 
         if not is_provisional and request.POST.get("confirm_new") != "1":
             candidates = find_candidates(first_name=first_name, last_name=last_name,
                                          date_of_birth=dob, phone=request.POST.get("phone", ""),
@@ -338,34 +393,43 @@ def patient_register_view(request):
                 return render(request, "core_patients/duplicates.html", {
                     "candidates": candidates, "form": request.POST,
                 })
-
+ 
         if not is_provisional and request.POST.get("confirm_new") == "1":
             reason = request.POST.get("duplicate_reason", "").strip()
             if not reason:
-                return render(request, "core_patients/register.html", {
-                    "error": "Say why this is a different person from the matches shown."})
+                return render(request, "core_patients/register.html", _register_context(
+                    error="Say why this is a different person from the matches shown.",
+                    **_form_state(request)))
             log_action(request, AuditAction.DUPLICATE_OVERRIDDEN,
                        f"Registered {first_name} {last_name} despite possible matches: {reason}")
-
-        patient = Patient.objects.create(
-            first_name=first_name,
-            last_name=last_name or "Unidentified",
-            date_of_birth=dob,
-            sex=request.POST.get("sex", "U"),
-            id_type=request.POST.get("id_type", "NONE"),
-            id_number=id_number,
-            is_provisional=is_provisional,
-            provisional_label=request.POST.get("provisional_label", ""),
-            phone=request.POST.get("phone", "").strip(),
-            created_by=request.staff_profile,
-        )
+ 
+        try:
+            # Patient and allergies save together. A bad allergy row saves nothing.
+            with transaction.atomic():
+                patient = Patient.objects.create(
+                    first_name=first_name,
+                    last_name=last_name or "Unidentified",
+                    date_of_birth=dob,
+                    sex=request.POST.get("sex", "U"),
+                    id_type=request.POST.get("id_type", "NONE"),
+                    id_number=id_number,
+                    is_provisional=is_provisional,
+                    provisional_label=request.POST.get("provisional_label", ""),
+                    phone=request.POST.get("phone", "").strip(),
+                    created_by=request.staff_profile,
+                )
+                _save_registration_allergies(request, patient)
+        except AllergyError as exc:
+            return render(request, "core_patients/register.html",
+                          _register_context(error=str(exc), **_form_state(request)))
+ 
         status = "provisional" if is_provisional else "registered"
         log_action(request, AuditAction.PATIENT_REGISTERED,
                    f"Registered {status} patient #{patient.id}: {patient}.")
         return redirect("core_patients:detail", patient_id=patient.id)
-
-    return render(request, "core_patients/register.html")
-
+ 
+    return render(request, "core_patients/register.html", _register_context())
+ 
 
 @login_required
 def patient_detail_view(request, patient_id):
@@ -380,10 +444,6 @@ def patient_detail_view(request, patient_id):
         AuditAction.PATIENT_VIEWED,
         f"Viewed record of patient #{patient.id}: {patient}.",
     )
-
-    patient_allergies = PatientAllergy.objects.filter(
-        patient=patient, status="ACTIVE"
-    ).select_related("allergen", "allergen__allergen_class")
 
     # Ward admissions and bed allocations
     admissions = (Admission.objects.filter(encounter__patient=patient)
@@ -414,7 +474,7 @@ def patient_detail_view(request, patient_id):
             timeline_items.append({
                 "type": "ORDER", "get_type_display": "Medication Order", "timestamp": order.ordered_at,
                 # order.medication.brand_name is broken on the previous setup of the pharmacy app if extarnal medication was prescribed
-                # TODO: Look to fix this 
+                # TODO: Look to fix this
                 "summary": f"{order.medication.brand_name} {order.dose_text} - {order.get_route_display()}",
                 "author": order.ordered_by,
             })
@@ -430,15 +490,14 @@ def patient_detail_view(request, patient_id):
         for enc in patient.encounters.order_by("-opened_at")
     ]
     lab_qs = (LabOrder.objects.filter(encounter__patient=patient)
-          .select_related("encounter")
-          .prefetch_related("lines__test")
-          .order_by("-ordered_at"))
+              .select_related("encounter")
+              .prefetch_related("lines__test")
+              .order_by("-ordered_at"))
     if Cap.VIEW_CLINICAL not in caps_for(request.user):
         lab_qs = lab_qs.filter(status="RELEASED")
 
     context = {
         "patient": patient,
-        "patient_allergies": patient_allergies,
         "lab_orders": lab_qs[:50],
         "admissions": admissions,
         "billing_account": billing_account,
@@ -451,7 +510,7 @@ def patient_detail_view(request, patient_id):
         "encounter_summaries": encounter_summaries,
     }
 
-    # Allergy panel data (all allergies including resolved, the class list, and manage permission)
+    # Allergy section: every entry (all statuses, with history), the statement, the catalogue and manage permission.
     context.update(allergy_context(patient, request.user))
 
     return render(request, "core_patients/patient_detail.html", context)
@@ -481,23 +540,6 @@ def patient_timeline_view(request, patient_id):
     """htmx endpoint for infinite scrolling or refreshing timeline items."""
     patient = get_object_or_404(Patient, pk=patient_id)
     return render(request, "core_patients/_timeline_items.html", {"patient": patient})
-
-
-@login_required
-def allergy_panel_view(request, patient_id):
-    """Renders the allergy management modal or panel."""
-    patient = get_object_or_404(Patient, pk=patient_id)
-
-    log_action(
-        request,
-        AuditAction.PATIENT_ALLERGIES_VIEWED,
-        f"Viewed allergy panel for patient #{patient.id}: {patient}.",
-    )
-
-    allergies = patient.allergies.select_related("allergen").all()
-    all_allergens = Allergen.objects.filter(is_active=True)
-    context = {"patient": patient, "allergies": allergies, "all_allergens": all_allergens}
-    return render(request, "core_patients/_allergy_panel.html", context)
 
 
 @login_required

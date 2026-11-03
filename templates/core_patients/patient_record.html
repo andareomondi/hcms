@@ -46,9 +46,45 @@
         </table>
     </header>
     {% if allergies %}
-        <section class="print-section border border-red-300 bg-red-50 rounded p-3">
-            <p class="font-bold text-red-800 uppercase text-xs mb-1">Allergies</p>
-            {% for a in allergies %}<span class="inline-block mr-3 font-semibold">{{ a.allergen.display_name }} ({{ a.get_severity_display }})</span>{% endfor %}
+        <section class="print-section border border-slate-300 rounded p-3">
+            <p class="font-bold text-xs uppercase mb-1">Allergies (all entries)</p>
+            <p class="text-xs mb-2">Status: <strong>{{ statement.get_status_display|default:"Unknown" }}</strong></p>
+            <table class="w-full text-xs border-collapse">
+                <thead>
+                    <tr class="text-left border-b">
+                        <th class="py-1">Allergen</th>
+                        <th>Severity</th>
+                        <th>Reaction</th>
+                        <th>Source</th>
+                        <th>Recorded</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in allergies %}
+                        <tr class="border-b align-top">
+                            <td class="py-1">{{ a.allergen.display_name }}</td>
+                            <td>{{ a.get_severity_display }}</td>
+                            <td>{{ a.reaction|default:"—" }}</td>
+                            <td>{{ a.get_source_display }}</td>
+                            <td>{{ a.recorded_at|date:"Y-m-d" }}</td>
+                            <td>{{ a.get_status_display }}{% if a.status_reason %} — {{ a.status_reason }}{% endif %}</td>
+                        </tr>
+                        {% for c in a.changes.all %}
+                            <tr class="text-slate-600">
+                                <td></td>
+                                <td colspan="5" class="pb-1">
+                                    {{ c.changed_at|date:"Y-m-d" }}: {{ c.from_status|title }} → {{ c.to_status|title }}. {{ c.reason }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="italic text-slate-500 py-1">No allergy entries.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </section>
     {% else %}
         <p class="text-xs text-slate-500">Allergies: none recorded.</p>

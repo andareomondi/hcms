@@ -1,0 +1,82 @@
+<ul class="divide-y divide-slate-100">
+    {% for a in allergies %}
+        <li class="p-3 space-y-2">
+            <div class="flex flex-wrap justify-between gap-2 text-sm">
+                <span>
+                    <strong>{{ a.allergen.display_name }}</strong> · {{ a.get_severity_display }} {% if a.reaction %}· {{ a.reaction }}{% endif %}
+                </span>
+                <span class="text-xs font-bold {% if a.status == 'ACTIVE' %}text-red-700{% else %}text-slate-600{% endif %}">{{ a.get_status_display }}</span>
+            </div>
+            <p class="text-xs text-slate-500">
+                From: {{ a.get_source_display }} · recorded {{ a.recorded_at|date:"Y-m-d H:i" }} by {{ a.recorded_by.user.get_full_name|default:a.recorded_by.user.username }} {% if a.status_reason %}· {{ a.status_reason }}{% endif %}
+            </p>
+            {% if a.changes.all %}
+                <details class="text-xs text-slate-600">
+                    <summary class="cursor-pointer">History ({{ a.changes.count }})</summary>
+                    <ul class="mt-1 space-y-0.5">
+                        {% for c in a.changes.all %}
+                            <li>
+                                {{ c.changed_at|date:"Y-m-d H:i" }}: {{ c.from_status|title }} → {{ c.to_status|title }} by {{ c.changed_by.user.get_full_name|default:c.changed_by.user.username }}.
+                                {{ c.reason }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            {% endif %}
+            {% if "ALLERGY_MANAGE" in caps %}
+                <div class="flex flex-wrap gap-2">
+                    {% if a.status == "ACTIVE" %}
+                        <form method="post"
+                              action="{% url 'core_patients:allergy_status' patient.id a.id %}"
+                              class="flex gap-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="to_status" value="DISPUTED" />
+                            <input name="reason"
+                                   required
+                                   placeholder="Reason (dispute)"
+                                   class="border rounded px-2 py-1 text-xs" />
+                            <button class="text-xs font-bold text-amber-700">Dispute</button>
+                        </form>
+                        <form method="post"
+                              action="{% url 'core_patients:allergy_status' patient.id a.id %}"
+                              class="flex gap-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="to_status" value="RESOLVED" />
+                            <input name="reason"
+                                   required
+                                   placeholder="Reason (resolve)"
+                                   class="border rounded px-2 py-1 text-xs" />
+                            <button class="text-xs font-bold text-slate-700">Resolve</button>
+                        </form>
+                    {% elif a.status == "DISPUTED" %}
+                        <form method="post"
+                              action="{% url 'core_patients:allergy_status' patient.id a.id %}"
+                              class="flex gap-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="to_status" value="ACTIVE" />
+                            <input name="reason"
+                                   placeholder="Reason (reinstate, optional)"
+                                   class="border rounded px-2 py-1 text-xs" />
+                            <button class="text-xs font-bold text-red-700">Reinstate</button>
+                        </form>
+                        <form method="post"
+                              action="{% url 'core_patients:allergy_status' patient.id a.id %}"
+                              class="flex gap-1">
+                            {% csrf_token %}
+                            <input type="hidden" name="to_status" value="RESOLVED" />
+                            <input name="reason"
+                                   required
+                                   placeholder="Reason (resolve)"
+                                   class="border rounded px-2 py-1 text-xs" />
+                            <button class="text-xs font-bold text-slate-700">Resolve</button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </li>
+    {% empty %}
+        <li class="p-4 text-sm text-slate-500 italic">
+            No allergy entries. Status: {{ statement.get_status_display|default:"Unknown" }}.
+        </li>
+    {% endfor %}
+</ul>

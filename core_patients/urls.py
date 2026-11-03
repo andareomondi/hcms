@@ -4,7 +4,7 @@ from django.urls import path
 from core_patients import merge_views
 from core_patients.debug_views import url_explorer_view
 
-from . import allergy_views, consent_views, family_views, views
+from . import allergy_recording_views, allergy_views, consent_views, family_views, views
 
 app_name = "core_patients"
 
@@ -30,11 +30,14 @@ urlpatterns = [
     path("<uuid:patient_id>/confirm-identity/", views.confirm_identity_view, name="confirm_identity"),
 
     # Allergies
+    # Panel (read view) lives in allergy_views. Record and status changes live in allergy_recording_views.
     path("<uuid:patient_id>/allergies/", allergy_views.allergy_panel_view, name="allergy_panel"),
-    path("<uuid:patient_id>/allergies/record/", allergy_views.allergy_record_action,
+    path("<uuid:patient_id>/allergies/record/", allergy_recording_views.allergy_record_action,
          name="allergy_record"),
-    path("<uuid:patient_id>/allergies/<uuid:allergy_id>/status/", allergy_views.allergy_status_action,
-         name="allergy_status"),  
+    path("<uuid:patient_id>/allergies/<uuid:allergy_id>/status/",
+         allergy_recording_views.allergy_status_action,
+         name="allergy_status"),
+
     # Family and guardians
     path("<uuid:patient_id>/family/", family_views.family_view, name="family"),
     path("<uuid:patient_id>/family/search/", family_views.family_search_view, name="family_search"),

@@ -1,74 +1,47 @@
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, render
 
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
-from hospital_system.permissions import Cap, caps_for, requires
+from hospital_system.permissions import Cap, caps_for
 
-from .allergy_services import AllergyError, change_allergy_status, record_allergy
-from .models import Allergen, Patient, PatientAllergy
+from .models import Allergen, AllergenClass, Patient, PatientAllergyStatement
+
+
+def allergy_queryset(patient):
+    """Every allergy entry for the patient, all statuses, newest first, with its history."""
+    return (patient.allergies
+            .select_related("allergen__allergen_class", "recorded_by__user")
+            .prefetch_related("changes__changed_by__user")
+            .order_by("-recorded_at"))
 
 
 def allergy_context(patient, user):
-    """Everything the allergy panel needs. Used by the patient file and the panel fragment."""
+    """
+    Context shared by the patient file, the allergy panel and the consultation room.
+    Includes disputed and resolved entries; only ACTIVE entries block medicines (see conflicts_for).
+    """
+    caps = caps_for(user)
+    allergies = allergy_queryset(patient)
+    profile = getattr(user, "staff_profile", None)
     return {
-        "allergy_rows": (PatientAllergy.objects.filter(patient=patient)
-                         .select_related("allergen__allergen_class")
-                         .order_by("status", "-recorded_at")),
-        "all_allergens": (Allergen.objects.filter(is_active=True)
-                          .select_related("allergen_class").order_by("display_name")),
-        "can_manage_allergies": Cap.ALLERGY_MANAGE in caps_for(user),
+        "allergies": allergies,
+        "all_allergies": allergies,
+        "statement": PatientAllergyStatement.objects.filter(patient=patient).first(),
+        "allergens": Allergen.objects.filter(is_active=True).select_related("allergen_class").order_by("display_name"),
+        "allergen_classes": AllergenClass.objects.order_by("name"),
+        "can_manage_allergies": Cap.ALLERGY_MANAGE in caps,
+        "active_count": sum(1 for a in allergies if a.status == "ACTIVE"),
+        "is_doctor": bool(profile and profile.role == "DOCTOR"),
     }
 
 
-@requires(Cap.PATIENT_FILE)
+@login_required
 def allergy_panel_view(request, patient_id):
+    """The allergy panel: record new entries and see every entry with its status and history."""
     patient = get_object_or_404(Patient, pk=patient_id)
-    context = {"patient": patient, **allergy_context(patient, request.user)}
+    log_action(request, AuditAction.PATIENT_ALLERGIES_VIEWED,
+               f"Viewed allergy panel for patient #{patient.id}: {patient}.")
+    context = {"patient": patient}
+    context.update(allergy_context(patient, request.user))
     return render(request, "core_patients/_allergy_panel.html", context)
-
-
-@requires(Cap.ALLERGY_MANAGE)
-@require_POST
-def allergy_record_action(request, patient_id):
-    patient = get_object_or_404(Patient, pk=patient_id)
-    try:
-        allergy, created = record_allergy(
-            patient=patient,
-            allergen_code=request.POST.get("allergen", ""),
-            severity=request.POST.get("severity", ""),
-            reaction=request.POST.get("reaction", ""),
-            staff=request.staff_profile,
-        )
-    except AllergyError as exc:
-        messages.error(request, str(exc))
-        return redirect("core_patients:detail", patient_id=patient.id)
-
-    log_action(request, AuditAction.ALLERGY_RECORDED,
-               f"{'Recorded' if created else 'Updated'} allergy to {allergy.allergen.display_name} "
-               f"({allergy.get_severity_display()}) for {patient}.")
-    messages.success(request, f"Allergy to {allergy.allergen.display_name} saved.")
-    return redirect("core_patients:detail", patient_id=patient.id)
-
-
-@requires(Cap.ALLERGY_MANAGE)
-@require_POST
-def allergy_status_action(request, patient_id, allergy_id):
-    patient = get_object_or_404(Patient, pk=patient_id)
-    try:
-        allergy = change_allergy_status(
-            patient=patient, allergy_id=allergy_id,
-            status=request.POST.get("status", ""),
-            reason=request.POST.get("reason", ""),
-            staff=request.staff_profile,
-        )
-    except AllergyError as exc:
-        messages.error(request, str(exc))
-        return redirect("core_patients:detail", patient_id=patient.id)
-
-    log_action(request, AuditAction.ALLERGY_STATUS_CHANGED,
-               f"Marked allergy to {allergy.allergen.display_name} {allergy.status.lower()} "
-               f"for {patient}: {request.POST.get('reason', '').strip()}")
-    messages.success(request, f"Allergy marked {allergy.status.lower()}.")
-    return redirect("core_patients:detail", patient_id=patient.id)

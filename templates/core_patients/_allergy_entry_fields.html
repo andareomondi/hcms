@@ -1,0 +1,73 @@
+<div x-data="{ rows: [{ allergen: '', newName: '', newClass: '', severity: 'MILD', reaction: '', source: 'PATIENT_REPORTED' }] }"
+     class="space-y-3">
+    <template x-for="(row, i) in rows" :key="i">
+        <div class="border border-slate-200 rounded-xl p-3 space-y-2 bg-white">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-slate-600">Allergen (catalogue)</label>
+                    <select name="allergen_id"
+                            x-model="row.allergen"
+                            class="w-full border rounded-lg px-2 py-2 text-sm bg-white">
+                        <option value="">— not listed, add below —</option>
+                        {% for a in allergens %}
+                            <option value="{{ a.id }}">{{ a.display_name }} ({{ a.allergen_class.name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-slate-600">Or add a new allergen</label>
+                    <div class="flex gap-2">
+                        <input name="new_allergen_name"
+                               x-model="row.newName"
+                               placeholder="Name"
+                               class="w-1/2 border rounded-lg px-2 py-2 text-sm" />
+                        <select name="new_allergen_class"
+                                x-model="row.newClass"
+                                class="w-1/2 border rounded-lg px-2 py-2 text-sm bg-white">
+                            <option value="">Class…</option>
+                            {% for c in allergen_classes %}
+                                <option value="{{ c.id }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                    <label class="block text-[11px] font-bold uppercase text-slate-600">Severity *</label>
+                    <select name="severity"
+                            x-model="row.severity"
+                            class="w-full border rounded-lg px-2 py-2 text-sm bg-white">
+                        <option value="MILD">Mild</option>
+                        <option value="MODERATE">Moderate</option>
+                        <option value="SEVERE">Severe</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[11px] font-bold uppercase text-slate-600">Reaction (brief)</label>
+                    <input name="reaction"
+                           x-model="row.reaction"
+                           maxlength="300"
+                           placeholder="e.g. rash, swelling, breathing difficulty"
+                           class="w-full border rounded-lg px-2 py-2 text-sm" />
+                </div>
+            </div>
+            <div class="flex justify-between items-center">
+                <select name="source"
+                        x-model="row.source"
+                        class="border rounded-lg px-2 py-1 text-xs bg-white">
+                    <option value="PATIENT_REPORTED">Patient reported</option>
+                    <option value="PREVIOUS_RECORD">From a previous record</option>
+                    <option value="OBSERVED">Observed during this visit</option>
+                </select>
+                <button type="button"
+                        @click="rows.splice(i, 1)"
+                        class="text-xs font-bold text-red-700"
+                        x-show="rows.length > 1">Remove</button>
+            </div>
+        </div>
+    </template>
+    <button type="button"
+            @click="rows.push({ allergen: '', newName: '', newClass: '', severity: 'MILD', reaction: '', source: 'PATIENT_REPORTED' })"
+            class="text-xs font-bold text-teal-700">+ Add another allergy</button>
+</div>

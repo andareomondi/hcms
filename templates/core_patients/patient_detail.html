@@ -94,6 +94,7 @@
         </div>
         <!-- TAB 1: VISITS, RADIOLOGY, LABORATORY, WARDS -->
         <div x-show="activeTab === 'overview'" class="space-y-6">
+            {% include "core_patients/_patient_allergies_section.html" %}
             <!-- Clinical Encounters & Visits -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
