@@ -1,8 +1,8 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 from .models import (
-    Department, StaffProfile, Patient, PatientRelationship,
-    AllergenClass, Allergen, PatientAllergy, AllergyObservation
+    AllergyStatusChange, ConsentRecord, Department, PatientMerge, StaffProfile, Patient, PatientRelationship,
+    AllergenClass, Allergen, PatientAllergy, AllergyObservation, PatientAllergyStatement, StaffRegistrationRequest
 )
 
 @admin.register(Department)
@@ -12,7 +12,7 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(StaffProfile)
 class StaffProfileAdmin(admin.ModelAdmin):
-    list_user = ("user", "employee_id", "role", "department", "is_active")
+    list_display = ("user", "employee_id", "role", "department", "is_active")
     list_filter = ("role", "is_active", "department")
     search_fields = ("employee_id", "user__username", "user__first_name", "user__last_name")
 
@@ -48,3 +48,34 @@ class PatientAllergyAdmin(SimpleHistoryAdmin):
 class AllergyObservationAdmin(admin.ModelAdmin):
     list_display = ("patient_allergy", "observed_at", "recorded_at")
     search_fields = ("reaction",)
+
+@admin.register(PatientAllergyStatement)
+class PatientAllergyStatementAdmin(admin.ModelAdmin):
+    list_display = ("patient", "status", "recorded_at", "recorded_by")
+    list_filter = ("status",)
+    search_fields = ("patient__last_name", "patient__first_name")
+
+@admin.register(StaffRegistrationRequest)
+class StaffRegistrationRequestAdmin(admin.ModelAdmin):
+    list_display = ("created_user", "username", "status", "requested_role", "first_name", "last_name")
+    list_filter = ("status", "requested_role")
+    search_fields = ("username", "requested_role", "first_name", "last_name")
+
+@admin.register(ConsentRecord)
+class ConsentRecordAdmin(admin.ModelAdmin):
+    list_display = ("patient", "consent_type", "given_by_patient",  "given_by_name", "recorded_at", "recorded_by")
+    list_filter = ("consent_type", "given_by_patient",  "given_by_name", "recorded_at")
+    search_fields = ("patient__last_name", "patient__first_name", "consent_type", "given_by_name", "recorded_by__user__username")
+
+@admin.register(PatientMerge)
+class PatientMergeAdmin(admin.ModelAdmin):
+    list_display = ("survivor", "duplicate", "merged_by", "merged_at")
+    list_filter = ("merged_by", "merged_at")
+    search_fields = ("survivor__last_name", "duplicate__last_name", "survivor__first_name", "duplicate__first_name", "merged_by__user__username")
+
+@admin.register(AllergyStatusChange)
+class AllergyStatusChangeAdmin(admin.ModelAdmin):
+    list_display = ("allergy", "from_status", "to_status", "changed_by", "changed_at")
+    list_filter = ("changed_by", "changed_at")
+    search_fields = ("changed_by__user__username", "allergy__patient__last_name", "allergy__patient__first_name", "allergy__allergen__display_name")
+

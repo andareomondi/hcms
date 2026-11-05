@@ -7,44 +7,110 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight">System Administrator Master Panel</h1>
-                <p class="text-sm text-slate-500 mt-0.5">
-                    Centralized hospital infrastructure control, device authorization, and entity management.
-                </p>
+                <p class="text-sm text-slate-500 mt-0.5">Hospital overview, patient records, infrastructure, staff access and audit.</p>
             </div>
-            <div class="flex items-center space-x-2">
-                <span class="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5">
-                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    <span>Restricted: System Administrator Only</span>
-                </span>
-            </div>
+            <span class="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span>Restricted: System Administrator Only</span>
+            </span>
         </div>
-        <!-- Navigation Tabs -->
+        <!-- Tabs -->
         <div class="flex border-b border-slate-200 space-x-6 overflow-x-auto">
+            <button @click="activeTab = 'overview'"
+                    :class="activeTab === 'overview' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">📊 Overview</button>
+            <button @click="activeTab = 'patients'"
+                    :class="activeTab === 'patients' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🧑‍⚕️ Patients</button>
             <button @click="activeTab = 'wards'"
                     :class="activeTab === 'wards' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
-                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🏥 Wards &amp; Beds Management</button>
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🏥 Wards &amp; Beds</button>
             <button @click="activeTab = 'staff'"
                     :class="activeTab === 'staff' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
-                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">👥 Staff &amp; Device Authorization</button>
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">👥 Staff</button>
+            <button @click="activeTab = 'rooms'"
+                    :class="activeTab === 'rooms' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🚪 Rooms &amp; Duty</button>
             <button @click="activeTab = 'audit'"
                     :class="activeTab === 'audit' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
-                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🛡️ Master Audit Log Stream</button>
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🛡️ Audit Log</button>
         </div>
-        <!-- TAB 1: WARDS & BEDS -->
-        <div x-show="activeTab === 'wards'" class="space-y-6">
+        <!-- TAB: OVERVIEW -->
+        <div x-show="activeTab === 'overview'" class="space-y-6">
+            <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Patients</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ kpis.patients }} {% include "dashboard/_admin_patients_tab.html" %}</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Visits today</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ kpis.visits_today }}</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Beds vacant</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ kpis.beds_vacant }} <span class="text-sm text-slate-400">/ {{ kpis.beds_total }}</span></p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Active staff</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ kpis.staff_active }}</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 lg:col-span-2">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Outstanding balance</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">KES {{ kpis.outstanding|floatformat:2 }}</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h2 class="text-sm font-bold text-slate-800 mb-3">Patients, visits and admissions (last 30 days)</h2>
+                    <div class="h-72">
+                        <canvas id="c-activity"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h2 class="text-sm font-bold text-slate-800 mb-3">Charges posted and payments, KES (last 30 days)</h2>
+                    <div class="h-72">
+                        <canvas id="c-finance"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h2 class="text-sm font-bold text-slate-800 mb-3">Payments by method, KES (last 30 days)</h2>
+                    <div class="h-72">
+                        <canvas id="c-methods"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 mb-3">Beds by status</h2>
+                        <div class="h-56">
+                            <canvas id="c-beds"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 mb-3">Active staff by role</h2>
+                        <div class="h-56">
+                            <canvas id="c-staff"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- TAB: PATIENTS -->
+        <div x-show="activeTab === 'patients'"
+             class="space-y-6"
+             style="display: none">{% include "dashboard/_admin_patients_tab.html" %}</div>
+        <!-- TAB: WARDS & BEDS -->
+        <div x-show="activeTab === 'wards'"
+             class="space-y-6"
+             style="display: none">
             <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h2 class="text-base font-bold text-slate-800">Hospital Wards &amp; Bed Infrastructure</h2>
                 <div class="flex flex-wrap items-center gap-2">
                     <a href="{% url 'dashboard:crud_index' %}"
                        class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm">Data manager →</a>
                     <button @click="showWardModal = true"
-                            class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-teal-700 transition shadow-sm cursor-pointer">
-                        + Add New Ward
-                    </button>
+                            class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-teal-700 transition shadow-sm cursor-pointer">+ Add New Ward</button>
                     <button @click="showBedModal = true"
-                            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm cursor-pointer">
-                        + Add New Bed
-                    </button>
+                            class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm cursor-pointer">+ Add New Bed</button>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -57,47 +123,46 @@
                             </div>
                             <span class="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">{{ ward.beds.all|length }} Beds</span>
                         </div>
-                        <div class="space-y-2">
-                            <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Assigned Beds</span>
-                            <div class="flex flex-wrap gap-2">
-                                {% for bed in ward.beds.all %}
-                                    <div class="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-                                        <span class="font-bold text-slate-800">{{ bed.code }}</span>
-                                        <span class="text-[10px] font-semibold {% if bed.status == 'VACANT' %}text-emerald-600{% elif bed.status == 'OCCUPIED' %}text-blue-600{% else %}text-amber-600{% endif %}">({{ bed.status }})</span>
-                                        <form action="{% url 'dashboard:admin_delete_bed' bed.id %}"
-                                              method="post"
-                                              class="inline ml-1">
-                                            {% csrf_token %}
-                                            <button type="submit"
-                                                    class="text-red-500 hover:text-red-700 font-bold cursor-pointer"
-                                                    title="Delete bed">×</button>
-                                        </form>
-                                    </div>
-                                {% empty %}
-                                    <p class="text-xs text-slate-400 italic">No beds created in this ward yet.</p>
-                                {% endfor %}
-                            </div>
+                        <div class="flex flex-wrap gap-2">
+                            {% for bed in ward.beds.all %}
+                                <div class="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+                                    <span class="font-bold text-slate-800">{{ bed.code }}</span>
+                                    <span class="text-[10px] font-semibold {% if bed.status == 'VACANT' %}text-emerald-600{% elif bed.status == 'OCCUPIED' %}text-blue-600{% else %}text-amber-600{% endif %}">({{ bed.status }})</span>
+                                    <form action="{% url 'dashboard:admin_delete_bed' bed.id %}"
+                                          method="post"
+                                          class="inline ml-1">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="text-red-500 hover:text-red-700 font-bold cursor-pointer"
+                                                title="Delete bed">×</button>
+                                    </form>
+                                </div>
+                            {% empty %}
+                                <p class="text-xs text-slate-400 italic">No beds created in this ward yet.</p>
+                            {% endfor %}
                         </div>
                     </div>
                 {% endfor %}
             </div>
         </div>
-        <!-- TAB 2: STAFF & DEVICES -->
+        <!-- TAB: STAFF -->
         <div x-show="activeTab === 'staff'"
              class="space-y-6"
              style="display: none">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 bg-slate-50/50 border-b border-slate-200">
-                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Registered Staff Profiles &amp; Device Access</h2>
+                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Staff profiles</h2>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[640px]">
+                    <table class="w-full text-left border-collapse min-w-[680px]">
                         <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                             <tr>
-                                <th class="p-3.5">Staff Name</th>
+                                <th class="p-3.5">Staff name</th>
                                 <th class="p-3.5">Username</th>
                                 <th class="p-3.5">Employee ID</th>
-                                <th class="p-3.5">Role / Status</th>
+                                <th class="p-3.5">Role</th>
+                                <th class="p-3.5">Status</th>
+                                <th class="p-3.5 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-sm">
@@ -106,55 +171,69 @@
                                     <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">{{ staff.user.get_full_name|default:staff.user.username }}</td>
                                     <td class="p-3.5 text-slate-600 whitespace-nowrap">@{{ staff.user.username }}</td>
                                     <td class="p-3.5 text-slate-600 font-mono whitespace-nowrap">{{ staff.employee_id|default:"N/A" }}</td>
+                                    <td class="p-3.5 text-slate-600 whitespace-nowrap">{{ staff.get_role_display|default:staff.role }}</td>
                                     <td class="p-3.5 whitespace-nowrap">
                                         {% if staff.is_active %}
-                                            <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs px-2.5 py-1 rounded-full font-bold">Active Staff</span>
+                                            <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs px-2.5 py-1 rounded-full font-bold">Active</span>
                                         {% else %}
                                             <span class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-bold">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="p-3.5 text-right whitespace-nowrap">
+                                        {% if staff.user_id != request.user.pk %}
+                                            <form action="{% url 'dashboard:admin_toggle_staff' staff.pk %}"
+                                                  method="post"
+                                                  class="inline">
+                                                {% csrf_token %}
+                                                <button type="submit"
+                                                        class="text-xs font-bold {% if staff.is_active %}text-red-600 hover:underline{% else %}text-teal-600 hover:underline{% endif %} cursor-pointer">
+                                                    {% if staff.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-xs text-slate-400">You</span>
                                         {% endif %}
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="4"
+                                    <td colspan="6"
                                         class="p-8 text-center text-slate-500 italic text-sm">No staff members found.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                <!-- Staff Pagination Footer -->
                 {% if staff_page.has_other_pages %}
                     <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-600">
-                        <div>Showing <span class="font-bold text-slate-900">{{ staff_page.start_index }}</span> to <span class="font-bold text-slate-900">{{ staff_page.end_index }}</span> of <span class="font-bold text-slate-900">{{ staff_page.paginator.count }}</span> staff</div>
+                        <div>Showing {{ staff_page.start_index }} to {{ staff_page.end_index }} of {{ staff_page.paginator.count }} staff</div>
                         <div class="inline-flex items-center gap-1.5">
                             {% if staff_page.has_previous %}
                                 <a href="?tab=staff&staff_page={{ staff_page.previous_page_number }}"
-                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Previous</a>
-                            {% else %}
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Previous</span>
+                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100">Previous</a>
                             {% endif %}
                             <span class="px-3 py-1.5 font-bold text-slate-700">Page {{ staff_page.number }} of {{ staff_page.paginator.num_pages }}</span>
                             {% if staff_page.has_next %}
                                 <a href="?tab=staff&staff_page={{ staff_page.next_page_number }}"
-                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Next</a>
-                            {% else %}
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Next</span>
+                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100">Next</a>
                             {% endif %}
                         </div>
                     </div>
                 {% endif %}
             </div>
         </div>
-        <!-- TAB 3: MASTER AUDIT LOGS -->
+        <div x-show="activeTab === 'rooms'"
+             class="space-y-6"
+             style="display: none">{% include "dashboard/_admin_rooms_tab.html" %}</div>
+        <!-- TAB: AUDIT -->
         <div x-show="activeTab === 'audit'"
              class="space-y-6"
              style="display: none">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Recent System Audit Stream</h2>
+                <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center gap-2">
+                    <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Recent system activity</h2>
                     <a href="{% url 'dashboard:audit_logs' %}"
-                       class="text-teal-600 text-xs font-bold hover:underline">View Full Audit Page →</a>
+                       class="text-teal-600 text-xs font-bold hover:underline">Full audit page →</a>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse min-w-[700px]">
@@ -170,7 +249,7 @@
                             {% for log in audit_logs %}
                                 <tr class="hover:bg-slate-50 transition align-top">
                                     <td class="p-3.5 text-xs text-slate-500 font-mono whitespace-nowrap">{{ log.timestamp|date:"Y-m-d H:i" }}</td>
-                                    <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">{{ log.actor.username|default:"System" }}</td>
+                                    <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">{{ log.actor.username }}</td>
                                     <td class="p-3.5 whitespace-nowrap">
                                         <span class="bg-blue-50 text-blue-700 border border-blue-200 text-xs px-2.5 py-0.5 rounded-full font-bold">{{ log.action_type }}</span>
                                     </td>
@@ -185,23 +264,18 @@
                         </tbody>
                     </table>
                 </div>
-                <!-- Audit Stream Pagination Footer -->
                 {% if audit_page.has_other_pages %}
                     <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-600">
-                        <div>Showing <span class="font-bold text-slate-900">{{ audit_page.start_index }}</span> to <span class="font-bold text-slate-900">{{ audit_page.end_index }}</span> of <span class="font-bold text-slate-900">{{ audit_page.paginator.count }}</span> events</div>
+                        <div>Showing {{ audit_page.start_index }} to {{ audit_page.end_index }} of {{ audit_page.paginator.count }} events</div>
                         <div class="inline-flex items-center gap-1.5">
                             {% if audit_page.has_previous %}
                                 <a href="?tab=audit&audit_page={{ audit_page.previous_page_number }}"
-                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Previous</a>
-                            {% else %}
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Previous</span>
+                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100">Previous</a>
                             {% endif %}
                             <span class="px-3 py-1.5 font-bold text-slate-700">Page {{ audit_page.number }} of {{ audit_page.paginator.num_pages }}</span>
                             {% if audit_page.has_next %}
                                 <a href="?tab=audit&audit_page={{ audit_page.next_page_number }}"
-                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Next</a>
-                            {% else %}
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Next</span>
+                                   class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100">Next</a>
                             {% endif %}
                         </div>
                     </div>
@@ -213,8 +287,7 @@
              style="display: none"
              class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
              @click.self="showWardModal = false">
-            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200"
-                 @click.away="showWardModal = false">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                     <h3 class="font-bold text-slate-900 text-lg">Create New Ward</h3>
                     <button @click="showWardModal = false"
@@ -243,13 +316,9 @@
                     <div class="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                         <button type="button"
                                 @click="showWardModal = false"
-                                class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 transition cursor-pointer">
-                            Cancel
-                        </button>
+                                class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 cursor-pointer">Cancel</button>
                         <button type="submit"
-                                class="flex-1 bg-teal-600 text-white min-h-11 rounded-xl text-sm font-bold hover:bg-teal-700 shadow-sm transition cursor-pointer">
-                            Save Ward
-                        </button>
+                                class="flex-1 bg-teal-600 text-white min-h-11 rounded-xl text-sm font-bold hover:bg-teal-700 shadow-sm cursor-pointer">Save Ward</button>
                     </div>
                 </form>
             </div>
@@ -259,8 +328,7 @@
              style="display: none"
              class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
              @click.self="showBedModal = false">
-            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200"
-                 @click.away="showBedModal = false">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200">
                 <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                     <h3 class="font-bold text-slate-900 text-lg">Add Bed to Ward</h3>
                     <button @click="showBedModal = false"
@@ -292,16 +360,63 @@
                     <div class="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                         <button type="button"
                                 @click="showBedModal = false"
-                                class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 transition cursor-pointer">
-                            Cancel
-                        </button>
+                                class="flex-1 bg-slate-100 text-slate-700 min-h-11 rounded-xl text-sm font-bold hover:bg-slate-200 cursor-pointer">Cancel</button>
                         <button type="submit"
-                                class="flex-1 bg-teal-600 text-white min-h-11 rounded-xl text-sm font-bold hover:bg-teal-700 shadow-sm transition cursor-pointer">
-                            Save Bed
-                        </button>
+                                class="flex-1 bg-teal-600 text-white min-h-11 rounded-xl text-sm font-bold hover:bg-teal-700 shadow-sm cursor-pointer">Save Bed</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+    {{ chart_data|json_script:"chart-data" }}
+    <script>
+(function () {
+    const d = JSON.parse(document.getElementById('chart-data').textContent);
+    const TEAL = '#0d9488', BLUE = '#2563eb', AMBER = '#d97706', SLATE = '#64748b', VIOLET = '#7c3aed';
+    const base = { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } };
+    const palette = [TEAL, BLUE, AMBER, VIOLET, SLATE, '#e11d48', '#059669', '#0891b2'];
+
+    new Chart(document.getElementById('c-activity'), {
+        type: 'line',
+        data: { labels: d.labels, datasets: [
+            { label: 'Patients registered', data: d.patients, borderColor: TEAL, backgroundColor: TEAL, tension: 0.3 },
+            { label: 'Visits opened', data: d.visits, borderColor: BLUE, backgroundColor: BLUE, tension: 0.3 },
+            { label: 'Admissions', data: d.admissions, borderColor: AMBER, backgroundColor: AMBER, tension: 0.3 },
+        ]},
+        options: base,
+    });
+
+    new Chart(document.getElementById('c-finance'), {
+        type: 'bar',
+        data: { labels: d.labels, datasets: [
+            { label: 'Charges posted (KES)', data: d.charges, backgroundColor: SLATE },
+            { label: 'Payments (KES)', data: d.payments_mpesa.map((v, i) => v + d.payments_manual[i]), backgroundColor: TEAL },
+        ]},
+        options: base,
+    });
+
+    new Chart(document.getElementById('c-methods'), {
+        type: 'bar',
+        data: { labels: d.labels, datasets: [
+            { label: 'M-Pesa (KES)', data: d.payments_mpesa, backgroundColor: TEAL, stack: 'pay' },
+            { label: 'Manual (KES)', data: d.payments_manual, backgroundColor: BLUE, stack: 'pay' },
+        ]},
+        options: { ...base, scales: { x: { stacked: true }, y: { stacked: true } } },
+    });
+
+    new Chart(document.getElementById('c-beds'), {
+        type: 'doughnut',
+        data: { labels: d.bed_status.map(r => r.status), datasets: [
+            { data: d.bed_status.map(r => r.n), backgroundColor: palette } ]},
+        options: { responsive: true, maintainAspectRatio: false },
+    });
+
+    new Chart(document.getElementById('c-staff'), {
+        type: 'bar',
+        data: { labels: d.staff_roles.map(r => r.role || 'Unassigned'), datasets: [
+            { label: 'Active staff', data: d.staff_roles.map(r => r.n), backgroundColor: TEAL } ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    });
+})();
+    </script>
 {% endblock %}

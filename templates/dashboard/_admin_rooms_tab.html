@@ -1,0 +1,162 @@
+<div x-show="activeTab === 'rooms'" class="space-y-6" style="display: none">
+  <!-- On duty now -->
+  <div
+    class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+  >
+    <div
+      class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center"
+    >
+      <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+        On duty now ({{ on_duty|length }})
+      </h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[560px]">
+        <thead
+          class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200"
+        >
+          <tr>
+            <th class="p-3.5">Staff</th>
+            <th class="p-3.5">Role</th>
+            <th class="p-3.5">Room</th>
+            <th class="p-3.5">Clocked in</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-sm">
+          {% for s in on_duty %}
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3.5 font-bold text-slate-900 whitespace-nowrap">
+              {{ s.staff.user.get_full_name|default:s.staff.user.username }}
+            </td>
+            <td class="p-3.5 text-slate-600 whitespace-nowrap">
+              {{ s.staff.get_role_display|default:s.staff.role }}
+            </td>
+            <td class="p-3.5 whitespace-nowrap">
+              {% if s.room %}
+              <span class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded"
+                >{{ s.room.code }}</span
+              >
+              {{ s.room.name }} {% else %}
+              <span class="text-slate-400 italic">No room</span>
+              {% endif %}
+            </td>
+            <td
+              class="p-3.5 text-xs text-slate-500 font-mono whitespace-nowrap"
+            >
+              {{ s.clocked_in_at|date:"Y-m-d H:i" }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td
+              colspan="4"
+              class="p-8 text-center text-slate-500 italic text-sm"
+            >
+              Nobody is clocked in right now.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Rooms -->
+  <div
+    class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+  >
+    <div
+      class="p-4 bg-slate-50/50 border-b border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center gap-3"
+    >
+      <h2 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+        Rooms ({{ room_rows|length }})
+      </h2>
+      <a
+        href="{% url 'dashboard:admin_room_create' %}"
+        class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-teal-700 transition shadow-sm text-center"
+        >+ Add room</a
+      >
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[720px]">
+        <thead
+          class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200"
+        >
+          <tr>
+            <th class="p-3.5">Code</th>
+            <th class="p-3.5">Name</th>
+            <th class="p-3.5">Department</th>
+            <th class="p-3.5">Floor</th>
+            <th class="p-3.5">Status</th>
+            <th class="p-3.5 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-sm">
+          {% for row in room_rows %} {% with r=row.room %}
+          <tr class="hover:bg-slate-50 transition">
+            <td
+              class="p-3.5 font-mono font-bold text-slate-900 whitespace-nowrap"
+            >
+              {{ r.code }}
+            </td>
+            <td class="p-3.5 text-slate-700">{{ r.name }}</td>
+            <td class="p-3.5 text-slate-600 whitespace-nowrap">
+              {{ r.department }}
+            </td>
+            <td class="p-3.5 text-slate-600 whitespace-nowrap">
+              {{ r.floor|default:"—" }}
+            </td>
+            <td class="p-3.5 whitespace-nowrap">
+              {% if not r.is_active %}
+              <span
+                class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-bold"
+                >Closed</span
+              >
+              {% elif row.occupied %}
+              <span
+                class="bg-blue-50 text-blue-800 border border-blue-200 text-xs px-2.5 py-1 rounded-full font-bold"
+                >Occupied</span
+              >
+              {% else %}
+              <span
+                class="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs px-2.5 py-1 rounded-full font-bold"
+                >Free</span
+              >
+              {% endif %}
+            </td>
+            <td class="p-3.5 text-right whitespace-nowrap space-x-3">
+              <a
+                href="{% url 'dashboard:admin_room_edit' r.pk %}"
+                class="text-xs font-bold text-teal-600 hover:underline"
+                >Edit</a
+              >
+              <form
+                action="{% url 'dashboard:admin_room_toggle' r.pk %}"
+                method="post"
+                class="inline"
+              >
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  class="text-xs font-bold {% if r.is_active %}text-red-600{% else %}text-emerald-700{% endif %} hover:underline cursor-pointer"
+                >
+                  {% if r.is_active %}Close{% else %}Reopen{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endwith %} {% empty %}
+          <tr>
+            <td
+              colspan="6"
+              class="p-8 text-center text-slate-500 italic text-sm"
+            >
+              No rooms yet. Add the first one.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

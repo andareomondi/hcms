@@ -3,29 +3,32 @@
 {% block content %}
     <div class="space-y-8">
         <!-- Header -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                <p class="text-sm font-medium text-slate-500">{{ today_label }}</p>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
-                    {{ greeting }}, {% firstof request.user.first_name request.user.username %}
-                </h1>
-                <p class="text-sm text-slate-600 mt-0.5">Live figures for today. Select a card to act on it.</p>
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-600 via-teal-700 to-slate-900 text-white p-6 sm:p-8 shadow-lg">
+            <div class="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl"></div>
+            <div class="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <p class="text-sm font-medium text-teal-100">{{ today_label }}</p>
+                    <h1 class="text-3xl font-extrabold tracking-tight mt-1">
+                        {{ greeting }}, {% firstof request.user.first_name request.user.username %}
+                    </h1>
+                    <p class="text-sm text-teal-100 mt-1">Live figures for today. Select a card to act on it.</p>
+                </div>
+                {% if show_register %}
+                    <a href="{% url 'core_patients:register' %}"
+                       class="bg-white text-teal-800 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-teal-50 transition">+ Register patient</a>
+                {% endif %}
             </div>
-            {% if show_register %}
-                <a href="{% url 'core_patients:register' %}"
-                   class="bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-teal-700">+ Register patient</a>
-            {% endif %}
         </div>
-        <!-- Cards: each is a link to the page behind the number -->
+        <!-- KPI cards: each links to the page behind the number -->
         {% if cards %}
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {% for c in cards %}
                     <a href="{{ c.url }}"
-                       class="block bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:border-teal-400 hover:shadow-md transition">
+                       class="group block bg-white p-5 rounded-2xl shadow-sm border border-slate-200 border-t-4 border-t-teal-500 hover:shadow-md hover:-translate-y-0.5 transition">
                         <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ c.label }}</p>
                         <p class="text-3xl font-extrabold text-slate-900 mt-3 break-words">{{ c.value }}</p>
                         <p class="text-xs text-slate-500 mt-2">{{ c.detail }}</p>
-                        <p class="text-xs font-bold text-teal-700 mt-3">{{ c.cta }} →</p>
+                        <p class="text-xs font-bold text-teal-700 mt-3 group-hover:underline">{{ c.cta }} →</p>
                     </a>
                 {% endfor %}
             </div>
@@ -36,8 +39,115 @@
                    class="text-teal-700 font-semibold hover:underline">role guide</a>.
             </div>
         {% endif %}
+        <!-- Movement charts -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Waiting list -->
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-4">
+                    <div>
+                        <h2 class="font-bold text-slate-900 text-lg">Patient movement</h2>
+                        <p class="text-xs text-slate-500">Registrations, visits and admissions, last 14 days</p>
+                    </div>
+                    <div class="flex gap-4 text-xs font-semibold text-slate-600">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>Registered</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>Visits</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>Admissions</span>
+                    </div>
+                </div>
+                <div class="h-72">
+                    <canvas id="c-movement"></canvas>
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <h2 class="font-bold text-slate-900 text-lg">Bed occupancy</h2>
+                <p class="text-xs text-slate-500 mb-4">Current status of every bed</p>
+                <div class="h-56">
+                    <canvas id="c-beds"></canvas>
+                </div>
+                <p class="text-xs text-slate-500 text-center mt-3">Vacant beds are shown in green.</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {% if show_waiting_list %}
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="font-bold text-slate-900 text-lg">Waiting by priority</h2>
+                    <p class="text-xs text-slate-500 mb-4">{{ waiting_total }} patient(s) in the queue</p>
+                    <div class="h-56">
+                        <canvas id="c-priority"></canvas>
+                    </div>
+                </div>
+            {% endif %}
+            {% if chart_data.show_finance %}
+                <div class="{% if show_waiting_list %}lg:col-span-2{% else %}lg:col-span-3{% endif %} bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="font-bold text-slate-900 text-lg">Money in and out</h2>
+                    <p class="text-xs text-slate-500 mb-4">Charges posted against payments (KES), last 14 days</p>
+                    <div class="h-56">
+                        <canvas id="c-finance"></canvas>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <h2 class="font-bold text-slate-900 text-lg">Rooms and duty</h2>
+                <p class="text-xs text-slate-500 mb-4">Who is on duty right now, by role, and how many rooms are in use</p>
+                <div class="h-56">
+                    <canvas id="c-duty-roles"></canvas>
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <h2 class="font-bold text-slate-900 text-lg">Room status</h2>
+                <p class="text-xs text-slate-500 mb-4">Occupied, free and closed rooms</p>
+                <div class="h-56">
+                    <canvas id="c-rooms"></canvas>
+                </div>
+            </div>
+        </div>
+        <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('overview-data');
+    if (!el || typeof Chart === 'undefined') return;
+    const d = JSON.parse(el.textContent);
+    const TEAL = '#14b8a6', BLUE = '#2563eb', AMBER = '#f59e0b', GREEN = '#10b981', SLATE = '#94a3b8';
+
+    const duty = d.duty_roles || [];
+    const dutyCanvas = document.getElementById('c-duty-roles');
+    if (dutyCanvas) {
+        new Chart(dutyCanvas, {
+            type: 'bar',
+            data: {
+                labels: duty.map(r => r.role || 'Unassigned'),
+                datasets: [{ label: 'On duty', data: duty.map(r => r.n), backgroundColor: TEAL, borderRadius: 8 }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,0.15)' } },
+                },
+            },
+        });
+    }
+
+    const rooms = d.room_status || [];
+    const roomsCanvas = document.getElementById('c-rooms');
+    if (roomsCanvas) {
+        new Chart(roomsCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: rooms.map(r => r.label),
+                datasets: [{ data: rooms.map(r => r.n), backgroundColor: [BLUE, GREEN, SLATE], borderWidth: 0 }],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '65%',
+                plugins: { legend: { position: 'bottom' } },
+            },
+        });
+    }
+});
+        </script>
+        <!-- Waiting list and activity -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {% if show_waiting_list %}
                 <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
                     <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -68,7 +178,6 @@
                     </div>
                 </div>
             {% endif %}
-            <!-- Activity -->
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4 {% if not show_waiting_list %}lg:col-span-3{% endif %}">
                 <div class="border-b border-slate-100 pb-3">
                     <h2 class="font-bold text-slate-900 text-lg">{{ activity_title }}</h2>
@@ -76,7 +185,7 @@
                 </div>
                 <ul class="space-y-3">
                     {% for a in activity %}
-                        <li>
+                        <li class="border-l-2 border-teal-200 pl-3">
                             <p class="text-xs text-slate-800">{{ a.description|truncatechars:140 }}</p>
                             <p class="text-[10px] text-slate-400 mt-0.5">
                                 {{ a.timestamp|date:"H:i" }}{% if a.actor and "ADMIN_CONFIG" in caps %} · {{ a.actor.username }}{% endif %}
@@ -89,4 +198,76 @@
             </div>
         </div>
     </div>
+    {{ chart_data|json_script:"overview-data" }}
+    <script>
+(function () {
+    const d = JSON.parse(document.getElementById('overview-data').textContent);
+    const TEAL = '#14b8a6', BLUE = '#2563eb', AMBER = '#f59e0b', SLATE = '#64748b', GREEN = '#10b981';
+    const grid = { color: 'rgba(148,163,184,0.15)' };
+    const fill = (c) => c + '26';
+    const line = (label, data, color) => ({
+        label, data, borderColor: color, backgroundColor: fill(color),
+        fill: true, tension: 0.4, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5,
+    });
+
+    new Chart(document.getElementById('c-movement'), {
+        type: 'line',
+        data: { labels: d.labels, datasets: [
+            line('Registered', d.patients, TEAL),
+            line('Visits', d.visits, BLUE),
+            line('Admissions', d.admissions, AMBER),
+        ]},
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid, ticks: { precision: 0 } } },
+            plugins: { legend: { display: false } },
+        },
+    });
+
+    const beds = d.bed_status || [];
+    const bedColour = (s) => ({ VACANT: GREEN, OCCUPIED: BLUE, CLEANING: AMBER, OUT_OF_SERVICE: SLATE })[s] || SLATE;
+    new Chart(document.getElementById('c-beds'), {
+        type: 'doughnut',
+        data: {
+            labels: beds.map(r => r.status.replace(/_/g, ' ').toLowerCase()),
+            datasets: [{ data: beds.map(r => r.n), backgroundColor: beds.map(r => bedColour(r.status)), borderWidth: 0 }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
+                   plugins: { legend: { position: 'bottom' } } },
+    });
+
+    const pri = document.getElementById('c-priority');
+    if (pri && d.priority) {
+        new Chart(pri, {
+            type: 'bar',
+            data: {
+                labels: d.priority.map(p => p.label),
+                datasets: [{ label: 'Waiting', data: d.priority.map(p => p.n),
+                             backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6'], borderRadius: 8 }],
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                       plugins: { legend: { display: false } },
+                       scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid, ticks: { precision: 0 } } } },
+        });
+    }
+
+    const fin = document.getElementById('c-finance');
+    if (fin && d.charges) {
+        new Chart(fin, {
+            type: 'line',
+            data: { labels: d.labels, datasets: [
+                line('Charges posted', d.charges, SLATE),
+                line('Payments', d.payments_mpesa.map((v, i) => v + d.payments_manual[i]), TEAL),
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid } },
+                plugins: { legend: { position: 'bottom' } },
+            },
+        });
+    }
+})();
+    </script>
 {% endblock %}

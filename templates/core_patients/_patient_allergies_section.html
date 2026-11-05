@@ -1,0 +1,22 @@
+<section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-between items-center">
+        <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Allergies</h3>
+        <span class="text-xs text-slate-500">Status:
+            <strong>{{ statement.get_status_display|default:"Unknown" }}</strong></span>
+    </div>
+    <div class="p-4 space-y-4">
+        {% if can_manage_allergies %}
+            <form method="post"
+                  action="{% url 'core_patients:allergy_record' patient.id %}"
+                  class="space-y-3">
+                {% csrf_token %}
+                {% include "core_patients/_allergy_entry_fields.html" %}
+                <button type="submit"
+                        class="bg-teal-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-teal-700">
+                    Save allergy
+                </button>
+            </form>
+        {% endif %}
+        {% include "core_patients/_allergy_list.html" with allergies=allergies %}
+    </div>
+</section>

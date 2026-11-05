@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 
 from billing.models import Charge, Payment
 from core_patients.models import Patient, StaffProfile, StaffRegistrationRequest
+from dashboard.overview_charts import build_overview_charts
 from duty.services import on_duty_staff
 from hospital_system.permissions import caps_for
 from pharmacy.models import MedicationOrder
@@ -365,6 +366,7 @@ def overview_dashboard_view(request):
         "activity": activity,
         "activity_title": activity_title,
         "show_register": "PATIENT_REGISTER" in caps,
+        "chart_data": build_overview_charts(caps, today, waiting_list)
     }
     return render(request, "dashboard/overview.html", context)
 

@@ -1,0 +1,86 @@
+<!-- Rooms and duty chart card. Paste this block into overview.html between the movement/bed charts row and the waiting list row.
+     It is self-contained: it waits for DOMContentLoaded, so it works wherever it sits in the content block. -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div
+    class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6"
+  >
+    <h2 class="font-bold text-slate-900 text-lg">Rooms and duty</h2>
+    <p class="text-xs text-slate-500 mb-4">
+      Who is on duty right now, by role, and how many rooms are in use
+    </p>
+    <div class="h-56"><canvas id="c-duty-roles"></canvas></div>
+  </div>
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <h2 class="font-bold text-slate-900 text-lg">Room status</h2>
+    <p class="text-xs text-slate-500 mb-4">Occupied, free and closed rooms</p>
+    <div class="h-56"><canvas id="c-rooms"></canvas></div>
+  </div>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const el = document.getElementById("overview-data");
+    if (!el || typeof Chart === "undefined") return;
+    const d = JSON.parse(el.textContent);
+    const TEAL = "#14b8a6",
+      BLUE = "#2563eb",
+      AMBER = "#f59e0b",
+      GREEN = "#10b981",
+      SLATE = "#94a3b8";
+
+    const duty = d.duty_roles || [];
+    const dutyCanvas = document.getElementById("c-duty-roles");
+    if (dutyCanvas) {
+      new Chart(dutyCanvas, {
+        type: "bar",
+        data: {
+          labels: duty.map((r) => r.role || "Unassigned"),
+          datasets: [
+            {
+              label: "On duty",
+              data: duty.map((r) => r.n),
+              backgroundColor: TEAL,
+              borderRadius: 8,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 },
+              grid: { color: "rgba(148,163,184,0.15)" },
+            },
+          },
+        },
+      });
+    }
+
+    const rooms = d.room_status || [];
+    const roomsCanvas = document.getElementById("c-rooms");
+    if (roomsCanvas) {
+      new Chart(roomsCanvas, {
+        type: "doughnut",
+        data: {
+          labels: rooms.map((r) => r.label),
+          datasets: [
+            {
+              data: rooms.map((r) => r.n),
+              backgroundColor: [BLUE, GREEN, SLATE],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "65%",
+          plugins: { legend: { position: "bottom" } },
+        },
+      });
+    }
+  });
+</script>

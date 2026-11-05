@@ -1,0 +1,60 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse min-w-[560px]">
+        <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
+            <tr>
+                <th class="p-3.5">Patient</th>
+                <th class="p-3.5">Registered</th>
+                <th class="p-3.5 text-right">Action</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-sm">
+            {% for p in page.object_list %}
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3.5 font-bold text-slate-900">{{ p }}</td>
+                    <td class="p-3.5 text-xs text-slate-500 font-mono whitespace-nowrap">{{ p.created_at|date:"Y-m-d" }}</td>
+                    <td class="p-3.5 text-right">
+                        <a href="{% url 'dashboard:admin_patient_edit' p.pk %}"
+                           class="text-teal-600 font-bold text-xs hover:underline">Edit →</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="3" class="p-8 text-center text-slate-500 italic text-sm">
+                        {% if q %}No patients match “{{ q }}”.{% else %}No patients registered
+                            yet.{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if page.paginator.count %}
+    <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-600">
+        <div>
+            Showing
+            <span class="font-bold text-slate-900">{{ page.start_index }}</span> to
+            <span class="font-bold text-slate-900">{{ page.end_index }}</span> of
+            <span class="font-bold text-slate-900">{{ page.paginator.count }}</span>
+            patients
+        </div>
+        {% if page.paginator.num_pages > 1 %}
+            <div class="inline-flex items-center gap-1.5">
+                {% if page.has_previous %}
+                    <a data-page="{{ page.previous_page_number }}"
+                       href="{% url 'dashboard:admin_master' %}?{{ q_param }}&amp;patient_page={{ page.previous_page_number }}"
+                       class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Previous</a>
+                {% else %}
+                    <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Previous</span>
+                {% endif %}
+                <span class="px-3 py-1.5 font-bold text-slate-700">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+                {% if page.has_next %}
+                    <a data-page="{{ page.next_page_number }}"
+                       href="{% url 'dashboard:admin_master' %}?{{ q_param }}&amp;patient_page={{ page.next_page_number }}"
+                       class="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Next</a>
+                {% else %}
+                    <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Next</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+{% endif %}

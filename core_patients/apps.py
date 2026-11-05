@@ -2,5 +2,8 @@ from django.apps import AppConfig
 
 
 class CorePatientsConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'core_patients'
+    name = "core_patients"
+    default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self):
+        from . import signals  # noqa: F401

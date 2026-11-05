@@ -1,0 +1,74 @@
+<div x-show="activeTab === 'patients'"
+     class="space-y-6"
+     style="display: none">
+    <div class="relative">
+        <span class="absolute inset-y-0 left-3.5 flex items-center text-slate-400 pointer-events-none">🔍</span>
+        <input id="patient-search"
+               type="search"
+               value="{{ q }}"
+               autocomplete="off"
+               placeholder="Search patients as you type: name, phone, ID, any field"
+               class="w-full border border-slate-300 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white" />
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div id="patient-results">{% include "dashboard/_admin_patient_results.html" %}</div>
+    </div>
+</div>
+<script>
+  (function () {
+    const input = document.getElementById("patient-search");
+    const box = document.getElementById("patient-results");
+    const base = "{% url 'dashboard:admin_master' %}";
+    let timer = null;
+    let latest = 0;
+
+    function load(url) {
+      const id = ++latest;
+      box.style.opacity = "0.5";
+      fetch(url, {
+        credentials: "same-origin",
+        headers: { "X-Partial": "patients" },
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error(r.status);
+          return r.text();
+        })
+        .then(function (html) {
+          if (id === latest) box.innerHTML = html;
+        })
+        .catch(function () {
+          if (id === latest)
+            box.innerHTML =
+              '<p class="p-6 text-sm text-red-600">Could not load patients. Try again.</p>';
+        })
+        .finally(function () {
+          if (id === latest) box.style.opacity = "1";
+        });
+    }
+
+    function urlFor(q, page) {
+      const params = new URLSearchParams({ tab: "patients" });
+      if (q) params.set("q", q);
+      if (page && page > 1) params.set("patient_page", page);
+      return base + "?" + params.toString();
+    }
+
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        const url = urlFor(input.value.trim(), 1);
+        history.replaceState(null, "", url);
+        load(url);
+      }, 250);
+    });
+
+    box.addEventListener("click", function (e) {
+      const a = e.target.closest("a[data-page]");
+      if (!a) return;
+      e.preventDefault();
+      const url = a.getAttribute("href");
+      history.replaceState(null, "", url);
+      load(url);
+    });
+  })();
+</script>
