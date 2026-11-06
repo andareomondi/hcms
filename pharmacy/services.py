@@ -418,3 +418,22 @@ def write_off(*, serial, reason, staff):
     unit.status = "WRITTEN_OFF"
     unit.save(update_fields=["status"])
     return unit
+
+@transaction.atomic
+def lock_unit_for_vaccine(*, serial, vaccine_code):
+    """
+    Returns the vial with this serial, locked for update, if it holds the requested vaccine
+    and can still give a dose. Must be called inside a transaction.
+    """
+    unit = (StockUnit.objects.select_for_update()
+            .select_related("medication", "batch")
+            .filter(serial=serial).first())
+    if unit is None:
+        raise PharmacyError("No vial with that serial is in stock.")
+    if unit.medication.vaccine_code != vaccine_code:
+        raise PharmacyError(f"That vial is {unit.medication.brand_name}, not the vaccine being recorded.")
+    if unit.status != "IN_STOCK" or unit.doses_remaining <= 0:
+        raise PharmacyError("That vial is used up, expired or written off.")
+    if unit.batch.expiry_date < timezone.localdate():
+        raise PharmacyError("That vial has expired.")
+    return unit
