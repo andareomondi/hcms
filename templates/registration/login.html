@@ -12,9 +12,12 @@
         <form method="post" class="space-y-4">
             {% csrf_token %}
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
+                <label for="username"
+                       class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
                 <input type="text"
+                       id="username"
                        name="username"
+                       value="{{ request.POST.username|default:'' }}"
                        autofocus
                        autocapitalize="none"
                        autocomplete="username"
@@ -23,8 +26,10 @@
                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
+                <label for="password"
+                       class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
                 <input type="password"
+                       id="password"
                        name="password"
                        autocomplete="current-password"
                        required
@@ -37,8 +42,9 @@
             </button>
         </form>
         <div class="mt-4 text-center text-sm text-slate-600">
-            Need a staff account? <a href="{% url 'core_patients:staff_register' %}"
-    class="text-teal-600 font-semibold hover:underline">Register here</a>
+            Need a staff account?
+            <a href="{% url 'core_patients:staff_register' %}"
+               class="text-teal-600 font-semibold hover:underline">Register here</a>
         </div>
     </div>
 {% endblock %}

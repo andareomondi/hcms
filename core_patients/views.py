@@ -19,6 +19,7 @@ from billing.models import Charge, Payment
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from dashboard.views import is_system_admin
+from hospital_system import settings
 from hospital_system.permissions import Cap, caps_for, requires
 from lab.models import LabOrder
 from radiology.models import ImagingStudy
@@ -163,6 +164,9 @@ def staff_register_view(request):
     PUBLIC. Submits a staff account request for administrator review.
     Creates no User and does not log anyone in.
     """
+    if not getattr(settings, 'ALLOW_STAFF_REGISTRATION', True):
+        return render(request, "core_patients/staff_registration_closed.html", status=403)
+
     if request.method == "POST":
         # Honeypot: real users never fill this hidden field. Bots do.
         if request.POST.get("website"):

@@ -39,12 +39,15 @@ SECRET_KEY = env_required("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
+ALLOW_STAFF_REGISTRATION = env_bool("ALLOW_STAFF_REGISTRATION", default=False)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-LOGIN_URL = "/accounts/login/"
-LOGOUT_REDIRECT_URL = "/accounts/login/"
+# Using named urls for login/logout redirects instead of hardcoded paths.
+LOGIN_URL = "login"
+LOGOUT_REDIRECT_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard:overview"
 
 # Application definition
 INSTALLED_APPS = [

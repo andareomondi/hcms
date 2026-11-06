@@ -1,0 +1,14 @@
+{% extends "base.html" %} {% block title %}Registration Closed - HCMS{% endblock %} {% block content %}
+<div class="max-w-md mx-auto bg-white p-8 rounded shadow mt-10 text-center">
+    <div class="text-4xl mb-4">🔒</div>
+    <h1 class="text-2xl font-bold mb-2 text-slate-800">Registration is Closed</h1>
+    <p class="text-sm text-slate-600 mb-6">
+        Staff account registration is currently disabled by the system
+        administrator. Please contact IT support if you need assistance.
+    </p>
+    <a href="{% url 'login' %}"
+       class="inline-block bg-teal-600 text-white px-4 py-2 rounded font-semibold hover:bg-teal-700 transition text-sm">
+        Return to Login
+    </a>
+</div>
+{% endblock %}

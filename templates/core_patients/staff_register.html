@@ -1,94 +1,158 @@
-{% extends "base.html" %} {% block title %}Staff Registration - HCMS{% endblock %} {% block content %}
-<div class="max-w-xl mx-auto bg-white p-8 rounded shadow mt-6">
-    <h1 class="text-2xl font-bold mb-6 text-slate-800">Hospital Staff Registration</h1>
-    {% if error %}
-        <div class="bg-red-100 text-red-700 p-3 rounded mb-4 text-xs font-semibold">{{ error }}</div>
-    {% endif %}
-    <form method="post" class="space-y-4">
-        {% csrf_token %}
-        <input type="text"
-               name="website"
-               tabindex="-1"
-               autocomplete="off"
-               aria-hidden="true"
-               style="display:none">
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
-                <input type="text"
-                       name="first_name"
-                       required
-                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+{% extends "base.html" %}
+{% block title %}Staff Registration - HCMS{% endblock %}
+{% block content %}
+    <div class="max-w-xl mx-auto bg-white p-8 rounded shadow mt-6"
+         x-data="{
+         form: {
+             first_name: '{{ form_values.first_name|default:'' }}',
+             last_name: '{{ form_values.last_name|default:'' }}',
+             username: '{{ form_values.username|default:'' }}',
+             email: '{{ form_values.email|default:'' }}',
+             employee_id: '{{ form_values.employee_id|default:'' }}',
+             role: '{{ form_values.role|default:roles.0.0 }}',
+             department_id: '{{ form_values.department_id|default:departments.0.id }}',
+             password: ''
+         },
+         get isValid() {
+             return this.form.first_name.trim() !== '' &&
+                    this.form.last_name.trim() !== '' &&
+                    this.form.username.trim() !== '' &&
+                    this.form.email.trim() !== '' &&
+                    this.form.employee_id.trim() !== '' &&
+                    this.form.role.trim() !== '' &&
+                    this.form.department_id.trim() !== '' &&
+                    this.form.password.length >= 12;
+         }
+     }">
+        <h1 class="text-2xl font-bold mb-6 text-slate-800">Hospital Staff Registration</h1>
+        {% if error %}
+            <div class="bg-red-100 text-red-700 p-3 rounded mb-4 text-xs font-semibold">{{ error }}</div>
+        {% endif %}
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <!-- Honeypot anti-spam field -->
+            <input type="text"
+                   name="website"
+                   tabindex="-1"
+                   autocomplete="off"
+                   aria-hidden="true"
+                   style="display:none">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="first_name"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">First Name</label>
+                    <input type="text"
+                           id="first_name"
+                           name="first_name"
+                           x-model="form.first_name"
+                           autocomplete="given-name"
+                           required
+                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                    <label for="last_name"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name</label>
+                    <input type="text"
+                           id="last_name"
+                           name="last_name"
+                           x-model="form.last_name"
+                           autocomplete="family-name"
+                           required
+                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="username"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
+                    <input type="text"
+                           id="username"
+                           name="username"
+                           x-model="form.username"
+                           autocomplete="username"
+                           required
+                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                    <label for="email"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email Address</label>
+                    <input type="email"
+                           id="email"
+                           name="email"
+                           x-model="form.email"
+                           autocomplete="email"
+                           required
+                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="employee_id"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">Employee ID</label>
+                    <input type="text"
+                           id="employee_id"
+                           name="employee_id"
+                           x-model="form.employee_id"
+                           placeholder="e.g. EMP-DOC-02"
+                           required
+                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div>
+                    <label for="role"
+                           class="block text-xs font-semibold uppercase text-slate-600 mb-1">Staff Role</label>
+                    <select id="role"
+                            name="role"
+                            x-model="form.role"
+                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500">
+                        {% for code, label in roles %}
+                            <option value="{{ code }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last Name</label>
-                <input type="text"
-                       name="last_name"
-                       required
-                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
-            </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
-                <input type="text"
-                       name="username"
-                       required
-                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
-            </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email Address</label>
-                <input type="email"
-                       name="email"
-                       required
-                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
-            </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Employee ID</label>
-                <input type="text"
-                       name="employee_id"
-                       placeholder="e.g. EMP-DOC-02"
-                       required
-                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
-            </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Staff Role</label>
-                <select name="role"
+                <label for="department_id"
+                       class="block text-xs font-semibold uppercase text-slate-600 mb-1">Department</label>
+                <select id="department_id"
+                        name="department_id"
+                        x-model="form.department_id"
                         class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500">
-                    {% for code, label in roles %}
-                        <option value="{{ code }}">{{ label }}</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept.id }}">{{ dept.name }} ({{ dept.get_kind_display }})</option>
                     {% endfor %}
                 </select>
             </div>
+            <!-- Password Field with Alpine Live Character Counter -->
+            <div>
+                <label for="password"
+                       class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
+                <input type="password"
+                       id="password"
+                       name="password"
+                       x-model="form.password"
+                       minlength="12"
+                       autocomplete="new-password"
+                       required
+                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
+                <div class="flex justify-between items-center mt-1 text-xs">
+                    <span :class="form.password.length >= 12 ? 'text-teal-600 font-medium' : 'text-slate-500'">
+                        <span x-text="form.password.length"></span>/12 characters minimum
+                    </span>
+                    <span x-text="form.password.length >= 12 ? '✓ Requirement met' : 'Too short'"
+                          :class="form.password.length >= 12 ? 'text-teal-600 font-semibold' : 'text-slate-400'">
+                    </span>
+                </div>
+            </div>
+            <!-- Submit Button: Disabled unless all fields are filled & password length >= 12 -->
+            <button type="submit"
+                    :disabled="!isValid"
+                    :class="isValid ? 'bg-teal-600 hover:bg-teal-700 cursor-pointer shadow' : 'bg-slate-300 text-slate-500 cursor-not-allowed'"
+                    class="w-full text-white py-2 rounded font-semibold transition">Register Staff Account</button>
+        </form>
+        <div class="mt-4 text-center text-sm text-slate-600">
+            Already have an account?
+            <a href="{% url 'login' %}"
+               class="text-teal-600 font-semibold hover:underline">Log in</a>
         </div>
-        <div>
-            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Department</label>
-            <select name="department_id"
-                    class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500">
-                {% for dept in departments %}
-                    <option value="{{ dept.id }}">{{ dept.name }} ({{ dept.get_kind_display }})</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
-            <input type="password"
-                   name="password"
-                   required
-                   class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-teal-500" />
-            <p class="text-xs text-slate-500 mt-1">Must contain at least 12 characters.</p>
-        </div>
-        <button type="submit"
-                class="w-full bg-teal-600 text-white py-2 rounded font-semibold hover:bg-teal-700 transition">
-            Register Staff Account
-        </button>
-    </form>
-    <div class="mt-4 text-center text-sm text-slate-600">
-        Already have an account?
-        <a href="{% url 'login' %}"
-           class="text-teal-600 font-semibold hover:underline">Log in</a>
     </div>
-</div>
 {% endblock %}
