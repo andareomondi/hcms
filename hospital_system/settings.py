@@ -47,7 +47,8 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 # Using named urls for login/logout redirects instead of hardcoded paths.
 LOGIN_URL = "login"
 LOGOUT_REDIRECT_URL = "login"
-LOGIN_REDIRECT_URL = "dashboard:overview"
+# Send them to clock in screen
+LOGIN_REDIRECT_URL = "duty:clock_in"
 
 # Application definition
 INSTALLED_APPS = [

@@ -1,0 +1,21 @@
+<div class="bg-white rounded-xl border border-red-200 p-4 space-y-2">
+    <p class="text-xs font-bold uppercase tracking-wider text-red-700">Allergies</p>
+    {% if allergies %}
+        <ul class="space-y-1">
+            {% for a in allergies %}
+                {% if a.status == "ACTIVE" or a.status == "DISPUTED" %}
+                    <li class="text-sm">
+                        <span class="font-bold text-slate-900">{{ a.allergen.display_name }}</span>
+                        {% if a.reaction %}<span class="text-slate-600">: {{ a.reaction }}</span>{% endif %} {% if a.status == "DISPUTED" %}<span class="text-xs font-bold text-amber-700">(disputed)</span>{% endif %}
+                    </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    {% elif allergy_statement.status == "NONE_KNOWN" %}
+        <p class="text-sm text-slate-700">No known allergies (recorded).</p>
+    {% elif allergy_statement.status == "UNKNOWN" %}
+        <p class="text-sm font-bold text-amber-700">Allergy status unknown.</p>
+    {% else %}
+        <p class="text-sm text-slate-500 italic">No allergies recorded.</p>
+    {% endif %}
+</div>

@@ -12,7 +12,7 @@ from .allergy_recording import (
     change_allergy_status,
     record_allergy,
 )
-from .models import AllergenClass, Patient, PatientAllergy
+from .models import Allergen, AllergenClass, Patient, PatientAllergy
 
 
 def _entries_from_post(request):
