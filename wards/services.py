@@ -137,30 +137,31 @@ def discharge(*, admission, staff):
 
     bed = Bed.objects.select_for_update().select_related("ward").get(pk=adm.bed_id)
     actual_days = nights_between(adm.admitted_at, now)
+    planned_days = adm.planned_days
+    rate = bed.ward.bed_day_rate
 
+    # The planned bed-day charge is never voided. Only the difference in days is billed or refunded.
     planned = billing.Charge.objects.filter(idempotency_key=f"bed:{adm.id}:planned").first()
-    if planned:
-        billing.void_or_reverse(planned, staff)
 
-    final = billing.add_charge(
-        encounter=adm.encounter,
-        source_type="BED_DAY",
-        description=f"Bed {bed.code} ({bed.ward.name}), actual {actual_days} day(s)",
-        unit_price=bed.ward.bed_day_rate,
-        quantity=actual_days,
-        staff=staff,
-        source_id=adm.id,
-        key=f"bed:{adm.id}:final",
-    )
-
-    # Pay the actual days from money already received, then refund whatever is left over.
-    billing.settle_from_credit(charge=final, staff=staff)
-    billing_refunds.request_overpayment_refund(
-        encounter=adm.encounter,
-        anchor=planned,
-        staff=staff,
-        reason=f"Stay ended after {actual_days} day(s); planned {adm.planned_days} day(s).",
-    )
+    if actual_days > planned_days:
+        billing.add_charge(
+            encounter=adm.encounter,
+            source_type="BED_DAY",
+            description=f"Bed {bed.code} ({bed.ward.name}), {actual_days - planned_days} day(s) beyond planned",
+            unit_price=rate,
+            quantity=actual_days - planned_days,
+            staff=staff,
+            source_id=adm.id,
+            key=f"bed:{adm.id}:overstay",
+        )
+    elif actual_days < planned_days:
+        billing_refunds.apply_unused_stay(
+            encounter=adm.encounter,
+            anchor=planned,
+            unused=rate * (planned_days - actual_days),
+            staff=staff,
+            reason=f"Bed {bed.code} left after {actual_days} of {planned_days} planned day(s)",
+        )
 
     _record(bed, CLEANING, staff, "Discharged. Needs cleaning before reuse.", adm)
     finish_encounter(adm.encounter, staff)

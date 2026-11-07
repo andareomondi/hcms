@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from billing import services as billing_services
-from billing.models import Charge, Payment
+from billing.models import Charge, Payment, Refund
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from dashboard.views import is_system_admin
@@ -24,6 +24,7 @@ from hospital_system.permissions import Cap, caps_for, requires
 from lab.models import LabOrder
 from radiology.models import ImagingStudy
 from wards.models import Admission
+from wards.services import nights_between
 
 from .allergy_recording import AllergyError, registration_allergy_status, set_statement
 from .allergy_recording_views import _entries_from_post, save_allergy_rows
@@ -139,6 +140,7 @@ def patient_record_view(request, patient_id):
                                   .prefetch_related("lines__test", "lines__amendments__amended_by__user")
                                   .order_by("ordered_at"))
         if show["finance"]:
+            item["refunds"] = enc.refunds.select_related("requested_by__user", "paid_by__user").order_by("requested_at")
             item["charges"] = enc.charges.select_related("created_by__user").order_by("created_at")
             item["payments"] = Payment.objects.filter(encounter=enc) \
                 .select_related("recorded_by__user").order_by("recorded_at")
@@ -433,11 +435,11 @@ def patient_register_view(request):
         return redirect("core_patients:detail", patient_id=patient.id)
  
     return render(request, "core_patients/register.html", _register_context())
- 
+
 
 @login_required
 def patient_detail_view(request, patient_id):
-    """Patient file: demographics, visits with triage data, ward history, bill and allergies."""
+    """Patient file: demographics, visits with triage data, ward history, bill, refunds and allergies."""
     patient = get_object_or_404(Patient.objects.select_related("created_by"), pk=patient_id)
     if patient.merged_into_id:
         messages.info(request, "This record was merged into another. You have been taken to the surviving record.")
@@ -449,21 +451,37 @@ def patient_detail_view(request, patient_id):
         f"Viewed record of patient #{patient.id}: {patient}.",
     )
 
-    # Ward admissions and bed allocations
-    admissions = (Admission.objects.filter(encounter__patient=patient)
-                  .select_related("bed__ward", "admitted_by")
-                  .order_by("-admitted_at"))
+    now = timezone.now()
 
-    # Financial data
+    # Ward admissions: planned against actual days, newest first
+    admissions = list(
+        Admission.objects.filter(encounter__patient=patient)
+        .select_related("bed__ward", "admitted_by", "encounter")
+        .order_by("-admitted_at")
+    )
+    stays = [
+        {
+            "adm": adm,
+            "planned": adm.planned_days,
+            "actual": nights_between(adm.admitted_at, adm.discharged_at or now),
+            "active": adm.discharged_at is None,
+        }
+        for adm in admissions
+    ]
+
+    # Financial data: totals come from billing so refund bills and paid-out refunds are counted once
     billing_account = getattr(patient, "billing_account", None)
-    charges = Charge.objects.filter(
-        Q(treated_patient=patient) | Q(encounter__patient=patient)
-    ).order_by("-created_at")
+    charges = (Charge.objects.filter(Q(treated_patient=patient) | Q(encounter__patient=patient))
+               .select_related("encounter")
+               .distinct()
+               .order_by("-created_at"))
+    totals = billing_services.patient_totals(patient)
 
-    total_billed = sum(c.amount for c in charges)
-    total_paid = sum(c.amount for c in charges.filter(status="PAID"))
-    total_posted = sum(c.amount for c in charges.filter(status="POSTED"))
-    total_provisional = sum(c.amount for c in charges.filter(status="PROVISIONAL"))
+    refunds = (Refund.objects.filter(encounter__patient=patient)
+               .select_related("encounter", "charge", "requested_by__user", "paid_by__user")
+               .order_by("-requested_at"))
+    refunds_paid = sum((r.amount for r in refunds if r.status == "PAID"), 0)
+    refunds_pending = sum((r.amount for r in refunds if r.status == "PENDING"), 0)
 
     # Clinical timeline (notes and medication orders across all visits)
     timeline_items = []
@@ -509,12 +527,15 @@ def patient_detail_view(request, patient_id):
         "patient": patient,
         "lab_orders": lab_qs[:50],
         "admissions": admissions,
+        "stays": stays,
         "billing_account": billing_account,
         "charges": charges,
-        "total_billed": total_billed,
-        "total_paid": total_paid,
-        "total_posted": total_posted,
-        "total_provisional": total_provisional,
+        "refunds": refunds,
+        "total_billed": totals["total"],
+        "total_paid": totals["paid"],
+        "total_outstanding": totals["outstanding"],
+        "total_refunded": refunds_paid,
+        "total_refund_pending": refunds_pending,
         "timeline_items": timeline_items,
         "encounter_summaries": encounter_summaries,
     }

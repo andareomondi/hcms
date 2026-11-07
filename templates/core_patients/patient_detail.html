@@ -353,6 +353,45 @@
                     </table>
                 </div>
             </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 bg-slate-50/50 border-b border-slate-200">
+                    <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">Stays and refunds</h3>
+                </div>
+                <table class="w-full text-left text-sm">
+                    <thead class="text-xs uppercase text-slate-500 border-b">
+                        <tr>
+                            <th class="p-3">Ward &amp; bed</th>
+                            <th class="p-3">Planned</th>
+                            <th class="p-3">Actual</th>
+                            <th class="p-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in stays %}
+                            <tr class="border-b">
+                                <td class="p-3">{{ s.adm.bed.ward.name }} ({{ s.adm.bed.code }})</td>
+                                <td class="p-3">{{ s.adm.planned_days }} day(s)</td>
+                                <td class="p-3">{{ s.actual }} day(s){% if not s.adm.discharged_at %} <em class="text-xs">so far</em>{% endif %}</td>
+                                <td class="p-3">{% if s.adm.discharged_at %}Discharged{% else %}Active stay{% endif %}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="4" class="p-6 text-center italic text-slate-500">No stays.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="p-4 border-t space-y-2 text-xs">
+                    {% for r in refunds %}
+                        <p>
+                            Refund KES {{ r.amount }} · {{ r.requested_at|date:"Y-m-d" }} · {{ r.reason }} ·
+                            <strong>{{ r.get_status_display }}</strong>
+                        {% if r.status == "PAID" %}· paid {{ r.paid_at|date:"Y-m-d" }}{% endif %}</p>
+                    {% empty %}
+                        <p class="italic text-slate-500">No refunds.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}

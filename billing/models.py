@@ -69,7 +69,7 @@ class Charge(models.Model):
     SOURCES = [("MEDICATION_ORDER", "Medication order"), ("BED_DAY", "Bed day"),
                ("SCAN_ORDER", "Scan order"), ("LAB_TEST", "Laboratory test"),
                ("CONSULTATION", "Consultation"), ("REGISTRATION", "Registration"),
-               ("MANUAL", "Manual adjustment")]
+               ("MANUAL", "Manual adjustment"), ("REFUND", "Refund")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="charges")

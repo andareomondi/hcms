@@ -302,6 +302,12 @@
                             · taken by {{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}
                         </p>
                     {% endfor %}
+                    {% for r in v.refunds %}
+                        <p class="text-xs">
+                            Refund KES {{ r.amount|floatformat:2 }} · requested {{ r.requested_at|date:"Y-m-d" }} · {{ r.reason }} · {{ r.get_status_display }}
+                            {% if r.status == "PAID" %}· paid {{ r.paid_at|date:"Y-m-d H:i" }} by {{ r.paid_by.user.get_full_name|default:r.paid_by.user.username }}{% endif %}
+                        </p>
+                    {% endfor %}
                     <p class="text-xs font-bold">Visit balance: KES {{ v.tally.outstanding|floatformat:2 }}</p>
                 {% endif %}
             </section>
