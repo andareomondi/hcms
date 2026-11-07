@@ -80,14 +80,15 @@ def add_charge(*, encounter, source_type, description, unit_price, staff,
 
 def void_or_reverse(charge, staff):
     """
-    PROVISIONAL charges are voided. POSTED charges are never edited or deleted:
-    a reversal row is added instead (spec 10.1).
+    PROVISIONAL charges are voided. POSTED and PAID charges are never edited or deleted:
+    a reversal row is added instead (spec 10.1). Reversing a PAID charge leaves the payment
+    in place, so the visit shows an overpayment that billing can refund.
     """
     if charge.status == "PROVISIONAL":
         charge.status = "VOIDED"
         charge.save(update_fields=["status"])
         return None
-    if charge.status == "POSTED":
+    if charge.status in ("POSTED", "PAID"):
         return Charge.objects.create(
             encounter=charge.encounter,
             treated_patient=charge.treated_patient,
@@ -104,6 +105,12 @@ def void_or_reverse(charge, staff):
             created_by=staff,
         )
     return None
+
+
+def overpaid_amount(encounter):
+    """Money paid beyond what the visit now costs. Zero if there is none."""
+    tally = encounter_tally(encounter)
+    return max(ZERO, tally["paid"] - tally["total"])
 
 
 def medication_charge_or_none(order):
@@ -246,3 +253,50 @@ def post_encounter_charges(encounter, staff):
     return (Charge.objects.filter(encounter=encounter, status="PROVISIONAL")
             .exclude(created_by=staff)
             .update(status="POSTED", posted_at=timezone.now()))
+
+def _live_allocations():
+    """Allocations that still count: not on a reversed charge, and not on a voided charge."""
+    reversed_ids = Charge.objects.filter(reversal_of__isnull=False).values_list("reversal_of", flat=True)
+    return (PaymentAllocation.objects.exclude(charge_id__in=reversed_ids)
+            .exclude(charge__status="VOIDED"))
+
+
+def live_credit(encounter):
+    """Money received on this visit, after refunds, that no live charge has used yet."""
+    received = Payment.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    refunded = Refund.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or ZERO
+    tied = (_live_allocations().filter(charge__encounter=encounter)
+            .aggregate(t=Sum("amount"))["t"] or ZERO)
+    return received - refunded - tied
+
+
+def settle_from_credit(*, charge, staff):
+    """
+    Marks a charge paid from money already received on the same visit, oldest payment first.
+    Used when an earlier charge was reversed and its money is still on the account.
+    Returns the amount applied.
+    """
+    start = min(outstanding_amount(charge), live_credit(charge.encounter))
+    if start <= 0:
+        return ZERO
+    remaining = start
+    for payment in Payment.objects.filter(encounter=charge.encounter).order_by("recorded_at"):
+        if remaining <= 0:
+            break
+        used = (_live_allocations().filter(payment=payment)
+                .aggregate(t=Sum("amount"))["t"] or ZERO)
+        room = payment.amount - used
+        take = min(room, remaining)
+        if take <= 0:
+            continue
+        PaymentAllocation.objects.create(payment=payment, charge=charge, amount=take)
+        remaining -= take
+
+    # The system settles this line, so it is posted here rather than by the person who created it.
+    if charge.status == "PROVISIONAL":
+        charge.status = "POSTED"
+        charge.posted_at = timezone.now()
+    if charge_fully_paid(charge):
+        charge.status = "PAID"
+    charge.save(update_fields=["status", "posted_at"])
+    return start - remaining

@@ -3,6 +3,7 @@ import math
 from django.db import transaction
 from django.utils import timezone
 
+from billing import refunds as billing_refunds
 from billing import services as billing
 from triage_queue.models import QueueEntry
 from triage_queue.services import FlowError, finish_encounter
@@ -141,7 +142,7 @@ def discharge(*, admission, staff):
     if planned:
         billing.void_or_reverse(planned, staff)
 
-    billing.add_charge(
+    final = billing.add_charge(
         encounter=adm.encounter,
         source_type="BED_DAY",
         description=f"Bed {bed.code} ({bed.ward.name}), actual {actual_days} day(s)",
@@ -150,6 +151,15 @@ def discharge(*, admission, staff):
         staff=staff,
         source_id=adm.id,
         key=f"bed:{adm.id}:final",
+    )
+
+    # Pay the actual days from money already received, then refund whatever is left over.
+    billing.settle_from_credit(charge=final, staff=staff)
+    billing_refunds.request_overpayment_refund(
+        encounter=adm.encounter,
+        anchor=planned,
+        staff=staff,
+        reason=f"Stay ended after {actual_days} day(s); planned {adm.planned_days} day(s).",
     )
 
     _record(bed, CLEANING, staff, "Discharged. Needs cleaning before reuse.", adm)

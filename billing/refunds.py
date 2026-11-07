@@ -76,3 +76,28 @@ def refunds_paid_for(encounter):
     """Total refunds on a visit, pending or paid. A refund reduces what the patient has paid."""
     from django.db.models import Sum
     return Refund.objects.filter(encounter=encounter).aggregate(t=Sum("amount"))["t"] or 0
+
+@transaction.atomic
+def request_overpayment_refund(*, encounter, anchor, staff, reason):
+    """
+    Called when a visit now costs less than was paid, for example a bed stay that ended early.
+    Requests a refund for the difference. Returns the Refund, or None if nothing is owed back.
+    """
+    amount = billing.overpaid_amount(encounter)
+    if amount <= 0:
+        return None
+    anchor = anchor or Charge.objects.filter(encounter=encounter).order_by("created_at").first()
+    refund = Refund.objects.create(
+        charge=anchor,
+        encounter=encounter,
+        billing_account=anchor.billing_account,
+        amount=amount,
+        reason=reason,
+        requested_by=staff,
+    )
+    notify_on_duty(
+        role="BILLING", kind="SYSTEM",
+        message=f"Refund due: KES {amount:,.2f} to {encounter.patient}. {reason[:80]}",
+        link=reverse("billing:refunds"),
+    )
+    return refund
