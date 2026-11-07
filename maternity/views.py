@@ -10,11 +10,12 @@ from core_patients.models import Patient
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, caps_for, requires
+from pharmacy.models import StockUnit
 from triage_queue.models import Encounter
 
 from . import services
 from .models import Delivery
-from .schedule import LABELS, SCHEDULE, schedule_status
+from .schedule import LABELS, schedule_status
 from .services import MaternityError
 
 
@@ -40,6 +41,25 @@ def _int_or_none(raw):
         return int(raw)
     except ValueError:
         raise MaternityError("Numbers must be whole numbers.")
+
+
+def _vials_for_form(today):
+    """In-date vials of vaccines, for the vial picker on the child page."""
+    units = (StockUnit.objects
+             .filter(status="IN_STOCK", doses_remaining__gt=0,
+                     medication__vaccine_code__isnull=False,
+                     batch__expiry_date__gte=today)
+             .select_related("medication", "batch")
+             .order_by("batch__expiry_date", "serial"))
+    return [
+        {
+            "code": u.medication.vaccine_code,
+            "serial": u.serial,
+            "label": (f"{u.serial} · batch {u.batch.batch_number} · "
+                      f"exp {u.batch.expiry_date:%d %b %Y} · {u.doses_remaining} dose(s) left"),
+        }
+        for u in units
+    ]
 
 
 @requires(Cap.MATERNITY_RECORD)
@@ -88,11 +108,13 @@ def delivery_view(request, encounter_id):
     })
 
 
+
 @requires(Cap.PATIENT_FILE)
 def child_view(request, patient_id):
     child = get_object_or_404(Patient, pk=patient_id)
     birth = Delivery.objects.filter(baby=child).select_related("mother_encounter__patient").first()
-    rows = schedule_status(child, timezone.localdate())
+    today = timezone.localdate()
+    rows = schedule_status(child, today)
     caps = caps_for(request.user)
     return render(request, "maternity/child.html", {
         "child": child,
@@ -100,8 +122,8 @@ def child_view(request, patient_id):
         "schedule": rows,
         "vaccinations": child.vaccinations.select_related("given_by__user").order_by("given_at"),
         "guardians": child.relationships_out.filter(is_active=True).select_related("related_patient"),
-        "next_vaccines": [(c, l) for c, l, _ in SCHEDULE],
         "labels": LABELS,
+        "vials": _vials_for_form(today),
         "can_record": Cap.MATERNITY_RECORD in caps,
         "can_confirm": Cap.PATIENT_REGISTER in caps,
         "held": billing.billing_hold_reason(child),
@@ -113,12 +135,14 @@ def child_view(request, patient_id):
 @require_POST
 def vaccination_action(request, patient_id):
     child = get_object_or_404(Patient, pk=patient_id)
+    # A scanned barcode wins. Otherwise the vial picked from the list is used.
+    serial = (request.POST.get("serial_scan") or request.POST.get("serial_pick") or "").strip()
     try:
         services.record_vaccination(
             patient=child,
             vaccine=request.POST.get("vaccine", ""),
             given_at=_aware(request.POST.get("given_at")),
-            serial=request.POST.get("serial", ""),
+            serial=serial,
             staff=_profile(request),
         )
     except MaternityError as exc:
@@ -129,7 +153,6 @@ def vaccination_action(request, patient_id):
                f"Recorded {request.POST.get('vaccine')} for {child}.")
     messages.success(request, "Vaccination recorded.")
     return redirect("maternity:child", patient_id=child.id)
-
 
 @requires(Cap.PATIENT_REGISTER)
 @require_POST

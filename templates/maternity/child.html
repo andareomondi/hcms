@@ -113,41 +113,82 @@
         {% endif %}
     </section>
     {% if can_record and schedule %}
+        {{ vials|json_script:"vials-data" }}
         <form method="post"
+              id="vaccine-form"
               action="{% url 'maternity:vaccinate' child.id %}"
-              class="bg-white rounded-2xl border p-5 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              class="bg-white rounded-2xl border p-5 space-y-4">
             {% csrf_token %}
-            <div class="md:col-span-1">
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Vaccine</label>
-                <select name="vaccine"
-                        required
-                        class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
-                    {% for row in schedule %}
-                        {% if row.status != "GIVEN" %}
-                            <option value="{{ row.code }}">{{ row.label }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+            <p class="font-bold text-sm">Record a dose</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Vaccine *</label>
+                    <select name="vaccine"
+                            required
+                            class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        <option value="">Choose a vaccine</option>
+                        {% for row in schedule %}
+                            {% if row.status != "GIVEN" %}
+                                <option value="{{ row.code }}">{{ row.label }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Given at *</label>
+                    <input type="datetime-local"
+                           name="given_at"
+                           required
+                           value="{{ now_local }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Vial from stock</label>
+                    <select name="serial_pick"
+                            disabled
+                            class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white font-mono">
+                        <option value="">Choose a vaccine first</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">Pick the vial you are opening. The list shows in-date vials of the chosen vaccine.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Or scan the vial barcode</label>
+                    <input name="serial_scan"
+                           autocomplete="off"
+                           placeholder="Scan here if the barcode scanner is working"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm font-mono uppercase" />
+                    <p class="text-xs text-slate-500 mt-1">Use either the list or the scanner. A scan takes priority.</p>
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Given at</label>
-                <input type="datetime-local"
-                       name="given_at"
-                       required
-                       value="{{ now_local }}"
-                       class="w-full min-h-11 border rounded-xl px-3 text-sm" />
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Scan the vial serial</label>
-                <input name="serial"
-                       required
-                       autocomplete="off"
-                       autofocus
-                       placeholder="Scan the vial barcode"
-                       class="w-full min-h-11 border rounded-xl px-3 text-sm font-mono uppercase">
-            </div>
-            <button class="min-h-11 rounded-xl bg-teal-600 text-white text-sm font-bold">Record dose</button>
+            <button class="min-h-11 px-5 rounded-xl bg-teal-600 text-white text-sm font-bold">Record dose</button>
         </form>
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('vaccine-form');
+            if (!form) return;
+            const vials = JSON.parse(document.getElementById('vials-data').textContent);
+            const vaccine = form.querySelector('[name=vaccine]');
+            const pick = form.querySelector('[name=serial_pick]');
+
+            function refresh() {
+                const chosen = vaccine.value;
+                pick.innerHTML = '';
+                const first = document.createElement('option');
+                first.value = '';
+                first.textContent = chosen ? 'Choose a vial' : 'Choose a vaccine first';
+                pick.appendChild(first);
+                vials.filter(v => v.code === chosen).forEach(v => {
+                    const o = document.createElement('option');
+                    o.value = v.serial;
+                    o.textContent = v.label;
+                    pick.appendChild(o);
+                });
+                pick.disabled = !chosen;
+            }
+            vaccine.addEventListener('change', refresh);
+            refresh();
+        });
+        </script>
     {% endif %}
 </div>
 {% endblock %}
