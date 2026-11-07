@@ -74,7 +74,7 @@ class StockMovement(models.Model):
 
 class MedicationOrder(models.Model):
     ROUTES = [("ORAL", "Oral"), ("IM", "Intramuscular"), ("IV", "Intravenous"),
-              ("SC", "Subcutaneous"), ("TOPICAL", "Topical"), ("OTHER", "Other")]
+              ("SC", "Subcutaneous"), ("TOPICAL", "Topical"), ("ID", "Intradermal"), ("OTHER", "Other")]
     FULFILMENT = [("PHARMACY_DISPENSE", "Pharmacy dispense"), ("NURSE_ADMINISTER", "Nurse administration")]
     STATUS = [("ORDERED", "Ordered"), ("PARTIALLY_DONE", "Partially done"),
               ("COMPLETED", "Completed"), ("CANCELLED", "Cancelled"),

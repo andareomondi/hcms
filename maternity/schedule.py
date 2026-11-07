@@ -24,6 +24,19 @@ SCHEDULE_CODES = {code for code, _, _ in SCHEDULE}
 LABELS = {code: label for code, label, _ in SCHEDULE}
 GRACE_WEEKS = 2
 
+# Route each vaccine is given by, as used in routine practice.
+# ID = intradermal, ORAL = by mouth, IM = intramuscular, SC = subcutaneous.
+VACCINE_ROUTE = {
+    "BCG": "ID",
+    "OPV0": "ORAL", "OPV1": "ORAL", "OPV2": "ORAL", "OPV3": "ORAL",
+    "ROTA1": "ORAL", "ROTA2": "ORAL",
+    "HEPB0": "IM",
+    "PENTA1": "IM", "PENTA2": "IM", "PENTA3": "IM",
+    "PCV1": "IM", "PCV2": "IM", "PCV3": "IM",
+    "IPV": "IM",
+    "MEASLES": "SC",
+}
+
 
 def schedule_status(child, today):
     """

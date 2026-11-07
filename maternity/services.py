@@ -1,17 +1,21 @@
 import uuid
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
 
 from billing import services as billing
+from core_patients.allergy_services import conflicts_for
 from core_patients.models import Patient, PatientRelationship
 from pharmacy import services as pharmacy
 from pharmacy.models import Medication
 from triage_queue.models import Encounter
 
-from .models import Delivery, Vaccination
+from .models import Delivery, Pregnancy, Vaccination
 from .prices import DELIVERY_PRICES
-from .schedule import LABELS, SCHEDULE_CODES
+from .schedule import LABELS, SCHEDULE_CODES, VACCINE_ROUTE
+
+PREGNANCY_DAYS = 280
 
 
 class MaternityError(Exception):
@@ -30,14 +34,80 @@ def _set_only_guarantor(patient, keep=None):
     qs.update(is_billing_guarantor=False)
 
 
+def _not_male(patient):
+    if patient.sex == "M":
+        raise MaternityError("Pregnancy and birth can only be recorded for a patient whose sex is not male.")
+
+
+# ---------- pregnancy ----------
+
+@transaction.atomic
+def open_pregnancy(*, patient, lmp, edd, edd_override_reason, staff):
+    """
+    Opens a pregnancy on the mother's record. The due date is calculated from the LMP
+    (LMP + 280 days). A different due date is allowed only with a reason.
+    """
+    if staff is None:
+        raise MaternityError("Your account has no staff profile.")
+    if patient.merged_into_id:
+        raise MaternityError("This record was merged into another. Open the surviving record.")
+    _not_male(patient)
+    today = timezone.localdate()
+    if lmp is None and edd is None:
+        raise MaternityError("Enter the last menstrual period or the due date.")
+    if lmp is not None and lmp > today:
+        raise MaternityError("The last menstrual period cannot be in the future.")
+    if Pregnancy.objects.filter(patient=patient, status="ONGOING").exists():
+        raise MaternityError("This patient already has an ongoing pregnancy.")
+
+    calculated = lmp + timedelta(days=PREGNANCY_DAYS) if lmp else None
+    reason = (edd_override_reason or "").strip()
+    if edd is None:
+        due = calculated
+    else:
+        if calculated and edd != calculated and not reason:
+            raise MaternityError("The due date differs from the one calculated from the last period. "
+                                 "Give the reason.")
+        due = edd
+
+    return Pregnancy.objects.create(
+        patient=patient, lmp=lmp, edd=due,
+        edd_override_reason=reason if calculated and due != calculated else "",
+        opened_by=staff,
+    )
+
+
+@transaction.atomic
+def close_pregnancy(*, pregnancy, status, note, staff):
+    """
+    Ends an ongoing pregnancy without a birth: a pregnancy loss or a transfer out.
+    A birth closes the pregnancy itself (see record_delivery).
+    """
+    if staff is None:
+        raise MaternityError("Your account has no staff profile.")
+    if status not in ("LOSS", "TRANSFERRED"):
+        raise MaternityError("Choose how the pregnancy ended.")
+    if not (note or "").strip():
+        raise MaternityError("Write a note on how the pregnancy ended.")
+    p = Pregnancy.objects.select_for_update().get(pk=pregnancy.pk)
+    if p.status != "ONGOING":
+        raise MaternityError("This pregnancy is already closed.")
+    p.status = status
+    p.closed_at = timezone.now()
+    p.closing_note = note.strip()
+    p.save(update_fields=["status", "closed_at", "closing_note"])
+    return p
+
+
+# ---------- birth ----------
+
 @transaction.atomic
 def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, baby_sex,
                     birth_weight_g, apgar_1, apgar_5, gestation_weeks, notes,
                     baby_first_name="", baby_last_name=""):
     if mother_encounter.status != "OPEN":
         raise MaternityError("This visit is closed. Record the birth on an open visit.")
-    if mother_encounter.patient.sex == "M":
-        raise MaternityError("A birth can only be recorded for a patient whose sex is not male.")
+    _not_male(mother_encounter.patient)
     if delivery_type not in dict(Delivery.DELIVERY_TYPES):
         raise MaternityError("Choose a delivery type.")
     if baby_sex not in ("M", "F", "X", "U"):
@@ -53,7 +123,9 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
         raise MaternityError("Your account has no staff profile.")
 
     mother = mother_encounter.patient
+    pregnancy = Pregnancy.objects.select_for_update().filter(patient=mother, status="ONGOING").first()
     local_day = timezone.localtime(delivered_at).date()
+
     baby = Patient.objects.create(
         first_name=baby_first_name.strip(),
         last_name=baby_last_name.strip() or mother.last_name,
@@ -72,15 +144,20 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
     )
 
     delivery = Delivery.objects.create(
-        mother_encounter=mother_encounter, baby=baby, delivered_at=delivered_at,
-        delivery_type=delivery_type, baby_sex=baby_sex, birth_weight_g=birth_weight_g,
-        apgar_1=apgar_1, apgar_5=apgar_5, gestation_weeks=gestation_weeks,
-        notes=notes.strip(), recorded_by=staff,
+        mother_encounter=mother_encounter, pregnancy=pregnancy, baby=baby,
+        delivered_at=delivered_at, delivery_type=delivery_type, baby_sex=baby_sex,
+        birth_weight_g=birth_weight_g, apgar_1=apgar_1, apgar_5=apgar_5,
+        gestation_weeks=gestation_weeks, notes=notes.strip(), recorded_by=staff,
     )
+
+    if pregnancy is not None:
+        pregnancy.status = "DELIVERED"
+        pregnancy.closed_at = timezone.now()
+        pregnancy.save(update_fields=["status", "closed_at"])
 
     # The baby's nursery visit. Its charges route to the mother's account via the guarantor link.
     Encounter.objects.create(
-        patient=baby, encounter_type="MATERNITY", payer_type="SELF_PAY",
+        patient=baby, encounter_type="CHILD_HEALTH", payer_type="SELF_PAY",
         opened_by=staff, chief_complaint="Newborn, delivered at "
         f"{timezone.localtime(delivered_at):%H:%M} on {local_day:%Y-%m-%d}",
     )
@@ -93,6 +170,8 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
     )
     return delivery
 
+
+# ---------- children ----------
 
 @transaction.atomic
 def register_child(*, parent, first_name, last_name, date_of_birth, sex, id_type, id_number,
@@ -145,17 +224,17 @@ def link_relationship(*, patient, related, relationship, is_guarantor):
 
 def _immunisation_visit_for_vaccine(patient, staff, vaccine):
     return Encounter.objects.create(
-        patient=patient, encounter_type="OUTPATIENT", payer_type="SELF_PAY",
+        patient=patient, encounter_type="CHILD_HEALTH", payer_type="SELF_PAY",
         opened_by=staff, chief_complaint=f"Immunisation: {LABELS[vaccine]}",
     )
 
 
 @transaction.atomic
-def record_vaccination(*, patient, vaccine, given_at, serial, staff, route="IM"):
+def record_vaccination(*, patient, vaccine, given_at, serial, staff):
     """
-    Records one dose. The vial is scanned; the dose goes through pharmacy as a nurse-administered
-    order, so stock, the order history and the vaccination record all agree. The visit is
-    recorded and closed at once. Any charge is posted to the visit under the order's key.
+    Records one dose. The vial is scanned or picked; the dose goes through pharmacy as a
+    nurse-administered order, so stock, the order history and the vaccination record agree.
+    The child's allergies are checked first. The visit is recorded and closed at once.
     """
     if staff is None:
         raise MaternityError("Your account has no staff profile.")
@@ -166,17 +245,23 @@ def record_vaccination(*, patient, vaccine, given_at, serial, staff, route="IM")
     if Vaccination.objects.filter(patient=patient, vaccine=vaccine).exists():
         raise MaternityError("This vaccine is already recorded for this child.")
     if not (serial or "").strip():
-        raise MaternityError("Scan the vial serial.")
+        raise MaternityError("Scan the vial serial or pick the vial from the list.")
 
     medication = Medication.objects.filter(vaccine_code=vaccine, is_active=True).first()
     if medication is None:
         raise MaternityError(f"{LABELS[vaccine]} is not set up in Pharmacy yet. Add it there with its vaccine code.")
 
+    hits = list(conflicts_for(patient, medication))
+    if hits:
+        names = ", ".join(h.allergen.display_name for h in hits)
+        raise MaternityError(f"Allergy alert: the child is recorded as allergic to {names}. "
+                             "A doctor must review this before the dose is given.")
+
     visit = _immunisation_visit_for_vaccine(patient, staff, vaccine)
     try:
         order, unit = pharmacy.give_vaccine_dose(
             encounter=visit, medication=medication, serial=serial.strip().upper(),
-            nurse=staff, route=route,
+            nurse=staff, route=VACCINE_ROUTE.get(vaccine, "IM"),
         )
     except pharmacy.PharmacyError as exc:
         raise MaternityError(str(exc))

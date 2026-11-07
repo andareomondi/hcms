@@ -7,6 +7,47 @@ from core_patients.models import Patient, StaffProfile
 from triage_queue.models import Encounter
 
 
+class Pregnancy(models.Model):
+    """
+    One pregnancy on the mother's record. Only one can be ongoing at a time.
+    Closed by a birth (DELIVERED), a pregnancy loss, or a transfer to another facility.
+    """
+    STATUS = [
+        ("ONGOING", "Ongoing"),
+        ("DELIVERED", "Delivered"),
+        ("LOSS", "Pregnancy loss"),
+        ("TRANSFERRED", "Transferred out"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="pregnancies")
+    lmp = models.DateField(null=True, blank=True, verbose_name="Last menstrual period")
+    edd = models.DateField(verbose_name="Estimated due date")
+    edd_override_reason = models.TextField(blank=True,
+                                           help_text="Needed when the due date is not the one calculated from the LMP.")
+    status = models.CharField(max_length=12, choices=STATUS, default="ONGOING", db_index=True)
+    opened_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    opened_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closing_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-opened_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["patient"], condition=Q(status="ONGOING"),
+                                    name="one_ongoing_pregnancy"),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.patient_id and self.patient.sex == "M":
+            raise ValidationError({"patient": "A pregnancy cannot be recorded for a patient whose sex is male."})
+
+    def __str__(self):
+        return f"Pregnancy of {self.patient} (due {self.edd:%Y-%m-%d})"
+
+
 class Delivery(models.Model):
     """
     Append-only. One row per birth. Corrections are made in the baby's record or by a new note.
@@ -20,6 +61,8 @@ class Delivery(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     mother_encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="deliveries")
+    pregnancy = models.ForeignKey(Pregnancy, on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name="deliveries")
     baby = models.OneToOneField(Patient, on_delete=models.PROTECT, related_name="birth_record")
     delivered_at = models.DateTimeField(db_index=True)
     delivery_type = models.CharField(max_length=10, choices=DELIVERY_TYPES)

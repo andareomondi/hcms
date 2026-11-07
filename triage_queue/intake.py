@@ -24,6 +24,19 @@ from .services import (
 )
 
 PRIORITIES = (1, 2, 3)
+PAY_WALL_EXEMPT_TYPES = ("DELIVERY", "CHILD_HEALTH")
+PREGNANCY_TYPES = ("ANC", "DELIVERY", "MATERNITY")
+
+
+def _refuse_pregnancy_visit_for_male(patient, encounter_type):
+    """
+    A pregnancy or birth visit can never be opened for a patient whose sex is male.
+    Child health visits are not restricted: boys attend them too.
+    """
+    if encounter_type in PREGNANCY_TYPES and patient.sex == "M":
+        raise FlowError("Antenatal and delivery visits cannot be opened for a patient whose sex is male. "
+                        "Check the patient's record.")
+ 
 
 
 def awaiting_triage():
@@ -36,9 +49,9 @@ def awaiting_triage():
 @transaction.atomic
 def open_visit(*, patient, encounter_type, payer_type, staff):
     """
-    Reception: opens a visit and charges the registration and consultation fees.
-    Refused if the patient already has a visit waiting for triage, so a second visit cannot
-    be opened by mistake.
+    Reception: opens a visit. Deliveries and child health visits are not charged at the gate;
+    their charges are posted by maternity. Other visits are charged the registration and
+    consultation fees.
     """
     valid_types = dict(Encounter.TYPE_CHOICES)
     if encounter_type not in valid_types:
@@ -48,15 +61,17 @@ def open_visit(*, patient, encounter_type, payer_type, staff):
         raise FlowError("This patient already has a visit waiting for triage. "
                         "Triage that visit instead of opening a new one.")
 
+    _refuse_pregnancy_visit_for_male(patient, encounter_type)
     encounter = Encounter.objects.create(
         patient=patient,
         encounter_type=encounter_type,
         payer_type=payer_type,
         opened_by=staff,
     )
-    charge_visit_fees(encounter, staff)
+    if encounter_type not in PAY_WALL_EXEMPT_TYPES:
+        charge_visit_fees(encounter, staff)
     return encounter
-
+ 
 
 @transaction.atomic
 def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_complaint,
@@ -67,6 +82,7 @@ def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_compla
     before payment and must carry a reason.
     """
     enc = Encounter.objects.select_for_update().get(pk=encounter.pk)
+    _refuse_pregnancy_visit_for_male(enc.patient, enc.encounter_type)
     if enc.status != "OPEN":
         raise FlowError("This visit is closed.")
     if enc.queue_entries.exists():

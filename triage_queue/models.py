@@ -10,9 +10,11 @@ class Encounter(models.Model):
         ("OUTPATIENT", "Outpatient"), ("EMERGENCY", "Emergency"),
         ("MATERNITY", "Maternity / delivery"), ("OBSERVATION", "Observation"),
         ("INPATIENT", "In-patient admission"),
+        ("ANC", "Antenatal visit"),
+        ("DELIVERY", "Delivery"),
+        ("CHILD_HEALTH", "Child health visit"),
     ]
     PAYER_CHOICES = [("SELF_PAY", "Self-pay"), ("INSURANCE", "Insurance (placeholder)")]
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="encounters")
     encounter_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
