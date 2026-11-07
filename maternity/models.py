@@ -46,6 +46,7 @@ class Delivery(models.Model):
 class Vaccination(models.Model):
     """
     Append-only. One dose per vaccine per child. A wrong entry is corrected by an admin, not edited here.
+    Every dose is linked to the pharmacy order and the vial it came from.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="vaccinations")
@@ -58,6 +59,8 @@ class Vaccination(models.Model):
     recorded_at = models.DateTimeField(auto_now_add=True)
     stock_unit = models.ForeignKey("pharmacy.StockUnit", on_delete=models.PROTECT,
                                    null=True, blank=True, related_name="vaccinations")
+    order = models.ForeignKey("pharmacy.MedicationOrder", on_delete=models.PROTECT,
+                              null=True, blank=True, related_name="vaccinations")
 
     class Meta:
         ordering = ["given_at"]

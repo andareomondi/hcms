@@ -83,8 +83,7 @@ class MedicationOrder(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="medication_orders")
-    ordered_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+",
-                                   limit_choices_to={"role": "DOCTOR"})
+    ordered_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
 
     medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="orders",
                                    null=True, blank=True)

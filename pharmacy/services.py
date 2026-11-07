@@ -437,3 +437,33 @@ def lock_unit_for_vaccine(*, serial, vaccine_code):
     if unit.batch.expiry_date < timezone.localdate():
         raise PharmacyError("That vial has expired.")
     return unit
+
+
+
+@transaction.atomic
+def give_vaccine_dose(*, encounter, medication, serial, nurse, route="IM", notes=""):
+    """
+    Immunisation: one scanned vial gives one dose. The dose gets the same trail as any medicine:
+    a completed, nurse-administered MedicationOrder, a NursingAdministration, and stock movements.
+    The caller records the Vaccination and any charge (charge key: med:<order id>).
+    Allergy checks are not run here yet; see the note in the maternity change.
+    """
+    if not medication.vaccine_code:
+        raise PharmacyError("This medicine is not set up as a vaccine on the immunisation schedule.")
+    unit = lock_unit_for_vaccine(serial=serial, vaccine_code=medication.vaccine_code)
+    problem = unit_problem(unit)
+    if problem:
+        raise PharmacyError(f"{unit.serial}: {problem}.")
+
+    order = MedicationOrder.objects.create(
+        encounter=encounter, ordered_by=nurse, medication=medication, source="FORMULARY",
+        route=route, fulfilment="NURSE_ADMINISTER", dose_text="1 dose",
+        doses_total=1, status="ORDERED", instructions=notes,
+    )
+    take_doses(medication=medication, doses=1, staff=nurse, reason="ADMINISTER",
+               reference_id=order.id, serials=[unit.serial])
+    NursingAdministration.objects.create(order=order, administered_by=nurse,
+                                         dose_given_text="1 dose", site="", notes=notes)
+    order.status = "COMPLETED"
+    order.save(update_fields=["status"])
+    return order, unit

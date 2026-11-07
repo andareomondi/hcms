@@ -16,50 +16,110 @@
                 </p>
             {% endif %}
         </div>
-        <form method="post" class="bg-white rounded-2xl border p-6 space-y-5">
+        <form method="post" class="bg-white rounded-2xl border p-6 space-y-6">
             {% csrf_token %}
+            <!-- Medicine details -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Brand name</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Brand name *</label>
                     <input name="brand_name"
                            required
-                           value="{{ medication.brand_name|default:'' }}"
+                           value="{{ values.brand_name }}"
                            class="w-full min-h-11 border rounded-xl px-3 text-sm">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Generic name</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Generic name *</label>
                     <input name="generic_name"
                            required
-                           value="{{ medication.generic_name|default:'' }}"
+                           value="{{ values.generic_name }}"
                            class="w-full min-h-11 border rounded-xl px-3 text-sm">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Form</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Form *</label>
                     <input name="form"
                            required
-                           value="{{ medication.form|default:'' }}"
-                           placeholder="Tablet, Capsule, Injection"
+                           value="{{ values.form }}"
+                           placeholder="Tablet, Capsule, Injection, Vial"
                            class="w-full min-h-11 border rounded-xl px-3 text-sm">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Strength</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Strength *</label>
                     <input name="strength"
                            required
-                           value="{{ medication.strength|default:'' }}"
+                           value="{{ values.strength }}"
                            placeholder="500mg"
                            class="w-full min-h-11 border rounded-xl px-3 text-sm">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit price (KES)</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit price (KES) *</label>
                     <input name="unit_price"
                            type="number"
                            step="0.01"
                            min="0"
                            required
-                           value="{{ medication.unit_price|default_if_none:'' }}"
+                           value="{{ values.unit_price }}"
                            class="w-full min-h-11 border rounded-xl px-3 text-sm">
                 </div>
             </div>
+            <!-- Immunisation -->
+            <div class="rounded-2xl border border-slate-200 p-4 space-y-4"
+                 x-data="{ vax: {% if values.vaccine_code %}true{% else %}false{% endif %} }">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Immunisation</label>
+                    <select name="vaccine_code"
+                            @change="vax = $event.target.value !== ''"
+                            {% if has_stock %}disabled{% endif %}
+                            class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        <option value="">Not a vaccine</option>
+                        {% for code, label in vaccines %}
+                            <option value="{{ code }}"
+                                    {% if values.vaccine_code == code %}selected{% endif %}>{{ label }} ({{ code }})</option>
+                        {% endfor %}
+                    </select>
+                    {% if has_stock %}
+                        <p class="text-xs text-amber-700 mt-1">Stock has been received for this medicine, so its immunisation setting is locked.</p>
+                        <input type="hidden" name="vaccine_code" value="{{ values.vaccine_code }}">
+                    {% else %}
+                        <p class="text-xs text-slate-500 mt-1">Choose a vaccine only for immunisation. Each vaccine can be set up on one medicine only.</p>
+                    {% endif %}
+                </div>
+                <div x-show="vax"
+                     x-cloak
+                     style="display:none"
+                     class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Doses per vial *</label>
+                        <input name="doses_per_unit"
+                               type="number"
+                               min="1"
+                               max="255"
+                               value="{{ values.doses_per_unit }}"
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                        <p class="text-xs text-slate-500 mt-1">1 for single-dose, 10 for a 10-dose vial.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Hours usable once opened</label>
+                        <input name="in_use_hours"
+                               type="number"
+                               min="1"
+                               max="255"
+                               value="{{ values.in_use_hours }}"
+                               class="w-full min-h-11 border rounded-xl px-3 text-sm">
+                        <p class="text-xs text-slate-500 mt-1">Leave blank for single-dose vials.</p>
+                    </div>
+                    <div class="flex items-end">
+                        <label class="flex items-center gap-2 text-sm min-h-11">
+                            <input type="checkbox"
+                                   name="is_programme_free"
+                                   {% if values.is_programme_free %}checked{% endif %}
+                                   class="rounded text-teal-600 focus:ring-teal-500">
+                            Free under the national programme
+                        </label>
+                    </div>
+                    <p class="md:col-span-3 text-xs text-slate-500">Every dose of a vaccine is taken by scanning its vial. This is set automatically.</p>
+                </div>
+            </div>
+            <!-- Allergies -->
             <div>
                 <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Allergy classes this medicine belongs to</label>
                 <select name="allergen_class_ids"
@@ -68,7 +128,7 @@
                         class="w-full border rounded-xl px-3 py-2 text-sm">
                     {% for c in classes %}
                         <option value="{{ c.id }}"
-                                {% if c.id|stringformat:"s" in selected_ids %}selected{% endif %}>{{ c.name }}</option>
+                                {% if c.id|stringformat:"s" in values.allergen_class_ids %}selected{% endif %}>{{ c.name }}</option>
                     {% endfor %}
                 </select>
                 <p class="text-xs text-slate-500 mt-1">Hold Ctrl (or Cmd) to pick several. A patient allergic to any of these is blocked from this medicine.</p>

@@ -15,6 +15,7 @@ from core_patients.models import AllergenClass
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, caps_for, requires
+from maternity.schedule import SCHEDULE
 
 from . import serials as serial_rules
 from . import services
@@ -64,12 +65,12 @@ def pharmacy_dashboard_view(request):
     meds = Medication.objects.select_related("stock").prefetch_related("allergen_classes").order_by("brand_name")
     if query:
         meds = meds.filter(Q(brand_name__icontains=query) | Q(generic_name__icontains=query))
-    
+
     page_obj = Paginator(meds, 30).get_page(request.GET.get("page"))
 
     stocks = list(StockItem.objects.select_related("medication"))
     low = sorted([s for s in stocks if s.quantity <= s.reorder_level], key=lambda s: s.quantity)
-    
+
     context = {
         "page_obj": page_obj,
         "medications": page_obj.object_list,
@@ -93,54 +94,154 @@ def pharmacy_dashboard_view(request):
 
     return render(request, "pharmacy/dashboard.html", context)
 
+
+VACCINE_CHOICES = [(code, label) for code, label, _ in SCHEDULE]
+VACCINE_CODES = {code for code, _ in VACCINE_CHOICES}
+TEXT_FIELDS = ("brand_name", "generic_name", "form", "strength")
+
+
+def _blank_values():
+    return {
+        **{k: "" for k in TEXT_FIELDS},
+        "unit_price": "", "vaccine_code": "", "doses_per_unit": "1", "in_use_hours": "",
+        "is_programme_free": False, "allergen_class_ids": [],
+    }
+
+
+def _values_from_post(request):
+    def get(key):
+        return request.POST.get(key, "").strip()
+
+    return {
+        **{k: get(k) for k in TEXT_FIELDS},
+        "unit_price": get("unit_price"),
+        "vaccine_code": get("vaccine_code"),
+        "doses_per_unit": get("doses_per_unit"),
+        "in_use_hours": get("in_use_hours"),
+        "is_programme_free": request.POST.get("is_programme_free") == "on",
+        "allergen_class_ids": request.POST.getlist("allergen_class_ids"),
+    }
+
+
+def _values_from_medication(medication):
+    return {
+        **{k: getattr(medication, k) for k in TEXT_FIELDS},
+        "unit_price": str(medication.unit_price),
+        "vaccine_code": medication.vaccine_code or "",
+        "doses_per_unit": str(medication.doses_per_unit),
+        "in_use_hours": str(medication.in_use_hours or ""),
+        "is_programme_free": medication.is_programme_free,
+        "allergen_class_ids": [str(c.id) for c in medication.allergen_classes.all()],
+    }
+
+
+def _clean_medication(v, medication):
+    """Checks the form and returns (data, None) or (None, message). Nothing is saved here."""
+    if not all(v[k] for k in TEXT_FIELDS):
+        return None, "Fill in brand, generic name, form and strength."
+    try:
+        price = Decimal(v["unit_price"])
+    except InvalidOperation:
+        return None, "Enter the unit price."
+    if price < 0:
+        return None, "The unit price must be zero or more."
+
+    code = v["vaccine_code"] or None
+    if code and code not in VACCINE_CODES:
+        return None, "Choose a vaccine from the immunisation schedule."
+
+    try:
+        per_unit = int(v["doses_per_unit"] or 1)
+    except ValueError:
+        return None, "Doses per vial must be a whole number."
+    if not 1 <= per_unit <= 255:
+        return None, "Doses per vial must be between 1 and 255."
+
+    hours = None
+    if code and v["in_use_hours"]:
+        try:
+            hours = int(v["in_use_hours"])
+        except ValueError:
+            return None, "In-use hours must be a whole number."
+        if not 1 <= hours <= 255:
+            return None, "In-use hours must be between 1 and 255."
+
+    if medication is not None and code != (medication.vaccine_code or None) and medication.units.exists():
+        return None, ("This medicine already has stock received under its current setting. "
+                      "Its vaccine code cannot be changed while stock exists.")
+
+    return {
+        "brand_name": v["brand_name"],
+        "generic_name": v["generic_name"],
+        "form": v["form"],
+        "strength": v["strength"],
+        "unit_price": price,
+        "vaccine_code": code,
+        "doses_per_unit": per_unit,
+        "in_use_hours": hours,
+        "is_programme_free": bool(code and v["is_programme_free"]),
+        "requires_serial_scan": bool(code),
+    }, None
+
+
 @requires(Cap.PHARMACY_MANAGE)
 def medication_create_or_edit_view(request, medication_id=None):
     medication = get_object_or_404(Medication, pk=medication_id) if medication_id else None
-    classes = AllergenClass.objects.order_by("name")
-    stock = StockItem.objects.filter(medication=medication).first() if medication else None
-    selected_ids = [str(c.id) for c in medication.allergen_classes.all()] if medication else []
+    has_stock = medication is not None and medication.units.exists()
 
     if request.method == "POST":
-        fields = {k: request.POST.get(k, "").strip()
-                  for k in ["brand_name", "generic_name", "form", "strength"]}
-        try:
-            price = Decimal(request.POST.get("unit_price", "").strip())
-        except InvalidOperation:
-            price = Decimal(-1)
-        if not all(fields.values()) or price < 0:
-            messages.error(request, "Fill in every field. The unit price must be zero or more.")
-            return _render_form(request, medication, stock, classes, selected_ids)
+        values = _values_from_post(request)
+        data, error = _clean_medication(values, medication)
+        if error:
+            messages.error(request, error)
+            return _render_form(request, medication, values, has_stock)
 
         try:
             with transaction.atomic():
                 if medication is None:
-                    medication = Medication.objects.create(**fields, unit_price=price, is_active=True)
+                    medication = Medication.objects.create(**data, is_active=True)
                     StockItem.objects.get_or_create(medication=medication,
                                                     defaults={"quantity": 0, "reorder_level": 50})
                     action = "created"
                 else:
-                    for k, v in fields.items():
-                        setattr(medication, k, v)
-                    medication.unit_price = price
+                    for key, value in data.items():
+                        setattr(medication, key, value)
                     medication.save()
                     action = "updated"
                 medication.allergen_classes.set(
-                    AllergenClass.objects.filter(id__in=request.POST.getlist("allergen_class_ids")))
+                    AllergenClass.objects.filter(id__in=values["allergen_class_ids"]))
         except IntegrityError:
-            messages.error(request, "A medicine with this brand, generic, form and strength already exists.")
-            return _render_form(request, medication, stock, classes, selected_ids)
+            code = data["vaccine_code"]
+            others = Medication.objects.filter(vaccine_code=code) if code else Medication.objects.none()
+            if medication is not None and medication.pk:
+                others = others.exclude(pk=medication.pk)
+            if others.exists():
+                message = "That vaccine is already set up on another medicine."
+            else:
+                message = "A medicine with this brand, generic, form and strength already exists."
+            messages.error(request, message)
+            return _render_form(request, medication, values, has_stock)
 
-        log_action(request, AuditAction.MEDICATION_CREATED if action == "created" else AuditAction.MEDICATION_UPDATED,
+        log_action(request,
+                   AuditAction.MEDICATION_CREATED if action == "created" else AuditAction.MEDICATION_UPDATED,
                    f"{action.title()} medicine {medication.brand_name} {medication.strength}.")
         messages.success(request, f"{medication.brand_name} saved.")
         return redirect("pharmacy:medication_edit", medication_id=medication.id)
 
-    return _render_form(request, medication, stock, classes, selected_ids)
+    if medication is not None:
+        values = _values_from_medication(medication)
+    else:
+        values = _blank_values()
+    return _render_form(request, medication, values, has_stock)
 
 
-def _render_form(request, medication, stock, classes, selected_ids):
+def _render_form(request, medication, values, has_stock):
     return render(request, "pharmacy/medication_form.html", {
-        "medication": medication, "stock": stock, "classes": classes, "selected_ids": selected_ids,
+        "medication": medication,
+        "values": values,
+        "has_stock": has_stock,
+        "classes": AllergenClass.objects.order_by("name"),
+        "vaccines": VACCINE_CHOICES,
     })
 
 
@@ -181,7 +282,6 @@ def dispense_action(request, order_id):
     return redirect("pharmacy:dispense_queue")
 
 
-
 @requires(Cap.NURSE_ADMINISTER)
 def nurse_worklist_view(request):
     _refresh_expiry(request)
@@ -191,15 +291,14 @@ def nurse_worklist_view(request):
                  .select_related("encounter__patient", "medication", "ordered_by__user")
                  .prefetch_related("dispensations", "administrations")
                  .order_by("ordered_at"))
-    
+
     paginator = Paginator(orders_qs, 30)
     page_obj = paginator.get_page(request.GET.get("page"))
-    
+
     return render(request, "pharmacy/nurse_worklist.html", {
         "page_obj": page_obj,
         "orders": _annotate(page_obj.object_list),
     })
-
 
 
 @requires(Cap.NURSE_ADMINISTER)
@@ -227,7 +326,6 @@ def administer_action(request, order_id):
                f"Administered {order.medication.brand_name} to {order.encounter.patient}.")
     messages.success(request, f"Recorded: {order.medication.brand_name} given.")
     return redirect("pharmacy:nurse_worklist")
-
 
 
 @requires(Cap.PHARMACY_MANAGE)

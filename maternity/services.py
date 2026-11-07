@@ -1,5 +1,4 @@
 import uuid
-from datetime import date
 
 from django.db import transaction
 from django.utils import timezone
@@ -7,6 +6,7 @@ from django.utils import timezone
 from billing import services as billing
 from core_patients.models import Patient, PatientRelationship
 from pharmacy import services as pharmacy
+from pharmacy.models import Medication
 from triage_queue.models import Encounter
 
 from .models import Delivery, Vaccination
@@ -36,6 +36,8 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
                     baby_first_name="", baby_last_name=""):
     if mother_encounter.status != "OPEN":
         raise MaternityError("This visit is closed. Record the birth on an open visit.")
+    if mother_encounter.patient.sex == "M":
+        raise MaternityError("A birth can only be recorded for a patient whose sex is not male.")
     if delivery_type not in dict(Delivery.DELIVERY_TYPES):
         raise MaternityError("Choose a delivery type.")
     if baby_sex not in ("M", "F", "X", "U"):
@@ -45,6 +47,8 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
             raise MaternityError(f"{label} must be between 0 and 10.")
     if birth_weight_g is not None and not (200 <= birth_weight_g <= 8000):
         raise MaternityError("Birth weight must be between 200 g and 8000 g.")
+    if delivered_at > timezone.now():
+        raise MaternityError("The time of birth cannot be in the future.")
     if staff is None:
         raise MaternityError("Your account has no staff profile.")
 
@@ -54,6 +58,7 @@ def record_delivery(*, mother_encounter, staff, delivered_at, delivery_type, bab
         first_name=baby_first_name.strip(),
         last_name=baby_last_name.strip() or mother.last_name,
         date_of_birth=local_day,
+        dob_is_estimated=False,
         sex=baby_sex,
         id_type="TEMP_NEWBORN",
         id_number=_newborn_identifier(delivered_at),
@@ -98,7 +103,7 @@ def register_child(*, parent, first_name, last_name, date_of_birth, sex, id_type
         raise MaternityError("Enter the child's first and last name.")
     if date_of_birth is None:
         raise MaternityError("Enter the child's date of birth, or an estimate.")
-    if date_of_birth > date.today():
+    if date_of_birth > timezone.localdate():
         raise MaternityError("The date of birth cannot be in the future.")
     if id_number and Patient.objects.filter(id_type=id_type, id_number=id_number).exists():
         raise MaternityError("A patient with this identifier already exists. Link them instead.")
@@ -146,7 +151,12 @@ def _immunisation_visit_for_vaccine(patient, staff, vaccine):
 
 
 @transaction.atomic
-def record_vaccination(*, patient, vaccine, given_at, serial, staff):
+def record_vaccination(*, patient, vaccine, given_at, serial, staff, route="IM"):
+    """
+    Records one dose. The vial is scanned; the dose goes through pharmacy as a nurse-administered
+    order, so stock, the order history and the vaccination record all agree. The visit is
+    recorded and closed at once. Any charge is posted to the visit under the order's key.
+    """
     if staff is None:
         raise MaternityError("Your account has no staff profile.")
     if vaccine not in SCHEDULE_CODES:
@@ -155,32 +165,35 @@ def record_vaccination(*, patient, vaccine, given_at, serial, staff):
         raise MaternityError("Record the child's date of birth first.")
     if Vaccination.objects.filter(patient=patient, vaccine=vaccine).exists():
         raise MaternityError("This vaccine is already recorded for this child.")
+    if not (serial or "").strip():
+        raise MaternityError("Scan the vial serial.")
 
+    medication = Medication.objects.filter(vaccine_code=vaccine, is_active=True).first()
+    if medication is None:
+        raise MaternityError(f"{LABELS[vaccine]} is not set up in Pharmacy yet. Add it there with its vaccine code.")
+
+    visit = _immunisation_visit_for_vaccine(patient, staff, vaccine)
     try:
-        unit = pharmacy.lock_unit_for_vaccine(serial=serial.strip().upper(), vaccine_code=vaccine)
+        order, unit = pharmacy.give_vaccine_dose(
+            encounter=visit, medication=medication, serial=serial.strip().upper(),
+            nurse=staff, route=route,
+        )
     except pharmacy.PharmacyError as exc:
         raise MaternityError(str(exc))
 
-    visit = _immunisation_visit_for_vaccine(patient, staff, vaccine)
     vacc = Vaccination.objects.create(
         patient=patient, vaccine=vaccine, given_at=given_at,
         batch_number=unit.batch.batch_number, encounter=visit,
-        given_by=staff, stock_unit=unit,
+        given_by=staff, stock_unit=unit, order=order,
     )
-    try:
-        pharmacy.consume_unit(unit=unit, doses=1, staff=staff, reason="ADMINISTER",
-                              reference_id=vacc.id)
-    except pharmacy.PharmacyError as exc:
-        raise MaternityError(str(exc))
 
-    medication = unit.medication
     charged = False
     if not medication.is_programme_free and medication.unit_price > 0:
         billing.add_charge(
-            encounter=visit, source_type="MANUAL",
+            encounter=visit, source_type="MEDICATION_ORDER",
             description=f"{medication.brand_name}: {LABELS[vaccine]}",
             unit_price=medication.unit_price, staff=staff,
-            source_id=vacc.id, key=f"vacc:{vacc.id}",
+            source_id=order.id, key=f"med:{order.id}",
         )
         charged = True
 
@@ -195,6 +208,8 @@ def record_vaccination(*, patient, vaccine, given_at, serial, staff):
 
 @transaction.atomic
 def confirm_birth_certificate(*, child, first_name, last_name, certificate_number):
+    if not child.is_provisional or not Delivery.objects.filter(baby=child).exists():
+        raise MaternityError("Only a provisional newborn record can be confirmed this way.")
     if not (first_name.strip() and last_name.strip() and certificate_number.strip()):
         raise MaternityError("Enter the name and certificate number exactly as on the certificate.")
     cert = certificate_number.strip()
