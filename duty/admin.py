@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from hospital_system.admin_readonly import ReadOnlyAdmin
+
 from .models import DutySession, Room
 
 
@@ -11,6 +13,6 @@ class RoomAdmin(admin.ModelAdmin):
 
 
 @admin.register(DutySession)
-class DutySessionAdmin(admin.ModelAdmin):
+class DutySessionAdmin(ReadOnlyAdmin):
     list_display = ("staff", "room", "clocked_in_at", "clocked_out_at")
     list_filter = ("room",)
