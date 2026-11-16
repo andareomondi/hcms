@@ -40,7 +40,14 @@ def open_visit_view(request, patient_id):
                                   "The patient goes to triage once the visit is in the triage list.")
         return redirect("triage_queue:board")
 
-    return render(request, "triage_queue/open_visit_form.html", {"patient": patient})
+    open_encounter = (Encounter.objects
+                      .filter(patient=patient, status="OPEN")
+                      .order_by("opened_at")
+                      .first())
+    return render(request, "triage_queue/open_visit_form.html", {
+        "patient": patient,
+        "open_encounter": open_encounter,
+    })
 
 
 # ---------- triage nurse: triage the visit ----------

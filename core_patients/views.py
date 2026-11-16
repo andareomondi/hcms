@@ -23,6 +23,7 @@ from hospital_system import settings
 from hospital_system.permissions import Cap, caps_for, requires
 from lab.models import LabOrder
 from radiology.models import ImagingStudy
+from triage_queue.models import Encounter
 from wards.models import Admission
 from wards.services import nights_between
 
@@ -361,9 +362,18 @@ def patient_registry_search(request):
     # Paginate results (30 patients per page)
     paginator = Paginator(patients_qs, 30)
     page_obj = paginator.get_page(page_number)
+    page_patients = list(page_obj.object_list)
+
+    open_visits = {
+        enc.patient_id: enc
+        for enc in Encounter.objects.filter(patient__in=page_patients, status="OPEN")
+                                    .order_by("opened_at")
+    }
+    for patient in page_patients:
+        patient.open_encounter = open_visits.get(patient.id)
 
     context = {
-        "patients": page_obj.object_list,
+        "patients": page_patients,
         "page_obj": page_obj,
         "query": query,
     }

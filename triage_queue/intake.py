@@ -12,6 +12,7 @@ from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from core_patients.models import Patient
 from notifications.services import notify
 
 from .models import Encounter, QueueEntry, TriageVitals
@@ -56,8 +57,18 @@ def open_visit(*, patient, encounter_type, payer_type, staff):
     valid_types = dict(Encounter.TYPE_CHOICES)
     if encounter_type not in valid_types:
         raise FlowError("Choose a valid visit type.")
-    if Encounter.objects.filter(patient=patient, status="OPEN",
-                                queue_entries__isnull=True).exists():
+
+    # Lock the patient row so two desks cannot open visits for the same patient at once.
+    Patient.objects.select_for_update().get(pk=patient.pk)
+
+    open_visit_for_patient = (Encounter.objects
+                              .filter(patient=patient, status="OPEN")
+                              .order_by("opened_at")
+                              .first())
+    if open_visit_for_patient is not None:
+        if open_visit_for_patient.queue_entries.exists():
+            raise FlowError("This patient already has an open visit that has not been closed yet. "
+                            "Finish or close that visit before opening a new one.")
         raise FlowError("This patient already has a visit waiting for triage. "
                         "Triage that visit instead of opening a new one.")
 
@@ -70,8 +81,7 @@ def open_visit(*, patient, encounter_type, payer_type, staff):
     )
     if encounter_type not in PAY_WALL_EXEMPT_TYPES:
         charge_visit_fees(encounter, staff)
-    return encounter
- 
+    return encounter 
 
 @transaction.atomic
 def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_complaint,

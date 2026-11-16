@@ -32,7 +32,6 @@ from django.db import transaction
 
 from core_patients.models import Allergen, AllergenClass, Department
 from lab.models import LabTest
-from wards.models import Bed, Ward
 
 # ---------------------------------------------------------------------------
 # Departments. `kind` must be a value your Department.kind choices accept.
@@ -85,13 +84,13 @@ ALLERGENS = [
 # Wards and beds. Bed codes are generated as <prefix>-B01 .. <prefix>-B<n>.
 # bed_day_rate is a PLACEHOLDER tariff in KES.
 # ---------------------------------------------------------------------------
-WARDS = [
-    # ward name,                  dept code,  bed prefix, beds, bed-day rate (KES)
-    ("General Medical Ward",      "WARD-GEN", "GMW",      12,   "2500.00"),
-    ("General Surgical Ward",     "WARD-GEN", "GSW",      12,   "2500.00"),
-    ("Paediatric Ward",           "PAED",     "PAW",      10,   "2000.00"),
-    ("Maternity Ward",            "OBGYN",    "MAT",      10,   "2200.00"),
-]
+# WARDS = [
+#     # ward name,                  dept code,  bed prefix, beds, bed-day rate (KES)
+#     ("General Medical Ward",      "WARD-GEN", "GMW",      12,   "2500.00"),
+#     ("General Surgical Ward",     "WARD-GEN", "GSW",      12,   "2500.00"),
+#     ("Paediatric Ward",           "PAED",     "PAW",      10,   "2000.00"),
+#     ("Maternity Ward",            "OBGYN",    "MAT",      10,   "2200.00"),
+# ]
 
 
 # ---------------------------------------------------------------------------
@@ -171,21 +170,21 @@ def seed_allergens():
     return len(classes), len(ALLERGENS)
 
 
-def seed_wards_and_beds():
-    departments = {d.code: d for d in Department.objects.all()}
-    beds_created = 0
-    for name, dept_code, prefix, bed_count, rate in WARDS:
-        ward, _ = Ward.objects.update_or_create(
-            name=name,
-            defaults={"department": departments[dept_code], "bed_day_rate": Decimal(rate)},
-        )
-        for n in range(1, bed_count + 1):
-            # get_or_create with a default status: an existing bed keeps its current status.
-            _, created = Bed.objects.get_or_create(
-                ward=ward, code=f"{prefix}-B{n:02d}", defaults={"status": "VACANT"},
-            )
-            beds_created += int(created)
-    return len(WARDS), beds_created
+# def seed_wards_and_beds():
+#     departments = {d.code: d for d in Department.objects.all()}
+#     beds_created = 0
+#     for name, dept_code, prefix, bed_count, rate in WARDS:
+#         ward, _ = Ward.objects.update_or_create(
+#             name=name,
+#             defaults={"department": departments[dept_code], "bed_day_rate": Decimal(rate)},
+#         )
+#         for n in range(1, bed_count + 1):
+#             # get_or_create with a default status: an existing bed keeps its current status.
+#             _, created = Bed.objects.get_or_create(
+#                 ward=ward, code=f"{prefix}-B{n:02d}", defaults={"status": "VACANT"},
+#             )
+#             beds_created += int(created)
+#     return len(WARDS), beds_created
 
 
 def seed_lab_tests():
@@ -221,7 +220,7 @@ def main():
     print(f"  Departments:        {departments}")
     print(f"  Allergen classes:   {classes}")
     print(f"  Allergens:          {allergens}")
-    print(f"  Wards:              {wards}  (new beds created: {beds})")
+    # print(f"  Wards:              {wards}  (new beds created: {beds})")
     print(f"  Laboratory tests:   {tests}")
     print("Reminder: ranges and prices are placeholders pending hospital review.")
 

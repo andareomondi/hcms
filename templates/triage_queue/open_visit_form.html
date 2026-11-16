@@ -12,32 +12,45 @@
             wait for payment.
         </p>
     </div>
-    <form method="post" class="space-y-5">
-        {% csrf_token %}
-        <div>
-            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Visit type *</label>
-            <select name="encounter_type"
-                    required
-                    class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
-                <option value="OUTPATIENT">Outpatient</option>
-                <option value="EMERGENCY">Emergency</option>
-                <option value="OBSERVATION">Observation</option>
-                <option value="MATERNITY">Maternity / delivery</option>
-            </select>
+    {% if open_encounter %}
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p class="font-bold">This patient already has an open visit.</p>
+            <p class="mt-1">
+                Opened {{ open_encounter.opened_at|date:"d M Y H:i" }}
+                ({{ open_encounter.get_encounter_type_display }}).
+                A new visit cannot be opened until it is closed.
+            </p>
+            <a href="{% url 'triage_queue:board' %}"
+               class="mt-2 inline-block font-bold text-amber-900 underline">Go to the triage board</a>
         </div>
-        <div>
-            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Who pays the bill *</label>
-            <select name="payer_type"
-                    required
-                    class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
-                <option value="SELF_PAY">Self-pay</option>
-                <option value="INSURANCE">Insurance (placeholder)</option>
-            </select>
-        </div>
-        <button type="submit"
-                class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700">
-            Open visit and charge fees
-        </button>
-    </form>
+    {% else %}
+        <form method="post" class="space-y-5">
+            {% csrf_token %}
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Visit type *</label>
+                <select name="encounter_type"
+                        required
+                        class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="OUTPATIENT">Outpatient</option>
+                    <option value="EMERGENCY">Emergency</option>
+                    <option value="OBSERVATION">Observation</option>
+                    <option value="MATERNITY">Maternity / delivery</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Who pays the bill *</label>
+                <select name="payer_type"
+                        required
+                        class="w-full border rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="SELF_PAY">Self-pay</option>
+                    <option value="INSURANCE">Insurance (placeholder)</option>
+                </select>
+            </div>
+            <button type="submit"
+                    class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold hover:bg-indigo-700">
+                Open visit and charge fees
+            </button>
+        </form>
+    {% endif %}
 </div>
 {% endblock %}
