@@ -29,19 +29,46 @@ class Bed(models.Model):
 
 
 class Admission(models.Model):
+    """
+    One stay in one bed. The stay is held on its own WARD_STAY encounter, so review
+    visits during the stay can close without ending the stay.
+    """
+    DISCHARGE_STATES = [
+        ("ADMITTED", "Admitted"),
+        ("DISCHARGE_REQUESTED", "Discharge requested"),
+        ("DISCHARGED", "Discharged"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey("core_patients.Patient", on_delete=models.PROTECT,
+                                related_name="admissions")
     encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="admissions")
     bed = models.ForeignKey(Bed, on_delete=models.PROTECT, related_name="admissions")
     admitted_at = models.DateTimeField()
-    discharged_at = models.DateTimeField(null=True, blank=True)
     admitted_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     planned_days = models.PositiveSmallIntegerField(default=1)
+    reason = models.TextField(blank=True, default="")
+
+    discharge_state = models.CharField(max_length=20, choices=DISCHARGE_STATES,
+                                       default="ADMITTED", db_index=True)
+    discharge_requested_at = models.DateTimeField(null=True, blank=True)
+    discharge_requested_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
+                                               null=True, blank=True, related_name="+")
+    discharge_confirm_token = models.CharField(max_length=64, blank=True, default="")
+    discharge_confirm_expires = models.DateTimeField(null=True, blank=True)
+    discharge_approved_at = models.DateTimeField(null=True, blank=True)
+    discharge_approved_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT,
+                                              null=True, blank=True, related_name="+")
+    discharged_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["bed"], condition=Q(discharged_at__isnull=True),
                                     name="one_open_admission_per_bed"),
+            models.UniqueConstraint(fields=["patient"], condition=Q(discharged_at__isnull=True),
+                                    name="one_open_admission_per_patient"),
         ]
+
 
 class BedStatusLog(models.Model):
     """

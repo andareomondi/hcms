@@ -10,6 +10,7 @@ class Encounter(models.Model):
         ("OUTPATIENT", "Outpatient"), ("EMERGENCY", "Emergency"),
         ("MATERNITY", "Maternity / delivery"), ("OBSERVATION", "Observation"),
         ("INPATIENT", "In-patient admission"),
+        ("WARD_STAY", "Ward stay"),
         ("ANC", "Antenatal visit"),
         ("DELIVERY", "Delivery"),
         ("CHILD_HEALTH", "Child health visit"),
