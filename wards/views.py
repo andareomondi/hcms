@@ -59,6 +59,7 @@ def ward_dashboard_view(request):
         bed.actions = services.available_actions(bed) if can_manage else []
 
     pending = request.session.get("discharge_token") or {}
+    print("pending_confirm:", pending)
 
     return render(request, "wards/dashboard.html", {
         "page_obj": page_obj,

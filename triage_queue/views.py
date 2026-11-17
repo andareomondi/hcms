@@ -11,7 +11,7 @@ from duty.services import on_duty_staff
 from hospital_system.permissions import Cap, requires
 from notifications.services import notify
 
-from .intake import awaiting_triage, open_visit, triage_encounter
+from .intake import active_admission_for, awaiting_triage, open_visit, triage_encounter
 from .models import Encounter, QueueEntry
 from .services import FlowError, fees_covered
 

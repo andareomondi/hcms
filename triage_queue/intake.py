@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from core_patients.models import Patient
 from notifications.services import notify
+from wards.models import Admission
 
 from .models import Encounter, QueueEntry, TriageVitals
 from .services import (
