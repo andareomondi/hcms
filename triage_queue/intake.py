@@ -25,8 +25,13 @@ from .services import (
 )
 
 PRIORITIES = (1, 2, 3)
-PAY_WALL_EXEMPT_TYPES = ("DELIVERY", "CHILD_HEALTH")
+PAY_WALL_EXEMPT_TYPES = ("DELIVERY", "CHILD_HEALTH", "INPATIENT")
 PREGNANCY_TYPES = ("ANC", "DELIVERY", "MATERNITY")
+STAY_TYPE = "WARD_STAY"
+REVIEW_TYPE = "INPATIENT"
+
+def active_admission_for(patient):
+    return Admission.objects.filter(patient=patient, discharged_at__isnull=True).first()
 
 
 def _refuse_pregnancy_visit_for_male(patient, encounter_type):
@@ -37,36 +42,35 @@ def _refuse_pregnancy_visit_for_male(patient, encounter_type):
     if encounter_type in PREGNANCY_TYPES and patient.sex == "M":
         raise FlowError("Antenatal and delivery visits cannot be opened for a patient whose sex is male. "
                         "Check the patient's record.")
- 
 
 
 def awaiting_triage():
-    """Open visits that have no queue entry yet, oldest first."""
+    """Open visits with no queue entry, oldest first. Ward stays are not triage visits."""
     return (Encounter.objects.filter(status="OPEN", queue_entries__isnull=True)
+            .exclude(encounter_type=STAY_TYPE)
             .select_related("patient")
             .order_by("opened_at"))
 
 
 @transaction.atomic
 def open_visit(*, patient, encounter_type, payer_type, staff):
-    """
-    Reception: opens a visit. Deliveries and child health visits are not charged at the gate;
-    their charges are posted by maternity. Other visits are charged the registration and
-    consultation fees.
-    """
     valid_types = dict(Encounter.TYPE_CHOICES)
-    if encounter_type not in valid_types:
+    if encounter_type not in valid_types or encounter_type == STAY_TYPE:
         raise FlowError("Choose a valid visit type.")
 
-    # Lock the patient row so two desks cannot open visits for the same patient at once.
     Patient.objects.select_for_update().get(pk=patient.pk)
 
-    open_visit_for_patient = (Encounter.objects
-                              .filter(patient=patient, status="OPEN")
-                              .order_by("opened_at")
-                              .first())
-    if open_visit_for_patient is not None:
-        if open_visit_for_patient.queue_entries.exists():
+    admission = active_admission_for(patient)
+    if admission is not None and encounter_type != REVIEW_TYPE:
+        raise FlowError("This patient is in a ward bed. Open an inpatient review instead.")
+    if admission is None and encounter_type == REVIEW_TYPE:
+        raise FlowError("An inpatient review is only for a patient admitted to a ward by a doctor.")
+
+    open_review = (Encounter.objects.filter(patient=patient, status="OPEN")
+                   .exclude(encounter_type=STAY_TYPE)
+                   .order_by("opened_at").first())
+    if open_review is not None:
+        if open_review.queue_entries.exists():
             raise FlowError("This patient already has an open visit that has not been closed yet. "
                             "Finish or close that visit before opening a new one.")
         raise FlowError("This patient already has a visit waiting for triage. "
@@ -74,14 +78,13 @@ def open_visit(*, patient, encounter_type, payer_type, staff):
 
     _refuse_pregnancy_visit_for_male(patient, encounter_type)
     encounter = Encounter.objects.create(
-        patient=patient,
-        encounter_type=encounter_type,
-        payer_type=payer_type,
-        opened_by=staff,
+        patient=patient, encounter_type=encounter_type,
+        payer_type=payer_type, opened_by=staff,
     )
     if encounter_type not in PAY_WALL_EXEMPT_TYPES:
         charge_visit_fees(encounter, staff)
-    return encounter 
+    return encounter
+
 
 @transaction.atomic
 def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_complaint,

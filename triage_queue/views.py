@@ -47,8 +47,9 @@ def open_visit_view(request, patient_id):
     return render(request, "triage_queue/open_visit_form.html", {
         "patient": patient,
         "open_encounter": open_encounter,
+        "active_admission": active_admission_for(patient),
+        "preset_type": request.GET.get("type", ""),
     })
-
 
 # ---------- triage nurse: triage the visit ----------
 

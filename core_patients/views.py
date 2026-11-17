@@ -369,8 +369,14 @@ def patient_registry_search(request):
         for enc in Encounter.objects.filter(patient__in=page_patients, status="OPEN")
                                     .order_by("opened_at")
     }
+    admissions = {
+        a.patient_id: a
+        for a in Admission.objects.filter(patient__in=page_patients, discharged_at__isnull=True)
+                                  .select_related("bed")
+    }
+
     for patient in page_patients:
-        patient.open_encounter = open_visits.get(patient.id)
+        patient.active_admission = admissions.get(patient.id)
 
     context = {
         "patients": page_patients,

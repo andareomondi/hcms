@@ -71,7 +71,7 @@ def consultation_room_view(request, encounter_id):
     medication_orders = (encounter.medication_orders
                          .select_related("medication", "ordered_by")
                          .order_by("-ordered_at"))
-    active_admission = (Admission.objects.filter(encounter=encounter, discharged_at__isnull=True)
+    active_admission = (Admission.objects.filter(patient=patient, discharged_at__isnull=True)
                         .select_related("bed__ward").first())
     wards = Ward.objects.prefetch_related("beds").all()
 
@@ -207,11 +207,14 @@ def _create_formulary(request, encounter, profile, route, frequency, dose_text, 
         return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     try:
+        stay = Encounter.objects.filter(patient=encounter.patient,encounter_type="WARD_STAY", status="OPEN").first()
         order = pharmacy_services.create_formulary_order(
             encounter=encounter, medication=medication, doctor=profile,
             route=route, frequency=frequency, dose_text=dose_text, days=days,
             doses_total=doses_total, override=override if hits else "", staff=profile,
+            billing_encounter=stay,
         )
+        
     except StockShortError as exc:
         request.session["prefill_external"] = {
             "external_name": medication.brand_name,
@@ -288,16 +291,20 @@ def _create_external(request, encounter, profile, route, frequency, dose_text, d
 def admit_patient_action(request, encounter_id):
     encounter = get_object_or_404(Encounter, pk=encounter_id)
     try:
+        require_active(encounter, request.staff_profile, allow_ward=False)
         days = int(request.POST.get("planned_days", "1"))
-        ward_services.admit(encounter=encounter, bed_id=request.POST.get("bed_id"),
-                            planned_days=days, staff=request.staff_profile)
+        ward_services.admit(
+            review=encounter, bed_id=request.POST.get("bed_id"),
+            planned_days=days, reason=request.POST.get("reason", ""),
+            staff=request.staff_profile,
+        )
     except (ValueError, FlowError) as exc:
-        messages.error(request, str(exc) if str(exc) else "Choose a vacant bed and a valid stay length.")
+        messages.error(request, str(exc) or "Choose a vacant bed and a valid stay length.")
         return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
     log_action(request, AuditAction.WARD_ADMISSION_CREATED,
                f"Admitted {encounter.patient} for {days} day(s).")
-    messages.success(request, f"Admitted for {days} day(s). A bed-day charge was added.")
+    messages.success(request, f"Admitted for {days} day(s). The ward stay stays open until discharge.")
     return redirect("doctors_portal:consultation_room", encounter_id=encounter.id)
 
 

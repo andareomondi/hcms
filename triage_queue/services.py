@@ -212,8 +212,6 @@ def consultation_mode(encounter, profile):
         mode = "AWAITING_RESULTS"
     elif entry.status == "IN_CONSULTATION":
         mode = "ACTIVE"
-    elif entry.status == "ADMITTED" and encounter.status == "OPEN":
-        mode = "IN_WARD"
     else:
         mode = "READ_ONLY"
     return mode, entry

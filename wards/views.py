@@ -12,11 +12,11 @@ from django.views.decorators.http import require_POST
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from hospital_system.permissions import Cap, caps_for, requires
-from triage_queue.models import Encounter
 from triage_queue.services import FlowError
 
 from . import services
 from .models import Admission, Bed, Ward
+from .services import DischargeConfirmationRequired
 
 
 def _back(request):
@@ -43,10 +43,11 @@ def ward_dashboard_view(request):
     status_counts = {code: Bed.objects.filter(status=code).count() for code, _ in Bed.STATUS}
     total_beds = sum(status_counts.values())
     occupancy_rate = round(status_counts["OCCUPIED"] / total_beds * 100) if total_beds else 0
+    status_rows = [(code, label, status_counts[code]) for code, label in Bed.STATUS]
 
     active = {a.bed_id: a for a in
               Admission.objects.filter(discharged_at__isnull=True)
-              .select_related("encounter__patient", "bed")}
+              .select_related("patient", "bed")}
     for ward in page_obj.object_list:
         for bed in ward.beds.all():
             bed.active_admission = active.get(bed.id)
@@ -57,55 +58,65 @@ def ward_dashboard_view(request):
     for bed in attention:
         bed.actions = services.available_actions(bed) if can_manage else []
 
-    available_encounters = (Encounter.objects.filter(status="OPEN")
-                            .exclude(admissions__discharged_at__isnull=True)
-                            .select_related("patient").order_by("-opened_at")[:50])
+    pending = request.session.get("discharge_token") or {}
 
     return render(request, "wards/dashboard.html", {
         "page_obj": page_obj,
         "wards": page_obj.object_list,
         "status_counts": status_counts,
+        "status_rows": status_rows,
         "status_choices": Bed.STATUS,
         "total_beds": total_beds,
         "occupancy_rate": occupancy_rate,
         "attention": attention,
-        "available_encounters": available_encounters,
         "can_manage": can_manage,
         "can_admit": can_admit,
+        "pending_confirm": pending,
+        "is_doctor": bool(request.staff_profile and request.staff_profile.role == "DOCTOR"),
     })
 
 
 @requires(Cap.WARD_ACTIONS)
 @require_POST
-def assign_bed_action(request, bed_id):
-    encounter = get_object_or_404(Encounter.objects.select_related("patient"),
-                                  pk=request.POST.get("encounter_id"))
+def request_discharge_action(request, admission_id):
+    admission = get_object_or_404(Admission, pk=admission_id, discharged_at__isnull=True)
     try:
-        days = int(request.POST.get("planned_days", "1"))
-        services.admit(encounter=encounter, bed_id=bed_id, planned_days=days,
-                       staff=request.staff_profile)
-    except (ValueError, FlowError) as exc:
-        messages.error(request, str(exc) or "Enter a valid stay length.")
+        services.request_discharge(admission=admission, staff=request.staff_profile)
+    except FlowError as exc:
+        messages.error(request, str(exc))
         return redirect("wards:dashboard")
-
-    log_action(request, AuditAction.WARD_ADMISSION_CREATED,
-               f"Admitted {encounter.patient} for {days} day(s).")
-    messages.success(request, f"{encounter.patient.first_name} admitted for {days} day(s).")
+    log_action(request, AuditAction.DISCHARGE_REQUESTED,
+               f"Requested discharge of {admission.patient}.")
+    messages.success(request, "Discharge requested. A doctor must approve it.")
     return redirect("wards:dashboard")
 
 
 @requires(Cap.WARD_ACTIONS)
 @require_POST
-def discharge_patient_action(request, admission_id):
+def approve_discharge_action(request, admission_id):
     admission = get_object_or_404(Admission, pk=admission_id, discharged_at__isnull=True)
+
+    # Drop a stored token that belongs to a different admission.
+    stored = request.session.get("discharge_token") or {}
+    if stored and stored.get("admission") != str(admission.id):
+        request.session.pop("discharge_token", None)
+
+    token = request.POST.get("token", "")
     try:
-        _, actual = services.discharge(admission=admission, staff=request.staff_profile)
+        _, actual = services.approve_discharge(
+            admission=admission, doctor=request.staff_profile, token=token)
+    except DischargeConfirmationRequired as exc:
+        # First click by the admitting doctor: store the token and show the confirm button.
+        request.session["discharge_token"] = {"admission": str(admission.id), "token": exc.token}
+        messages.info(request, "You admitted this patient. Press Confirm to approve the discharge.")
+        return redirect("wards:dashboard")
     except FlowError as exc:
         messages.error(request, str(exc))
         return redirect("wards:dashboard")
 
-    log_action(request, AuditAction.PATIENT_DISCHARGED,
-               f"Discharged {admission.encounter.patient} after {actual} day(s).")
+    request.session.pop("discharge_token", None)
+    log_action(request, AuditAction.DISCHARGE_APPROVED,
+               f"Approved discharge of {admission.patient} after {actual} day(s).")
     messages.success(request, f"Discharged after {actual} day(s). The bed now needs cleaning.")
     return redirect("wards:dashboard")
 
@@ -131,16 +142,16 @@ def change_bed_status_action(request, bed_id):
     return redirect(_back(request))
 
 
-
 @requires(Cap.WARD_VIEW)
 def bed_history_view(request, bed_id):
     bed = get_object_or_404(Bed.objects.select_related("ward"), pk=bed_id)
     logs = (bed.status_logs.select_related("changed_by__user", "admission__encounter__patient")
             .order_by("-changed_at")[:200])
     stays = (Admission.objects.filter(bed=bed)
-             .select_related("encounter__patient", "admitted_by__user", "encounter__opened_by__user")
+             .select_related("patient", "admitted_by__user", "encounter__opened_by__user")
              .order_by("-admitted_at"))
     return render(request, "wards/bed_history.html", {"bed": bed, "logs": logs, "stays": stays})
+
 
 @requires(Cap.WARD_VIEW)
 def ward_occupancy_view(request):
@@ -149,7 +160,7 @@ def ward_occupancy_view(request):
     day_raw = request.GET.get("date", "").strip()
 
     stays = (Admission.objects.select_related(
-                 "bed__ward", "encounter__patient", "admitted_by__user", "encounter__opened_by__user")
+                 "bed__ward", "patient", "admitted_by__user", "encounter__opened_by__user")
              .order_by("-admitted_at"))
 
     if ward_id:

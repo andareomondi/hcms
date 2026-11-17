@@ -4,7 +4,15 @@
     <div class="space-y-6"
          x-data="{ tab: 'notes', showPrescribe: false, showScan: false, showAdmit: false, showLab: false, showAllergy: false }">
         <!-- ===== Status banner: explains what the doctor can do ===== -->
-        {% if mode == "CLOSED" %}
+        {% if active_admission and mode == "CLOSED" %}
+            <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                <p class="font-bold text-blue-900">Consultation finished</p>
+                <p class="text-sm text-blue-800">
+                    The patient stays admitted to {{ active_admission.bed.ward.name }}, bed {{ active_admission.bed.code }}.
+                    The stay closes at discharge.
+                </p>
+            </div>
+        {% elif mode == "CLOSED" %}
             <div class="bg-slate-100 border border-slate-300 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
                 <div>
                     <p class="font-bold text-slate-800">This visit is closed</p>
@@ -61,14 +69,6 @@
                 <p class="font-bold text-slate-800">No queue entry for this visit</p>
                 <p class="text-sm text-slate-600">The visit is open but not assigned to a doctor. Read-only.</p>
             </div>
-        {% elif mode == "IN_WARD" %}
-            <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                <p class="font-bold text-blue-900">Patient is admitted</p>
-                <p class="text-sm text-blue-800">
-                    You can still write notes, prescribe and order tests or scans. When you finish the consultation, the stay continues.
-                    The patient is discharged from the ward.
-                </p>
-            </div>
         {% elif mode == "READ_ONLY" %}
             <div class="bg-slate-100 border border-slate-300 rounded-2xl p-4">
                 <p class="font-bold text-slate-800">Read-only</p>
@@ -84,8 +84,8 @@
                 <div>
                     <div class="flex items-center gap-3 flex-wrap">
                         <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ patient.last_name }}, {{ patient.first_name }}</h1>
-                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if mode == 'ACTIVE' %}bg-teal-100 text-teal-800{% elif mode == 'IN_WARD' %}bg-blue-100 text-blue-800{% elif mode == 'CLOSED' %}bg-slate-200 text-slate-700{% else %}bg-amber-100 text-amber-800{% endif %}">
-                            {% if mode == "ACTIVE" %}In consultation{% elif mode == "IN_WARD" %}Admitted{% elif mode == "CLOSED" %}Closed{% elif mode == "WAITING" %}Waiting{% elif mode == "AWAITING_PAYMENT" %}Awaiting payment{% elif mode == "AWAITING_RESULTS" %}Awaiting results{% else %}Read-only{% endif %}
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full {% if mode == 'ACTIVE' %}bg-teal-100 text-teal-800{% elif mode == 'CLOSED' %}bg-slate-200 text-slate-700{% else %}bg-amber-100 text-amber-800{% endif %}">
+                            {% if mode == "ACTIVE" %}In consultation{% elif mode == "CLOSED" %}Closed{% elif mode == "WAITING" %}Waiting{% elif mode == "AWAITING_PAYMENT" %}Awaiting payment{% elif mode == "AWAITING_RESULTS" %}Awaiting results{% else %}Read-only{% endif %}
                         </span>
                     </div>
                     <p class="text-sm text-slate-500 mt-1">
@@ -113,11 +113,11 @@
                     <form action="{% url 'doctors_portal:complete' encounter.id %}"
                           method="post"
                           class="inline"
-                          onsubmit="return confirm('{% if mode == 'IN_WARD' %}Finish your consultation? The patient stays admitted.{% else %}Complete this consultation? The visit will close and the bill will go to billing.{% endif %}');">
+                          onsubmit="return confirm('Complete this consultation? The visit will close. {% if active_admission %}The patient stays admitted.{% endif %}');">
                         {% csrf_token %}
                         <button type="submit"
                                 class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700">
-                            {% if mode == "IN_WARD" %}Finish consultation (stay continues){% else %}Complete &amp; close visit{% endif %}
+                            Complete &amp; close visit
                         </button>
                     </form>
                 </div>
@@ -125,8 +125,8 @@
         </div>
         {% if active_admission %}
             <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-2xl text-sm">
-                <strong>Admitted</strong> to {{ active_admission.bed.ward.name }}, bed {{ active_admission.bed.code }}
-                since {{ active_admission.admitted_at|date:"Y-m-d H:i" }} · planned {{ active_admission.planned_days }} day(s).
+                <strong>In ward</strong>: {{ active_admission.bed.ward.name }}, bed {{ active_admission.bed.code }},
+                admitted {{ active_admission.admitted_at|date:"Y-m-d H:i" }}, planned {{ active_admission.planned_days }} day(s).
             </div>
         {% endif %}
         <!-- ===== Tabs ===== -->
@@ -401,7 +401,7 @@
         {% endif %}
         <!-- ===== Modals: rendered only when the visit is open to changes ===== -->
         {% if can_act %}
-            <!-- PRESCRIBE: replaces the existing block in consultation_room_part2.html -->
+            <!-- PRESCRIBE -->
             <div x-show="showPrescribe"
                  x-cloak
                  style="display:none"
@@ -721,6 +721,19 @@
                               method="post"
                               class="space-y-4">
                             {% csrf_token %}
+                            <div x-data="{ n: 0 }">
+                                <textarea name="reason"
+                                          required
+                                          minlength="100"
+                                          rows="4"
+                                          x-on:input="n = $event.target.value.trim().length"
+                                          placeholder="Reason for admission (at least 100 characters)"
+                                          class="w-full border rounded-xl px-3 py-2.5 text-sm"></textarea>
+                                <p class="text-xs mt-1"
+                                   :class="n >= 100 ? 'text-emerald-700' : 'text-slate-500'">
+                                    <span x-text="n"></span> / 100 characters
+                                </p>
+                            </div>
                             <select name="bed_id"
                                     required
                                     class="w-full border rounded-xl px-3 py-2.5 text-sm bg-white">

@@ -3,16 +3,15 @@
 {% block content %}
     <div class="space-y-8"
          x-data="{
-         assign: { open: false, bedId: '', code: '' },
          act: { open: false, bedId: '', code: '', to: '', label: '', needsReason: false, reason: '' },
          discharge: { open: false, url: '', name: '', bed: '' }
      }"
-         @keydown.escape.window="assign.open = false; act.open = false; discharge.open = false">
+         @keydown.escape.window="act.open = false; discharge.open = false">
         <!-- Header and occupancy -->
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Wards &amp; beds</h1>
-                <p class="text-sm text-slate-500 mt-1">Admit, discharge, and keep every bed ready for the next patient.</p>
+                <p class="text-sm text-slate-500 mt-1">Admit from a doctor's consultation, request discharge, and keep every bed ready for the next patient.</p>
             </div>
             <div class="w-full md:w-72 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <div class="flex justify-between text-xs font-bold text-slate-700 mb-1.5">
@@ -89,23 +88,44 @@
                             </header>
                             <div class="min-h-[3rem] text-sm">
                                 {% if bed.active_admission %}
-                                    <p class="font-bold text-slate-900 truncate">{{ bed.active_admission.encounter.patient.last_name }}, {{ bed.active_admission.encounter.patient.first_name }}</p>
+                                    <p class="font-bold text-slate-900 truncate">{{ bed.active_admission.patient.last_name }}, {{ bed.active_admission.patient.first_name }}</p>
                                     <p class="text-xs text-slate-500 mt-0.5">Admitted {{ bed.active_admission.admitted_at|date:"d M, H:i" }} · {{ bed.active_admission.planned_days }} day(s)</p>
+                                    {% if bed.active_admission.discharge_state == "DISCHARGE_REQUESTED" %}
+                                        <p class="text-xs font-semibold text-amber-700 mt-1">Discharge requested, awaiting doctor</p>
+                                    {% endif %}
                                 {% elif bed.status_reason %}
                                     <p class="text-xs font-medium text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">{{ bed.status_reason }}</p>
                                 {% elif bed.status == "VACANT" %}
-                                    <p class="text-xs text-slate-400 italic">Ready for the next patient</p>
+                                    <p class="text-xs text-slate-400 italic">Ready. Admitted from a doctor's consultation.</p>
                                 {% endif %}
                             </div>
                             <footer class="mt-auto space-y-2 pt-2 border-t border-slate-100">
-                                {% if bed.status == "VACANT" and can_admit %}
-                                    <button type="button"
-                                            class="w-full min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition"
-                                            @click="assign = { open: true, bedId: '{{ bed.id }}', code: '{{ bed.code|escapejs }}' }">Assign patient</button>
-                                {% elif bed.active_admission and can_admit %}
-                                    <button type="button"
-                                            class="w-full min-h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-sm transition"
-                                            @click="discharge = { open: true, url: '{% url 'wards:discharge_patient' bed.active_admission.id %}', name: '{{ bed.active_admission.encounter.patient.last_name|escapejs }}, {{ bed.active_admission.encounter.patient.first_name|escapejs }}', bed: '{{ bed.code|escapejs }}' }">Discharge</button>
+                                {% if bed.active_admission and can_admit %}
+                                    {% if bed.active_admission.discharge_state == "ADMITTED" %}
+                                        <button type="button"
+                                                class="w-full min-h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-sm transition"
+                                                @click="discharge = { open: true, url: '{% url 'wards:request_discharge' bed.active_admission.id %}', name: '{{ bed.active_admission.patient.last_name|escapejs }}, {{ bed.active_admission.patient.first_name|escapejs }}', bed: '{{ bed.code|escapejs }}' }">Request discharge</button>
+                                    {% elif bed.active_admission.discharge_state == "DISCHARGE_REQUESTED" %}
+                                        {% if is_doctor %}
+                                            <form method="post"
+                                                  action="{% url 'wards:approve_discharge' bed.active_admission.id %}"
+                                                  class="space-y-2">
+                                                {% csrf_token %}
+                                                {% if pending_confirm.admission == bed.active_admission.id|stringformat:"s" %}
+                                                    <input type="hidden"
+                                                           name="token"
+                                                           value="{{ pending_confirm.token }}">
+                                                    <p class="text-[11px] text-slate-600">You admitted this patient. Press Confirm to approve.</p>
+                                                {% endif %}
+                                                <button type="submit"
+                                                        class="w-full min-h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition">
+                                                    {% if pending_confirm.admission == bed.active_admission.id|stringformat:"s" %}Confirm discharge{% else %}Approve discharge{% endif %}
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <p class="text-xs font-semibold text-amber-700 text-center">Awaiting doctor approval</p>
+                                        {% endif %}
+                                    {% endif %}
                                 {% endif %}
                                 {% if can_manage and not bed.active_admission and bed.actions %}
                                     <div class="flex flex-wrap gap-2">
@@ -139,87 +159,20 @@
                 <div class="inline-flex items-center gap-1.5">
                     {% if page_obj.has_previous %}
                         <a href="?page={{ page_obj.previous_page_number }}"
-                           class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">
-                            Previous
-                        </a>
+                           class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Previous</a>
                     {% else %}
-                        <span class="px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">
-                            Previous
-                        </span>
+                        <span class="px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Previous</span>
                     {% endif %}
-                    <span class="px-3 py-1.5 font-bold text-slate-700">
-                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                    </span>
+                    <span class="px-3 py-1.5 font-bold text-slate-700">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
                     {% if page_obj.has_next %}
                         <a href="?page={{ page_obj.next_page_number }}"
-                           class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">
-                            Next
-                        </a>
+                           class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 hover:bg-slate-100 transition shadow-sm">Next</a>
                     {% else %}
-                        <span class="px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">
-                            Next
-                        </span>
+                        <span class="px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl font-semibold text-slate-400 cursor-not-allowed">Next</span>
                     {% endif %}
                 </div>
             </nav>
         {% endif %}
-        <!-- ===== Modal: assign patient ===== -->
-        <div x-show="assign.open"
-             x-cloak
-             style="display:none"
-             class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4"
-             @click.self="assign.open = false">
-            <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-900">Assign patient</h3>
-                        <p class="text-sm text-slate-500 mt-0.5">Bed <span class="font-bold text-slate-900"
-       x-text="assign.code"></span></p>
-                    </div>
-                    <button type="button"
-                            @click="assign.open = false"
-                            class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-lg flex items-center justify-center"
-                            aria-label="Close">×</button>
-                </div>
-                <form method="post"
-                      :action="'{% url 'wards:assign_bed' '00000000-0000-0000-0000-000000000000' %}'.replace('00000000-0000-0000-0000-000000000000', assign.bedId)"
-                      class="space-y-4">
-                    {% csrf_token %}
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Patient visit</label>
-                        <select name="encounter_id"
-                                required
-                                class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
-                            <option value="">Choose an open visit</option>
-                            {% for enc in available_encounters %}
-                                <option value="{{ enc.id }}">{{ enc.patient.last_name }}, {{ enc.patient.first_name }} · {{ enc.get_encounter_type_display }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if not available_encounters %}
-                            <p class="text-xs text-amber-700 mt-1 font-medium">No open visits are waiting for a bed.</p>
-                        {% endif %}
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Planned stay (days)</label>
-                        <input type="number"
-                               name="planned_days"
-                               min="1"
-                               max="365"
-                               value="1"
-                               required
-                               class="w-full min-h-11 border border-slate-300 rounded-xl px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                        <p class="text-xs text-slate-500 mt-1">Charged at the ward's bed-day rate. Adjusted to actual days at discharge.</p>
-                    </div>
-                    <div class="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-                        <button type="button"
-                                @click="assign.open = false"
-                                class="flex-1 min-h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition">Cancel</button>
-                        <button type="submit"
-                                class="flex-1 min-h-11 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition">Confirm admission</button>
-                    </div>
-                </form>
-            </div>
-        </div>
         <!-- ===== Modal: bed status change ===== -->
         <div x-show="act.open"
              x-cloak
@@ -266,7 +219,7 @@
                 </form>
             </div>
         </div>
-        <!-- ===== Modal: confirm discharge ===== -->
+        <!-- ===== Modal: request discharge ===== -->
         <div x-show="discharge.open"
              x-cloak
              style="display:none"
@@ -274,11 +227,11 @@
              @click.self="discharge.open = false">
             <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
                 <div>
-                    <h3 class="text-lg font-bold text-slate-900">Discharge patient?</h3>
+                    <h3 class="text-lg font-bold text-slate-900">Request discharge?</h3>
                     <p class="text-sm text-slate-600 mt-2 leading-relaxed">
                         <span class="font-bold text-slate-900" x-text="discharge.name"></span> will leave bed
                         <span class="font-bold text-slate-900"
-                              x-text="discharge.bed"></span>. The bed will be marked as cleaning, and the final bill will be sent to billing.
+                              x-text="discharge.bed"></span>. A doctor must approve it before the bed is released.
                     </p>
                 </div>
                 <form method="post"
@@ -289,7 +242,7 @@
                             @click="discharge.open = false"
                             class="flex-1 min-h-11 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition">Keep in bed</button>
                     <button type="submit"
-                            class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 shadow-sm transition">Confirm discharge</button>
+                            class="flex-1 min-h-11 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 shadow-sm transition">Send request</button>
                 </form>
             </div>
         </div>

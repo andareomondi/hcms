@@ -112,12 +112,14 @@ def expire_due_units(*, staff, today=None):
 # ---------- payment ----------
 
 def is_prepaid(order):
-    if order.encounter.prepay_bypassed:
-        return True
-    if order.credit_approved_by_id:
+    if order.encounter.prepay_bypassed or order.credit_approved_by_id:
         return True
     charge = medication_charge_or_none(order)
-    return charge is not None and billing.charge_fully_paid(charge)
+    if charge is None:
+        return False
+    if charge.encounter.encounter_type == "WARD_STAY":
+        return True   # ward medicine is settled at discharge
+    return billing.charge_fully_paid(charge)
 
 
 def check_prepaid(order):
@@ -169,10 +171,11 @@ def unit_problem(unit, today=None):
 
 @transaction.atomic
 def create_formulary_order(*, encounter, medication, doctor, route, frequency, dose_text,
-                           days, doses_total, override, staff):
+                           days, doses_total, override, staff, billing_encounter=None):
     """
-    Creates a formulary order only if the hospital can supply every dose. The medicine's stock
-    row is locked for the duration, so two prescribers cannot both claim the same last doses.
+    Creates a formulary order only if the hospital can supply every dose. The medicine's
+    stock row is locked for the duration, so two prescribers cannot both claim the same last
+    doses. The charge goes to billing_encounter (a ward stay) when given, otherwise to the visit.
     Raises StockShortError otherwise; the caller then offers an external prescription.
     """
     StockItem.objects.select_for_update().filter(medication=medication).first()
@@ -190,13 +193,12 @@ def create_formulary_order(*, encounter, medication, doctor, route, frequency, d
         status="ORDERED", allergy_override_reason=override,
     )
     billing.add_charge(
-        encounter=encounter, source_type="MEDICATION_ORDER",
+        encounter=billing_encounter or encounter, source_type="MEDICATION_ORDER",
         description=f"{medication.brand_name} {medication.strength} x{doses_total}",
         unit_price=medication.unit_price, quantity=doses_total, staff=staff,
         source_id=order.id, key=f"med:{order.id}",
     )
     return order
-
 
 # ---------- receiving ----------
 
@@ -283,7 +285,8 @@ def take_doses(*, medication, doses, staff, reason, reference_id, serials=None):
             units.append(unit)
         available = sum(u.doses_remaining for u in units)
         if available < doses:
-            raise StockShortError(f"The scanned packs hold {available} dose(s); {doses} are needed.")
+            raise PharmacyError(f"The scanned packs hold {available} dose(s); {doses} are needed. "
+                                "Scan another pack.")
     else:
         if medication.requires_serial_scan:
             raise PharmacyError(f"Scan the vial or pack for {medication.brand_name}. "
@@ -443,13 +446,20 @@ def lock_unit_for_vaccine(*, serial, vaccine_code):
 @transaction.atomic
 def give_vaccine_dose(*, encounter, medication, serial, nurse, route="IM", notes=""):
     """
-    Immunisation: one scanned vial gives one dose. The dose gets the same trail as any medicine:
-    a completed, nurse-administered MedicationOrder, a NursingAdministration, and stock movements.
-    The caller records the Vaccination and any charge (charge key: med:<order id>).
-    Allergy checks are not run here yet; see the note in the maternity change.
+    Immunisation: one scanned vial gives one dose. Allergies are checked first, inside this
+    transaction, so a refused dose writes nothing. The dose gets the same trail as any
+    medicine: a completed, nurse-administered MedicationOrder, a NursingAdministration, and
+    stock movements. The caller records the Vaccination and any charge (key: med:<order id>).
     """
     if not medication.vaccine_code:
         raise PharmacyError("This medicine is not set up as a vaccine on the immunisation schedule.")
+
+    hits = list(conflicts_for(encounter.patient, medication))
+    if hits:
+        names = ", ".join(h.allergen.display_name for h in hits)
+        raise PharmacyError(f"Allergy alert: the patient is recorded as allergic to {names}. "
+                            "The dose was not given.")
+
     unit = lock_unit_for_vaccine(serial=serial, vaccine_code=medication.vaccine_code)
     problem = unit_problem(unit)
     if problem:
