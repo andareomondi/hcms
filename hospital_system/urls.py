@@ -7,6 +7,7 @@ from django.urls import include, path
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
 from duty.services import clock_out, current_session
+from hospital_system.views_pwa import service_worker
 
 
 class CustomLogoutView(auth_views.LogoutView):
@@ -42,6 +43,7 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("maternity/", include("maternity.urls")),
     path("lab/", include("lab.urls")),
+    path("sw.js", service_worker, name="service_worker"),
     
     # Root dashboard app
     path("", include("dashboard.urls")),

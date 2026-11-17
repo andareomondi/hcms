@@ -4,10 +4,89 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="manifest" href="{% static 'manifest.json' %}">
+        <meta name="theme-color" content="#0d9488">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="HCMS">
+        <link rel="apple-touch-icon"
+              href="{% static 'icons/apple-touch-icon.png' %}">
         <title>{% block title %}HCMS - Hospital Clinical Management System{% endblock %}</title>
         <script src="{% static 'js/tailwind.js' %}"></script>
         <script src="{% static 'js/htmx.min.js' %}"></script>
         <script src="{% static 'js/chart.js' %}"></script>
+        <script>
+  // Count visits once per browser session, for the "second visit" rule.
+  if (!sessionStorage.getItem("hcms-visit-counted")) {
+    sessionStorage.setItem("hcms-visit-counted", "1");
+    localStorage.setItem("hcms-visits",
+      String(Number(localStorage.getItem("hcms-visits") || 0) + 1));
+  }
+
+  // Keep the install event so the banner can use it later, even if it fires early.
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    window.__hcmsInstallEvent = e;
+    window.dispatchEvent(new CustomEvent("hcms:installable"));
+  });
+
+  window.addEventListener("appinstalled", () => {
+    window.__hcmsInstallEvent = null;
+    localStorage.setItem("hcms-installed", "1");
+    window.dispatchEvent(new CustomEvent("hcms:installed"));
+  });
+
+  function hcmsInstallPrompt() {
+    const DISMISS_KEY = "hcms-install-dismissed-at";
+    const DAYS_BETWEEN_PROMPTS = 30;
+    const MIN_VISITS = 2;
+
+    return {
+      visible: false,
+
+      isInstalled() {
+        return window.matchMedia("(display-mode: standalone)").matches
+          || window.navigator.standalone === true
+          || localStorage.getItem("hcms-installed") === "1";
+      },
+
+      eligible() {
+        if (!window.__hcmsInstallEvent || this.isInstalled()) return false;
+        const visits = Number(localStorage.getItem("hcms-visits") || 0);
+        if (visits < MIN_VISITS) return false;
+        const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
+        return Date.now() - dismissedAt > DAYS_BETWEEN_PROMPTS * 24 * 60 * 60 * 1000;
+      },
+
+      init() {
+        if (this.eligible()) this.visible = true;
+      },
+
+      onInstallable() {
+        if (this.eligible()) this.visible = true;
+      },
+
+      install() {
+        const e = window.__hcmsInstallEvent;
+        if (!e) return;
+        e.prompt();
+        e.userChoice.then((choice) => {
+          window.__hcmsInstallEvent = null;
+          this.visible = false;
+          if (choice.outcome !== "accepted") this.remember();
+        });
+      },
+
+      dismiss() {
+        this.visible = false;
+        this.remember();
+      },
+
+      remember() {
+        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      }
+    };
+  }
+        </script>
         <style>
             [x-cloak] { display: none !important; }
             @media print {
@@ -175,6 +254,46 @@
                 {% block content %}{% endblock %}
             </main>
         </div>
+        <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js");
+  }
+        </script>
+        {% if request.user.is_authenticated %}
+            <div x-data="hcmsInstallPrompt()"
+                 x-init="init()"
+                 x-show="visible"
+                 x-cloak
+                 @hcms:installable.window="onInstallable()"
+                 @hcms:installed.window="visible = false"
+                 role="dialog"
+                 aria-label="Install HCMS"
+                 class="no-print fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-4">
+                <div class="flex items-start gap-3">
+                    <div class="bg-teal-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shrink-0">🏥</div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-bold text-slate-900">Install HCMS</p>
+                        <p class="text-xs text-slate-600 mt-0.5">Open it from your home screen in one tap. It needs an internet connection.</p>
+                        <div class="mt-3 flex gap-2">
+                            <button type="button"
+                                    @click="install()"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700">
+                                Install
+                            </button>
+                            <button type="button"
+                                    @click="dismiss()"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200">
+                                Not now
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button"
+                            @click="dismiss()"
+                            aria-label="Close"
+                            class="text-slate-400 hover:text-slate-600 text-lg leading-none px-1">×</button>
+                </div>
+            </div>
+        {% endif %}
     </body>
     <script src="{% static 'js/alpine.min.js' %}"></script>
 </html>
