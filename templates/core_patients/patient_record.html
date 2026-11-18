@@ -1,6 +1,12 @@
-{% extends "base.html" %} {% block title %}Patient record - {{ patient.last_name }}{% endblock %} {% block content %}
-<style>
+{% extends "base.html" %}
+{% block title %}Patient record - {{ patient.last_name }}{% endblock %}
+{% block content %}
+    <style>
   @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     .no-print { display: none !important; }
     body { background: #fff !important; }
     main { padding: 0 !important; max-width: none !important; }
@@ -9,314 +15,488 @@
     img.scan { max-height: 420px; }
   }
   img.scan { max-width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; }
-</style>
-<div class="space-y-6 text-sm">
-    <!-- Screen-only controls -->
-    <div class="no-print flex justify-between items-center">
-        <a href="{% url 'core_patients:detail' patient.id %}"
-           class="text-xs text-slate-500 hover:underline">← Back to patient file</a>
-        <button onclick="window.print()"
-                class="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold">Print record</button>
-    </div>
-    <!-- Letterhead -->
-    <header class="border-b-2 border-slate-900 pb-3 print-section">
-        <div class="flex justify-between items-end">
-            <div>
-                <p class="text-xs uppercase tracking-widest text-slate-500">Hospital clinical record</p>
-                <h1 class="text-2xl font-extrabold text-slate-900">{{ patient.last_name }}, {{ patient.first_name }}</h1>
-            </div>
-            <div class="text-right text-xs text-slate-600">
-                <p>Printed {{ printed_at|date:"Y-m-d H:i" }}</p>
-                <p>By {{ printed_by }}</p>
-            </div>
+    </style>
+    <div class="space-y-6 text-sm text-slate-800">
+        <!-- Screen-only controls -->
+        <div class="no-print flex justify-between items-center bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl">
+            <a href="{% url 'core_patients:detail' patient.id %}"
+               class="text-xs font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1">
+                <span>←</span> Back to patient file
+            </a>
+            <button onclick="window.print()"
+                    class="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition">
+                Print record
+            </button>
         </div>
-        <table class="w-full mt-3 text-xs">
-            <tr>
-                <td class="py-0.5"><span class="text-slate-500">Patient ID:</span> <strong>{{ patient.id }}</strong></td>
-                <td class="py-0.5"><span class="text-slate-500">National / other ID:</span> <strong>{{ patient.id_number|default:"None recorded" }}</strong></td>
-            </tr>
-            <tr>
-                <td class="py-0.5"><span class="text-slate-500">Sex:</span> <strong>{{ patient.get_sex_display }}</strong></td>
-                <td class="py-0.5"><span class="text-slate-500">Date of birth:</span> <strong>{{ patient.date_of_birth|default:"Not recorded" }}</strong></td>
-            </tr>
-            <tr>
-                <td class="py-0.5"><span class="text-slate-500">Phone:</span> <strong>{{ patient.phone|default:"—" }}</strong></td>
-                <td class="py-0.5"><span class="text-slate-500">Registered:</span> <strong>{{ patient.created_at|date:"Y-m-d" }}</strong></td>
-            </tr>
-        </table>
-    </header>
-    {% if allergies %}
-        <section class="print-section border border-slate-300 rounded p-3">
-            <p class="font-bold text-xs uppercase mb-1">Allergies (all entries)</p>
-            <p class="text-xs mb-2">Status: <strong>{{ statement.get_status_display|default:"Unknown" }}</strong></p>
-            <table class="w-full text-xs border-collapse">
-                <thead>
-                    <tr class="text-left border-b">
-                        <th class="py-1">Allergen</th>
-                        <th>Severity</th>
-                        <th>Reaction</th>
-                        <th>Source</th>
-                        <th>Recorded</th>
-                        <th>Status</th>
+        <!-- Letterhead -->
+        <header class="rounded-xl overflow-hidden border border-teal-800/20 shadow-sm print-section">
+            <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-cyan-800 text-white px-5 py-4 flex justify-between items-end">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-widest text-teal-200">Hospital Clinical Record</p>
+                    <h1 class="text-2xl font-extrabold tracking-tight mt-0.5">{{ patient.last_name }}, {{ patient.first_name }}</h1>
+                </div>
+                <div class="text-right text-xs text-teal-100 space-y-0.5">
+                    <p><span class="text-teal-300">Printed:</span> {{ printed_at|date:"Y-m-d H:i" }}</p>
+                    <p><span class="text-teal-300">By:</span> {{ printed_by }}</p>
+                </div>
+            </div>
+            <div class="bg-teal-50/60 px-5 py-3 border-t border-teal-100">
+                <table class="w-full text-xs">
+                    <tr>
+                        <td class="py-1 w-1/2">
+                            <span class="text-slate-500">Patient ID:</span>
+                            <span class="ml-1 inline-block bg-teal-100 text-teal-900 font-bold px-2 py-0.5 rounded">{{ patient.id }}</span>
+                        </td>
+                        <td class="py-1 w-1/2">
+                            <span class="text-slate-500">National / other ID:</span>
+                            <strong class="text-slate-900 ml-1">{{ patient.id_number|default:"None recorded" }}</strong>
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    {% for a in allergies %}
-                        <tr class="border-b align-top">
-                            <td class="py-1">{{ a.allergen.display_name }}</td>
-                            <td>{{ a.get_severity_display }}</td>
-                            <td>{{ a.reaction|default:"—" }}</td>
-                            <td>{{ a.get_source_display }}</td>
-                            <td>{{ a.recorded_at|date:"Y-m-d" }}</td>
-                            <td>{{ a.get_status_display }}{% if a.status_reason %} — {{ a.status_reason }}{% endif %}</td>
+                    <tr>
+                        <td class="py-1">
+                            <span class="text-slate-500">Sex:</span>
+                            <strong class="text-slate-900 ml-1">{{ patient.get_sex_display }}</strong>
+                        </td>
+                        <td class="py-1">
+                            <span class="text-slate-500">Date of birth:</span>
+                            <strong class="text-slate-900 ml-1">{{ patient.date_of_birth|default:"Not recorded" }}</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="py-1">
+                            <span class="text-slate-500">Phone:</span>
+                            <strong class="text-slate-900 ml-1">{{ patient.phone|default:"—" }}</strong>
+                        </td>
+                        <td class="py-1">
+                            <span class="text-slate-500">Registered:</span>
+                            <strong class="text-slate-900 ml-1">{{ patient.created_at|date:"Y-m-d" }}</strong>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </header>
+        <!-- Allergies Alert Box -->
+        {% if allergies %}
+            <section class="print-section bg-rose-50/70 border border-rose-200 border-l-4 border-l-rose-600 rounded-lg p-3.5">
+                <div class="flex justify-between items-center mb-2">
+                    <p class="font-bold text-xs uppercase tracking-wider text-rose-800">Past Medical History &amp; Allergies</p>
+                    <span class="text-[11px] bg-rose-100 text-rose-900 px-2 py-0.5 rounded-full font-semibold">
+                        Status: {{ statement.get_status_display|default:"Unknown" }}
+                    </span>
+                </div>
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="text-left border-b border-rose-200 text-rose-900 bg-rose-100/60">
+                            <th class="py-1.5 px-2 rounded-tl">Allergen</th>
+                            <th class="py-1.5 px-2">Severity</th>
+                            <th class="py-1.5 px-2">Reaction</th>
+                            <th class="py-1.5 px-2">Source</th>
+                            <th class="py-1.5 px-2">Recorded</th>
+                            <th class="py-1.5 px-2 rounded-tr">Status</th>
                         </tr>
-                        {% for c in a.changes.all %}
-                            <tr class="text-slate-600">
-                                <td></td>
-                                <td colspan="5" class="pb-1">
-                                    {{ c.changed_at|date:"Y-m-d" }}: {{ c.from_status|title }} → {{ c.to_status|title }}. {{ c.reason }}
+                    </thead>
+                    <tbody class="divide-y divide-rose-100">
+                        {% for a in allergies %}
+                            <tr class="align-top bg-white/80">
+                                <td class="py-1.5 px-2 font-bold text-slate-900">{{ a.allergen.display_name }}</td>
+                                <td class="py-1.5 px-2">
+                                    <span class="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">
+                                        {{ a.get_severity_display }}
+                                    </span>
+                                </td>
+                                <td class="py-1.5 px-2 text-slate-700">{{ a.reaction|default:"—" }}</td>
+                                <td class="py-1.5 px-2 text-slate-600">{{ a.get_source_display }}</td>
+                                <td class="py-1.5 px-2 text-slate-600">{{ a.recorded_at|date:"Y-m-d" }}</td>
+                                <td class="py-1.5 px-2 font-medium text-slate-800">
+                                    {{ a.get_status_display }}{% if a.status_reason %} — <span class="text-slate-600 font-normal">{{ a.status_reason }}</span>{% endif %}
                                 </td>
                             </tr>
-                        {% endfor %}
-                    {% empty %}
-                        <tr>
-                            <td colspan="6" class="italic text-slate-500 py-1">No allergy entries.</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </section>
-    {% else %}
-        <p class="text-xs text-slate-500">Allergies: none recorded.</p>
-    {% endif %}
-    {% if finance_totals %}
-        <section class="print-section border border-slate-300 rounded p-3">
-            <p class="font-bold uppercase text-xs mb-1">Account summary (all visits)</p>
-            <p>
-                Total billed <strong>KES {{ finance_totals.total|floatformat:2 }}</strong> ·
-                Paid <strong>KES {{ finance_totals.paid|floatformat:2 }}</strong> ·
-                Outstanding <strong>KES {{ finance_totals.outstanding|floatformat:2 }}</strong>
-            </p>
-        </section>
-    {% endif %}
-    {% for v in visits %}
-        {% with enc=v.enc %}
-            <section class="print-section {% if not forloop.first %}page-break{% endif %} space-y-3">
-                <div class="bg-slate-100 border-l-4 border-slate-900 px-3 py-2">
-                    <p class="font-bold text-slate-900">
-                        Visit {{ forloop.counter }} · {{ enc.get_encounter_type_display }} · opened {{ enc.opened_at|date:"Y-m-d H:i" }}
-                    </p>
-                    <p class="text-xs text-slate-600">
-                        Status: {{ enc.get_status_display }}{% if enc.closed_at %} · closed {{ enc.closed_at|date:"Y-m-d H:i" }}{% endif %}
-                        {% if enc.opened_by %} · opened by {{ enc.opened_by.user.get_full_name|default:enc.opened_by.user.username }}{% endif %}
-                    </p>
-                    {% if show.clinical and enc.chief_complaint %}
-                        <p class="text-xs mt-1"><strong>Chief complaint:</strong> {{ enc.chief_complaint }}</p>
-                    {% endif %}
-                </div>
-                {% for adm in v.admissions %}
-                    <p class="text-xs">
-                        <strong>Ward stay:</strong> {{ adm.bed.ward.name }}, bed {{ adm.bed.code }} · admitted {{ adm.admitted_at|date:"Y-m-d H:i" }} ·
-                        {% if adm.discharged_at %}discharged {{ adm.discharged_at|date:"Y-m-d H:i" }}{% else %}<em>still admitted</em>{% endif %} ·
-                        planned {{ adm.planned_days }} day(s)
-                    </p>
-                {% endfor %}
-                {% if show.clinical %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Triage and vital signs</h3>
-                    {% for vit in v.vitals %}
-                        <p class="text-xs">
-                            {{ vit.recorded_at|date:"Y-m-d H:i" }} — T {{ vit.temperature_c|default:"—" }} °C, P {{ vit.pulse_bpm|default:"—" }},
-                            BP {% if vit.systolic_mmhg %}{{ vit.systolic_mmhg }}/{{ vit.diastolic_mmhg }}{% else %}—{% endif %},
-                            RR {{ vit.respiratory_rate|default:"—" }}, SpO2 {{ vit.spo2_percent|default:"—" }}%, Wt {{ vit.weight_kg|default:"—" }} kg
-                            {% if vit.notes %}— <em>{{ vit.notes }}</em>{% endif %}
-                            <span class="text-slate-500">({{ vit.recorded_by.user.get_full_name|default:vit.recorded_by.user.username }})</span>
-                        </p>
-                    {% empty %}
-                        <p class="text-xs italic text-slate-500">No vitals recorded.</p>
-                    {% endfor %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Clinical notes</h3>
-                    {% for note in v.notes %}
-                        <div class="border border-slate-200 rounded p-2 text-xs space-y-1">
-                            <p class="text-slate-500">{{ note.created_at|date:"Y-m-d H:i" }} · Dr. {{ note.author.user.get_full_name|default:note.author.user.username }}</p>
-                            <p><strong>Complaint:</strong> {{ note.presenting_complaint }}</p>
-                            {% if note.examination %}<p><strong>Examination:</strong> {{ note.examination }}</p>{% endif %}
-                            <p><strong>Diagnosis:</strong> {{ note.diagnosis }}</p>
-                            {% if note.plan %}<p><strong>Plan:</strong> {{ note.plan }}</p>{% endif %}
-                            {% for add in note.addenda.all %}
-                                <p class="text-slate-600"><strong>Addendum {{ add.created_at|date:"Y-m-d H:i" }}:</strong> {{ add.text }}</p>
-                            {% endfor %}
-                        </div>
-                    {% empty %}
-                        <p class="text-xs italic text-slate-500">No clinical notes.</p>
-                    {% endfor %}
-                {% endif %}
-                {% if show.pharmacy %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Medication</h3>
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="text-left border-b">
-                                <th class="py-1">Ordered</th>
-                                <th>Medicine</th>
-                                <th>Dose / route</th>
-                                <th>Status</th>
-                                <th>Given / dispensed</th>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="italic text-slate-500 py-2 px-2">No allergy entries.</td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {% for o in v.orders %}
-                                <tr class="border-b align-top">
-                                    <td class="py-1">{{ o.ordered_at|date:"Y-m-d H:i" }}</td>
-                                    <td>
-                                        {% if o.source == "EXTERNAL" %}
-                                            {{ o.external_name }} {{ o.external_strength }} <em>(external, not supplied by hospital)</em>
-                                        {% else %}
-                                            {{ o.medication.brand_name }} {{ o.medication.strength }}
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ o.dose_text }} · {{ o.get_route_display }} · {{ o.frequency_text }}</td>
-                                    <td>{{ o.get_status_display }}</td>
-                                    <td>
-                                        {% for a in o.administrations.all %}
-                                            <div>Given {{ a.administered_at|date:"Y-m-d H:i" }} · {{ a.dose_given_text }} · by {{ a.administered_by.user.get_full_name|default:a.administered_by.user.username }}</div>
-                                        {% endfor %}
-                                        {% for d in o.dispensations.all %}
-                                            <div>Dispensed {{ d.dispensed_at|date:"Y-m-d H:i" }} · qty {{ d.quantity }} · by {{ d.dispensed_by.user.get_full_name|default:d.dispensed_by.user.username }}</div>
-                                        {% endfor %}
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="5" class="italic text-slate-500 py-1">No medication orders.</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                {% endif %}
-                {% if show.radiology %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Imaging and reports</h3>
-                    {% for scan in v.scans %}
-                        <div class="border border-slate-200 rounded p-2 text-xs space-y-2">
-                            <p><strong>{{ scan.modality }} · {{ scan.body_part }}</strong> · ordered {{ scan.ordered_at|date:"Y-m-d H:i" }} · status {{ scan.get_status_display }}</p>
-                            <p><strong>Indication:</strong> {{ scan.clinical_indication }}</p>
-                            {% for study in scan.studies.all %}
-                                <div class="space-y-1">
-                                    <p><strong>Report</strong> ({{ study.reported_at|date:"Y-m-d H:i"|default:"not yet reported" }}{% if study.reported_by %}, {{ study.reported_by.user.get_full_name|default:study.reported_by.user.username }}{% endif %}): {{ study.report|default:"—" }}</p>
-                                    {% if study.file %}
-                                        {% if study.is_image %}
-                                            <img class="scan"
-                                                 src="{% url 'radiology:study_file' study.id %}"
-                                                 alt="{{ scan.modality }} {{ scan.body_part }}" />
-                                        {% else %}
-                                            <p class="no-print"><a href="{% url 'radiology:study_file' study.id %}"
-   class="text-cyan-700 underline">Open file</a></p>
-                                            <p class="hidden print:block text-slate-500">Non-image file attached (DICOM or PDF). Available in the system.</p>
-                                        {% endif %}
-                                        <p class="text-slate-400 text-[10px]">SHA-256 {{ study.file_sha256|default:"not recorded" }} · uploaded {{ study.uploaded_at|date:"Y-m-d H:i" }}</p>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+        {% else %}
+            <div class="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-600">
+                <span class="font-semibold text-slate-700">Past Medical History &amp; Allergies:</span> None recorded.
+            </div>
+        {% endif %}
+        <!-- Account Summary -->
+        {% if finance_totals %}
+            <section class="print-section bg-emerald-50/70 border border-emerald-200 border-l-4 border-l-emerald-600 rounded-lg p-3.5">
+                <p class="font-bold uppercase tracking-wider text-xs text-emerald-900 mb-2">Account summary (all visits)</p>
+                <div class="grid grid-cols-3 gap-3 text-xs">
+                    <div class="bg-white border border-emerald-100 rounded-md px-3 py-2">
+                        <span class="text-slate-500 block text-[11px]">Total Billed</span>
+                        <strong class="text-sm text-slate-900">KES {{ finance_totals.total|floatformat:2 }}</strong>
+                    </div>
+                    <div class="bg-white border border-emerald-100 rounded-md px-3 py-2">
+                        <span class="text-slate-500 block text-[11px]">Total Paid</span>
+                        <strong class="text-sm text-emerald-700">KES {{ finance_totals.paid|floatformat:2 }}</strong>
+                    </div>
+                    <div class="bg-white border border-emerald-100 rounded-md px-3 py-2">
+                        <span class="text-slate-500 block text-[11px]">Outstanding Balance</span>
+                        <strong class="text-sm {% if finance_totals.outstanding > 0 %}text-rose-700{% else %}text-slate-900{% endif %}">
+                            KES {{ finance_totals.outstanding|floatformat:2 }}
+                        </strong>
+                    </div>
+                </div>
+            </section>
+        {% endif %}
+        <!-- Visits Loop -->
+        {% for v in visits %}
+            {% with enc=v.enc %}
+                <section class="print-section {% if not forloop.first %}page-break{% endif %} space-y-4">
+                    <!-- Visit Header Banner -->
+                    <div class="bg-slate-800 text-white rounded-lg border-l-4 border-teal-400 px-4 py-3 shadow-sm">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <p class="font-bold text-sm">
+                                <span class="text-teal-300">Visit {{ forloop.counter }}</span> · {{ enc.get_encounter_type_display }}
+                                <span class="text-slate-300 font-normal text-xs ml-1">· opened {{ enc.opened_at|date:"Y-m-d H:i" }}</span>
+                            </p>
+                            <span class="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-200 border border-teal-400/30">
+                                {{ enc.get_status_display }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-300 mt-1">
+                            {% if enc.closed_at %}Closed {{ enc.closed_at|date:"Y-m-d H:i" }}{% endif %}
+                            {% if enc.opened_by %}{% if enc.closed_at %} · {% endif %}Opened by {{ enc.opened_by.user.get_full_name|default:enc.opened_by.user.username }}{% endif %}
+                        </p>
+                    </div>
+                    <!-- Ward Admissions -->
+                    {% for adm in v.admissions %}
+                        <div class="bg-sky-50 border border-sky-200 border-l-4 border-l-sky-500 rounded-md px-3 py-2 text-xs text-sky-950">
+                            <strong class="text-sky-800">Ward stay:</strong> {{ adm.bed.ward.name }}, bed <strong>{{ adm.bed.code }}</strong> ·
+                            admitted {{ adm.admitted_at|date:"Y-m-d H:i" }} ·
+                            {% if adm.discharged_at %}
+                                discharged {{ adm.discharged_at|date:"Y-m-d H:i" }}
+                            {% else %}
+                                <span class="bg-sky-200 text-sky-900 font-semibold px-1.5 py-0.5 rounded">still admitted</span>
+                            {% endif %} ·
+                            planned {{ adm.planned_days }} day(s)
+                        </div>
+                    {% endfor %}
+                    <!-- Clinical Section: Triage & Vitals -->
+                    {% if show.clinical %}
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-teal-900 border-b border-teal-200 pb-1">
+                                2. Chief Complaint (CC) &amp; Triage Vitals
+                            </h3>
+                            {% if enc.chief_complaint %}
+                                <div class="bg-teal-50/50 border border-teal-200 rounded-md px-3 py-2 text-xs text-slate-900 mb-2">
+                                    <span class="font-bold uppercase text-[11px] text-teal-950">Chief Complaint:</span> "{{ enc.chief_complaint }}"
+                                </div>
+                            {% endif %}
+                            {% for vit in v.vitals %}
+                                <div class="bg-teal-50/30 border border-teal-100 rounded-md px-3 py-2 text-xs">
+                                    <div class="flex flex-wrap justify-between items-center text-[11px] text-teal-900 font-semibold mb-1">
+                                        <span>{{ vit.recorded_at|date:"Y-m-d H:i" }}</span>
+                                        <span class="text-slate-500 font-normal">Recorded by {{ vit.recorded_by.user.get_full_name|default:vit.recorded_by.user.username }}</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-slate-800">
+                                        <span><span class="text-slate-500">Temp:</span> <strong>{{ vit.temperature_c|default:"—" }}</strong> °C</span>
+                                        <span><span class="text-slate-500">Pulse:</span> <strong>{{ vit.pulse_bpm|default:"—" }}</strong> bpm</span>
+                                        <span><span class="text-slate-500">BP:</span> <strong>{% if vit.systolic_mmhg %}{{ vit.systolic_mmhg }}/{{ vit.diastolic_mmhg }}{% else %}—{% endif %}</strong></span>
+                                        <span><span class="text-slate-500">RR:</span> <strong>{{ vit.respiratory_rate|default:"—" }}</strong></span>
+                                        <span><span class="text-slate-500">SpO2:</span> <strong>{{ vit.spo2_percent|default:"—" }}</strong>%</span>
+                                        <span><span class="text-slate-500">Weight:</span> <strong>{{ vit.weight_kg|default:"—" }}</strong> kg</span>
+                                    </div>
+                                    {% if vit.notes %}
+                                        <p class="mt-1 text-slate-600 italic">— {{ vit.notes }}</p>
                                     {% endif %}
                                 </div>
                             {% empty %}
-                                <p class="italic text-slate-500">No images uploaded yet.</p>
+                                <p class="text-xs italic text-slate-500">No vitals recorded.</p>
                             {% endfor %}
                         </div>
-                    {% empty %}
-                        <p class="text-xs italic text-slate-500">No scans ordered.</p>
-                    {% endfor %}
-                {% endif %}
-                {% if show.lab %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Laboratory (released results only)</h3>
-                    {% for lo in v.lab_orders %}
-                        <div class="border border-slate-200 rounded p-2 text-xs space-y-2 print-section">
-                            <p>
-                                <strong>Laboratory order</strong> · ordered {{ lo.ordered_at|date:"Y-m-d H:i" }} · released {{ lo.released_at|date:"Y-m-d H:i" }}
-                                · verified by {{ lo.verified_by.user.get_full_name|default:lo.verified_by.user.username }}
-                            </p>
-                            <table class="w-full border-collapse">
-                                <thead>
-                                    <tr class="text-left border-b">
-                                        <th class="py-1">Test</th>
-                                        <th>Result</th>
-                                        <th>Reference</th>
-                                        <th>Flag</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for line in lo.lines.all %}
-                                        {% if line.status == "RELEASED" %}
-                                            <tr class="border-b align-top">
-                                                <td class="py-1">{{ line.test.name }}</td>
-                                                <td>
-                                                    {{ line.value_number|default:line.value_text|default:"—" }} {{ line.test.unit }}
-                                                    {% for a in line.amendments.all %}
-                                                        <div class="text-[10px] text-amber-800">
-                                                            Corrected {{ a.amended_at|date:"Y-m-d H:i" }} from {{ a.previous_number|default:a.previous_text }}
-                                                            to {{ a.new_number|default:a.new_text }}. Reason: {{ a.reason }}
-                                                        </div>
+                        <!-- Clinical Section: Clerkship & Consultation Notes -->
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-blue-900 border-b border-blue-200 pb-1">
+                                3. Clinical History (HPI), ROS &amp; Physician Consultation Notes
+                            </h3>
+                            {% for note in v.notes %}
+                                <div class="bg-blue-50/40 border border-blue-200 border-l-4 border-l-blue-600 rounded-md p-3 text-xs space-y-2">
+                                    <div class="flex justify-between items-center border-b border-blue-100 pb-1">
+                                        <span class="font-bold text-blue-950 uppercase text-[11px]">Consultation Note</span>
+                                        <span class="text-[11px] font-semibold text-blue-900 bg-blue-100/70 px-2 py-0.5 rounded">
+                                            {{ note.created_at|date:"Y-m-d H:i" }} · Dr. {{ note.author.user.get_full_name|default:note.author.user.username }}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-blue-800">History of Present Illness (HPI) &amp; Chief Complaint</p>
+                                        <p class="text-slate-800 mt-0.5 leading-relaxed">{{ note.presenting_complaint }}</p>
+                                    </div>
+                                    {% if note.examination %}
+                                        <div class="pt-1 border-t border-blue-100">
+                                            <p class="text-[10px] font-bold uppercase tracking-wide text-blue-800">Review of Systems (ROS) &amp; Physical Examination</p>
+                                            <p class="text-slate-800 mt-0.5 leading-relaxed whitespace-pre-line">{{ note.examination }}</p>
+                                        </div>
+                                    {% endif %}
+                                    <div class="bg-white border border-blue-200 rounded px-2.5 py-1.5">
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-blue-950">Working Diagnosis / Clinical Impression</p>
+                                        <p class="font-bold text-slate-900 mt-0.5">{{ note.diagnosis }}</p>
+                                    </div>
+                                    {% if note.plan %}
+                                        <div class="pt-1">
+                                            <p class="text-[10px] font-bold uppercase tracking-wide text-blue-800">Management &amp; Treatment Plan</p>
+                                            <p class="text-slate-800 mt-0.5 leading-relaxed whitespace-pre-line">{{ note.plan }}</p>
+                                        </div>
+                                    {% endif %}
+                                    {% for add in note.addenda.all %}
+                                        <div class="mt-1 pl-2 border-l-2 border-amber-400 text-slate-700 bg-amber-50/60 py-1 pr-2 rounded-r">
+                                            <strong class="text-amber-900">Addendum ({{ add.created_at|date:"Y-m-d H:i" }}):</strong> {{ add.text }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% empty %}
+                                <p class="text-xs italic text-slate-500">No clinical notes recorded.</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <!-- Pharmacy / Medication -->
+                    {% if show.pharmacy %}
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-violet-800 border-b border-violet-200 pb-1">
+                                5. Prescribed &amp; Dispensed Medications
+                            </h3>
+                            <div class="border border-violet-200 rounded-lg overflow-hidden">
+                                <table class="w-full text-xs border-collapse">
+                                    <thead>
+                                        <tr class="text-left bg-violet-100/80 text-violet-950 border-b border-violet-200">
+                                            <th class="py-1.5 px-2.5">Ordered</th>
+                                            <th class="py-1.5 px-2.5">Medicine</th>
+                                            <th class="py-1.5 px-2.5">Dose / route</th>
+                                            <th class="py-1.5 px-2.5">Status</th>
+                                            <th class="py-1.5 px-2.5">Given / dispensed</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-violet-100">
+                                        {% for o in v.orders %}
+                                            <tr class="align-top odd:bg-white even:bg-violet-50/30">
+                                                <td class="py-1.5 px-2.5 text-slate-600 whitespace-nowrap">{{ o.ordered_at|date:"Y-m-d H:i" }}</td>
+                                                <td class="py-1.5 px-2.5 font-semibold text-slate-900">
+                                                    {% if o.source == "EXTERNAL" %}
+                                                        {{ o.external_name }} {{ o.external_strength }}
+                                                        <span class="block text-[11px] font-normal italic text-amber-700">(external, not supplied by hospital)</span>
+                                                    {% else %}
+                                                        {{ o.medication.brand_name }} <span class="text-violet-800">{{ o.medication.strength }}</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-slate-700">{{ o.dose_text }} · {{ o.get_route_display }} · {{ o.frequency_text }}</td>
+                                                <td class="py-1.5 px-2.5">
+                                                    <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-100 text-violet-900">
+                                                        {{ o.get_status_display }}
+                                                    </span>
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-slate-700 space-y-0.5">
+                                                    {% for a in o.administrations.all %}
+                                                        <div><span class="text-emerald-700 font-semibold">Given</span> {{ a.administered_at|date:"Y-m-d H:i" }} · {{ a.dose_given_text }} · by {{ a.administered_by.user.get_full_name|default:a.administered_by.user.username }}</div>
+                                                    {% endfor %}
+                                                    {% for d in o.dispensations.all %}
+                                                        <div><span class="text-teal-700 font-semibold">Dispensed</span> {{ d.dispensed_at|date:"Y-m-d H:i" }} · qty {{ d.quantity }} · by {{ d.dispensed_by.user.get_full_name|default:d.dispensed_by.user.username }}</div>
                                                     {% endfor %}
                                                 </td>
-                                                <td class="text-slate-600">
-                                                    {% if line.test.result_type == "NUMERIC" %}{{ line.test.reference_low|default:"" }} – {{ line.test.reference_high|default:"" }}{% else %}{{ line.test.reference_text|default:"—" }}{% endif %}
-                                                </td>
-                                                <td class="font-bold">{{ line.get_flag_display|default:"—" }}</td>
                                             </tr>
-                                        {% endif %}
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                            <p><strong>Report:</strong> {{ lo.report|default:"—" }}</p>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="5"
+                                                    class="italic text-slate-500 py-2 px-2.5">No medication orders.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    {% empty %}
-                        <p class="text-xs italic text-slate-500">No released laboratory results.</p>
-                    {% endfor %}
-                {% endif %}
-                {% if show.finance %}
-                    <h3 class="font-bold text-xs uppercase text-slate-500 mt-2">Charges and payments</h3>
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="text-left border-b">
-                                <th class="py-1">Date</th>
-                                <th>Item</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for c in v.charges %}
-                                <tr class="border-b">
-                                    <td class="py-1">{{ c.created_at|date:"Y-m-d" }}</td>
-                                    <td>{{ c.description }}</td>
-                                    <td>{{ c.amount|floatformat:2 }}</td>
-                                    <td>{{ c.get_status_display }}</td>
-                                </tr>
+                    {% endif %}
+                    <!-- Radiology -->
+                    {% if show.radiology %}
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-cyan-800 border-b border-cyan-200 pb-1">
+                                4A. Diagnostic Imaging &amp; Radiology Reports
+                            </h3>
+                            {% for scan in v.scans %}
+                                <div class="bg-cyan-50/40 border border-cyan-200 border-l-4 border-l-cyan-600 rounded-md p-3 text-xs space-y-2">
+                                    <div class="flex flex-wrap justify-between items-center gap-2">
+                                        <p class="font-bold text-cyan-950">
+                                            {{ scan.modality }} · {{ scan.body_part }}
+                                            <span class="font-normal text-slate-600 ml-1">· ordered {{ scan.ordered_at|date:"Y-m-d H:i" }}</span>
+                                        </p>
+                                        <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-100 text-cyan-900">
+                                            {{ scan.get_status_display }}
+                                        </span>
+                                    </div>
+                                    <p><strong class="text-slate-900">Indication:</strong> {{ scan.clinical_indication }}</p>
+                                    {% for study in scan.studies.all %}
+                                        <div class="bg-white border border-cyan-100 rounded p-2.5 space-y-1.5">
+                                            <p>
+                                                <strong class="text-cyan-900">Report</strong>
+                                                <span class="text-slate-500">({{ study.reported_at|date:"Y-m-d H:i"|default:"not yet reported" }}{% if study.reported_by %}, {{ study.reported_by.user.get_full_name|default:study.reported_by.user.username }}{% endif %})</span>:
+                                                {{ study.report|default:"—" }}
+                                            </p>
+                                            {% if study.file %}
+                                                {% if study.is_image %}
+                                                    <img class="scan"
+                                                         src="{% url 'radiology:study_file' study.id %}"
+                                                         alt="{{ scan.modality }} {{ scan.body_part }}" />
+                                                {% else %}
+                                                    <p class="no-print">
+                                                        <a href="{% url 'radiology:study_file' study.id %}"
+                                                           class="inline-flex items-center gap-1 text-cyan-700 font-semibold hover:underline">
+                                                            Open attached file →
+                                                        </a>
+                                                    </p>
+                                                    <p class="hidden print:block text-slate-500">Non-image file attached (DICOM or PDF). Available in the system.</p>
+                                                {% endif %}
+                                                <p class="text-slate-400 text-[10px]">SHA-256 {{ study.file_sha256|default:"not recorded" }} · uploaded {{ study.uploaded_at|date:"Y-m-d H:i" }}</p>
+                                            {% endif %}
+                                        </div>
+                                    {% empty %}
+                                        <p class="italic text-slate-500">No images uploaded yet.</p>
+                                    {% endfor %}
+                                </div>
                             {% empty %}
-                                <tr>
-                                    <td colspan="4" class="italic text-slate-500 py-1">No charges.</td>
-                                </tr>
+                                <p class="text-xs italic text-slate-500">No scans ordered.</p>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                    {% for p in v.payments %}
-                        <p class="text-xs">
-                            Payment {{ p.receipt_number }} · {{ p.recorded_at|date:"Y-m-d H:i" }} · KES {{ p.amount|floatformat:2 }} · {{ p.get_method_display }}
-                            {% if p.reference %}· ref {{ p.reference }}{% endif %}
-                            · paid by {{ p.payer_display }}
-                            · taken by {{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}
-                        </p>
-                    {% endfor %}
-                    {% for r in v.refunds %}
-                        <p class="text-xs">
-                            Refund KES {{ r.amount|floatformat:2 }} · requested {{ r.requested_at|date:"Y-m-d" }} · {{ r.reason }} · {{ r.get_status_display }}
-                            {% if r.status == "PAID" %}· paid {{ r.paid_at|date:"Y-m-d H:i" }} by {{ r.paid_by.user.get_full_name|default:r.paid_by.user.username }}{% endif %}
-                        </p>
-                    {% endfor %}
-                    <p class="text-xs font-bold">Visit balance: KES {{ v.tally.outstanding|floatformat:2 }}</p>
-                {% endif %}
-            </section>
-        {% endwith %}
-    {% empty %}
-        <p class="italic text-slate-500">No visits recorded for this patient.</p>
-    {% endfor %}
-    <footer class="border-t pt-2 text-[10px] text-slate-500 print-section">
-        Confidential. This printout reflects the record at the time shown above. Access is logged.
-    </footer>
-</div>
+                        </div>
+                    {% endif %}
+                    <!-- Laboratory -->
+                    {% if show.lab %}
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-amber-800 border-b border-amber-200 pb-1">
+                                4B. Laboratory Investigations (Released Results)
+                            </h3>
+                            {% for lo in v.lab_orders %}
+                                <div class="bg-amber-50/30 border border-amber-200 border-l-4 border-l-amber-500 rounded-md p-3 text-xs space-y-2 print-section">
+                                    <p class="text-slate-700">
+                                        <strong class="text-amber-950">Laboratory order</strong> · ordered {{ lo.ordered_at|date:"Y-m-d H:i" }} · released {{ lo.released_at|date:"Y-m-d H:i" }}
+                                        · verified by <span class="font-medium text-slate-900">{{ lo.verified_by.user.get_full_name|default:lo.verified_by.user.username }}</span>
+                                    </p>
+                                    <div class="border border-amber-200 rounded overflow-hidden bg-white">
+                                        <table class="w-full border-collapse">
+                                            <thead>
+                                                <tr class="text-left bg-amber-100/80 text-amber-950 border-b border-amber-200">
+                                                    <th class="py-1.5 px-2.5">Test</th>
+                                                    <th class="py-1.5 px-2.5">Result</th>
+                                                    <th class="py-1.5 px-2.5">Reference</th>
+                                                    <th class="py-1.5 px-2.5">Flag</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-amber-100">
+                                                {% for line in lo.lines.all %}
+                                                    {% if line.status == "RELEASED" %}
+                                                        <tr class="align-top odd:bg-white even:bg-amber-50/20">
+                                                            <td class="py-1.5 px-2.5 font-medium text-slate-900">{{ line.test.name }}</td>
+                                                            <td class="py-1.5 px-2.5 font-semibold text-slate-900">
+                                                                {{ line.value_number|default:line.value_text|default:"—" }} <span class="font-normal text-slate-600">{{ line.test.unit }}</span>
+                                                                {% for a in line.amendments.all %}
+                                                                    <div class="mt-1 text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">
+                                                                        Corrected {{ a.amended_at|date:"Y-m-d H:i" }} from {{ a.previous_number|default:a.previous_text }}
+                                                                        to {{ a.new_number|default:a.new_text }}. Reason: {{ a.reason }}
+                                                                    </div>
+                                                                {% endfor %}
+                                                            </td>
+                                                            <td class="py-1.5 px-2.5 text-slate-600">
+                                                                {% if line.test.result_type == "NUMERIC" %}
+                                                                    {{ line.test.reference_low|default:"" }} – {{ line.test.reference_high|default:"" }}
+                                                                {% else %}
+                                                                    {{ line.test.reference_text|default:"—" }}
+                                                                {% endif %}
+                                                            </td>
+                                                            <td class="py-1.5 px-2.5 font-bold">
+                                                                {% if line.flag %}
+                                                                    <span class="inline-block px-2 py-0.5 rounded text-[11px] bg-rose-100 text-rose-800">{{ line.get_flag_display }}</span>
+                                                                {% else %}
+                                                                    <span class="text-slate-400 font-normal">—</span>
+                                                                {% endif %}
+                                                            </td>
+                                                        </tr>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p class="bg-white border border-amber-100 rounded px-2.5 py-1.5">
+                                        <strong class="text-amber-950">Report:</strong> {{ lo.report|default:"—" }}
+                                    </p>
+                                </div>
+                            {% empty %}
+                                <p class="text-xs italic text-slate-500">No released laboratory results.</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <!-- Finance / Charges -->
+                    {% if show.finance %}
+                        <div class="space-y-2">
+                            <h3 class="font-bold text-xs uppercase tracking-wider text-emerald-800 border-b border-emerald-200 pb-1">
+                                6. Charges and Payments
+                            </h3>
+                            <div class="border border-emerald-200 rounded-lg overflow-hidden">
+                                <table class="w-full text-xs border-collapse">
+                                    <thead>
+                                        <tr class="text-left bg-emerald-100/80 text-emerald-950 border-b border-emerald-200">
+                                            <th class="py-1.5 px-2.5">Date</th>
+                                            <th class="py-1.5 px-2.5">Item</th>
+                                            <th class="py-1.5 px-2.5">Amount</th>
+                                            <th class="py-1.5 px-2.5">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-emerald-100">
+                                        {% for c in v.charges %}
+                                            <tr class="odd:bg-white even:bg-emerald-50/20">
+                                                <td class="py-1.5 px-2.5 text-slate-600">{{ c.created_at|date:"Y-m-d" }}</td>
+                                                <td class="py-1.5 px-2.5 text-slate-900 font-medium">{{ c.description }}</td>
+                                                <td class="py-1.5 px-2.5 font-semibold text-slate-900">{{ c.amount|floatformat:2 }}</td>
+                                                <td class="py-1.5 px-2.5">
+                                                    <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-900">
+                                                        {{ c.get_status_display }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="4"
+                                                    class="italic text-slate-500 py-2 px-2.5">No charges.</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="space-y-1">
+                                {% for p in v.payments %}
+                                    <p class="text-xs bg-emerald-50/70 border border-emerald-200 rounded px-2.5 py-1.5 text-emerald-950">
+                                        <strong class="text-emerald-800">Payment {{ p.receipt_number }}</strong> · {{ p.recorded_at|date:"Y-m-d H:i" }} ·
+                                        <strong>KES {{ p.amount|floatformat:2 }}</strong> · {{ p.get_method_display }}
+                                        {% if p.reference %}· ref {{ p.reference }}{% endif %}
+                                        · paid by {{ p.payer_display }}
+                                        · taken by {{ p.recorded_by.user.get_full_name|default:p.recorded_by.user.username }}
+                                    </p>
+                                {% endfor %}
+                                {% for r in v.refunds %}
+                                    <p class="text-xs bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 text-amber-950">
+                                        <strong class="text-amber-800">Refund KES {{ r.amount|floatformat:2 }}</strong> · requested {{ r.requested_at|date:"Y-m-d" }} ·
+                                        {{ r.reason }} · {{ r.get_status_display }}
+                                        {% if r.status == "PAID" %}· paid {{ r.paid_at|date:"Y-m-d H:i" }} by {{ r.paid_by.user.get_full_name|default:r.paid_by.user.username }}{% endif %}
+                                    </p>
+                                {% endfor %}
+                            </div>
+                            <div class="flex justify-end">
+                                <p class="text-xs font-bold bg-slate-800 text-white px-3 py-1.5 rounded-md">
+                                    Visit balance: <span class="text-emerald-300 ml-1">KES {{ v.tally.outstanding|floatformat:2 }}</span>
+                                </p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </section>
+            {% endwith %}
+        {% empty %}
+            <p class="italic text-slate-500">No visits recorded for this patient.</p>
+        {% endfor %}
+        <!-- Footer -->
+        <footer class="border-t-2 border-teal-800/20 pt-3 text-[11px] text-slate-500 flex justify-between items-center print-section">
+            <span><strong class="text-teal-800">CONFIDENTIAL:</strong> This printout reflects the record at the time shown above. Access is logged.</span>
+        </footer>
+    </div>
 {% endblock %}
