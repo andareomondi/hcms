@@ -5,5 +5,6 @@ __pycache__/
 *.pyc
 media/
 private_exports/
+data_backups/
 staticfiles/
 *.sqlite3

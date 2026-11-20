@@ -30,6 +30,10 @@ def env_bool(name, default=False):
     return os.environ.get(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
+def env_int(name, default=0):
+    return int(os.environ.get(name, str(default)).strip())
+
+
 def env_list(name):
     return [v.strip() for v in os.environ.get(name, "").split(",") if v.strip()]
 
@@ -43,6 +47,16 @@ ALLOW_STAFF_REGISTRATION = env_bool("ALLOW_STAFF_REGISTRATION", default=False)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", default=False)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", default=False)
+
+# HTTPS & HSTS (configure via environment variables)
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
+SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False)
+SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
 
 # Using named urls for login/logout redirects instead of hardcoded paths.
 LOGIN_URL = "login"
@@ -64,6 +78,8 @@ INSTALLED_APPS = [
     "simple_history",
     "django_otp",
     "django_otp.plugins.otp_totp",
+    "dbbackup",
+    "django_apscheduler",
 
     # HCMS Modular Monolith Apps
     "core_patients",
@@ -124,8 +140,8 @@ DATABASES = {
         "NAME": env_required("DB_NAME"),
         "USER": env_required("DB_USER"),
         "PASSWORD": env_required("DB_PASSWORD"),
-        "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+        "HOST": env_required("DB_HOST"),
+        "PORT": env_required("DB_PORT"),
     }
 }
 
@@ -152,12 +168,20 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+DBBACKUP_HOSTNAME = "hospital_cms"
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {
+            'location': BASE_DIR / 'data_backups',
+        },
     },
 }
 
