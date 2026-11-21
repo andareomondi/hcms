@@ -62,3 +62,53 @@ class PermissionMatrixTests(TestCase):
         from django.contrib.auth import get_user_model
         bare = get_user_model().objects.create_user(username="bare", password="x-test-password-123")
         self.assertEqual(caps_for(bare), set())
+
+
+class LogoutRuleTests(TestCase):
+    """Logout is refused while a doctor still owns patients; it succeeds otherwise."""
+
+    def setUp(self):
+        from core_patients.models import Department
+        from duty import services as duty
+        from duty.models import Room
+        from hospital_system.testing import make_encounter, make_patient
+        from triage_queue.models import QueueEntry
+        self.doc = make_staff("DOCTOR")
+        self.reception = make_staff("RECEPTION")
+        dept = Department.objects.create(name="Clinic", code="CLN", kind="CLINICAL")
+        self.room = Room.objects.create(department=dept, code="RL", name="Room L")
+        duty.clock_in(self.doc, self.room)
+        self.patient = make_patient(self.reception)
+        self.encounter = make_encounter(self.patient, self.reception)
+        self.QueueEntry = QueueEntry
+        self.client.force_login(self.doc.user)
+
+    def test_logout_is_refused_while_a_patient_is_assigned(self):
+        self.QueueEntry.objects.create(encounter=self.encounter, assigned_doctor=self.doc,
+                                       status="WAITING", priority=1)
+        response = self.client.post("/accounts/logout/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)  # still signed in
+        from duty import services as duty
+        self.assertIsNotNone(duty.current_session(self.doc))  # still on duty, not silently clocked out
+
+    def test_logout_succeeds_and_clocks_out_when_nothing_is_open(self):
+        from duty import services as duty
+        response = self.client.post("/accounts/logout/")
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertIsNone(duty.current_session(self.doc))
+
+    def test_logout_is_refused_for_an_open_ward_stay_the_doctor_admitted(self):
+        from wards.models import Admission, Bed, Ward
+        from core_patients.models import Department
+        from django.utils import timezone
+        from hospital_system.testing import make_encounter
+        dept2 = Department.objects.create(name="Med", code="MED", kind="WARD")
+        ward = Ward.objects.create(name="A", department=dept2, bed_day_rate=100)
+        bed = Bed.objects.create(ward=ward, code="A1", status="OCCUPIED")
+        stay = make_encounter(self.patient, self.reception, encounter_type="WARD_STAY")
+        Admission.objects.create(patient=self.patient, encounter=stay, bed=bed,
+                                 admitted_at=timezone.now(), admitted_by=self.doc,
+                                 planned_days=1, reason="x" * 100)
+        self.client.post("/accounts/logout/")
+        self.assertIn("_auth_user_id", self.client.session)

@@ -3,7 +3,6 @@ Visit rules: one open visit per patient, triage before consultation, emergencies
 treated before payment only with a reason, the visit waits for fees, and a
 consultation cannot close while an investigation is outstanding.
 """
-import unittest
 from decimal import Decimal
 
 from django.test import TestCase
@@ -17,6 +16,17 @@ from triage_queue.services import FlowError
 
 VITALS = dict(systolic_mmhg=120, diastolic_mmhg=80, pulse_bpm=80, temperature_c=36.8,
               respiratory_rate=16, spo2_percent=98, weight_kg=60)
+
+
+def clock_in_doctor(doctor):
+    from core_patients.models import Department
+    from duty.models import Room
+    from duty import services as duty
+    dept, _ = Department.objects.get_or_create(code="CLN", defaults={"name": "Clinic", "kind": "CLINICAL"})
+    import uuid
+    # Room.code is max 20 chars; a UUID pk would overflow it on PostgreSQL.
+    room = Room.objects.create(department=dept, code=f"R{uuid.uuid4().hex[:8]}", name="Room")
+    duty.clock_in(doctor, room)
 
 
 class VisitOpeningTests(TestCase):
@@ -58,6 +68,7 @@ class TriageAndFeeGateTests(TestCase):
         self.reception = make_staff("RECEPTION")
         self.triage_nurse = make_staff("TRIAGE_NURSE")
         self.doctor = make_staff("DOCTOR")
+        clock_in_doctor(self.doctor)
         self.billing = make_staff("BILLING")
         self.patient = make_patient(self.reception)
         self.encounter = intake.open_visit(patient=self.patient, encounter_type="OUTPATIENT",
@@ -102,11 +113,26 @@ class TriageAndFeeGateTests(TestCase):
         with self.assertRaises(FlowError):
             self.triage()
 
-    @unittest.expectedFailure  # GAP: the service checks only that a doctor was given, not that
-    # they are a doctor or clocked in. The web form may filter this; the service does not.
-    def test_triage_needs_an_on_duty_or_valid_doctor(self):
-        not_a_doctor = make_staff("RECEPTION")
+    def test_a_non_doctor_cannot_be_assigned_as_the_consulting_doctor(self):
+        receptionist = make_staff("RECEPTION")
         from triage_queue.intake import triage_encounter
         with self.assertRaises(FlowError):
-            triage_encounter(encounter=self.encounter, staff=self.triage_nurse, doctor=not_a_doctor,
+            triage_encounter(encounter=self.encounter, staff=self.triage_nurse, doctor=receptionist,
+                             priority=1, vitals=VITALS, chief_complaint="Cough")
+
+    def test_a_doctor_who_is_not_clocked_in_cannot_be_assigned(self):
+        off_duty = make_staff("DOCTOR")
+        from triage_queue.intake import triage_encounter
+        with self.assertRaises(FlowError):
+            triage_encounter(encounter=self.encounter, staff=self.triage_nurse, doctor=off_duty,
+                             priority=1, vitals=VITALS, chief_complaint="Cough")
+
+    def test_an_inactive_doctor_cannot_be_assigned(self):
+        inactive = make_staff("DOCTOR")
+        clock_in_doctor(inactive)
+        inactive.is_active = False
+        inactive.save()
+        from triage_queue.intake import triage_encounter
+        with self.assertRaises(FlowError):
+            triage_encounter(encounter=self.encounter, staff=self.triage_nurse, doctor=inactive,
                              priority=1, vitals=VITALS, chief_complaint="Cough")

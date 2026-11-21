@@ -103,8 +103,12 @@ def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_compla
         raise FlowError("This patient has already been triaged.")
     if priority not in PRIORITIES:
         raise FlowError("Choose a valid priority.")
-    if doctor is None:
-        raise FlowError("Choose a doctor who is on duty.")
+    from duty.commitments import require_on_duty_doctor
+    from duty.services import DutyError
+    try:
+        require_on_duty_doctor(doctor)
+    except DutyError as exc:
+        raise FlowError(str(exc))
 
     emergency = priority == 3 or enc.encounter_type == "EMERGENCY"
     bypass_reason = (bypass_reason or "").strip()

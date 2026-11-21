@@ -69,17 +69,12 @@ def clock_out(staff):
     if session is None:
         raise DutyError("You are not clocked in.")
 
-    # Only check for open patient assignments if the staff member is a doctor
-    if staff.role == "DOCTOR":
-        open_patients = QueueEntry.objects.filter(
-            assigned_doctor=staff,
-            status__in=["WAITING", "IN_CONSULTATION"],
-        ).count()
-        if open_patients:
-            raise DutyError(
-                f"You still have {open_patients} patient(s) assigned. "
-                "Ask reception to reassign them before clocking out."
-            )
+    from duty.commitments import open_commitments
+    blockers = open_commitments(staff)
+    if blockers:
+        raise DutyError(
+            "You cannot clock out yet: " + "; ".join(blockers) +
+            ". Hand them over before clocking out.")
 
     session.clocked_out_at = timezone.now()
     session.save(update_fields=["clocked_out_at"])

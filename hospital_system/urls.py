@@ -1,29 +1,37 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib import messages
 from django.contrib.auth import views as auth_views
+from django.shortcuts import redirect
 from django.urls import include, path
 
 from dashboard.audit_actions import AuditAction
 from dashboard.utils import log_action
+from duty.commitments import open_commitments
 from duty.services import clock_out, current_session
 from hospital_system.views_pwa import service_worker
 
 
 class CustomLogoutView(auth_views.LogoutView):
-    """Automatically clocks out the staff member on logout, logs the audit action, and clears the session."""
-    def dispatch(self, request, *args, **kwargs):
+    """
+    Logs a staff member out and clocks them out automatically, but only when they have
+    no open commitments. A doctor with assigned patients or open ward stays stays signed
+    in and is told what to hand over. Nothing is swallowed silently.
+    """
+    def post(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             profile = getattr(request, "staff_profile", None)
+            blockers = open_commitments(profile)
+            if blockers:
+                messages.error(request, "You cannot log out yet: " + "; ".join(blockers) +
+                               ". Hand them over first.")
+                return redirect(request.META.get("HTTP_REFERER") or "/")
             if profile and current_session(profile):
-                try:
-                    clock_out(profile)
-                    # Log the automatic clock-out action using the system's auditing utility
-                    log_action(request, AuditAction.DUTY_CLOCKED_OUT, f"{profile} clocked out automatically on logout.")
-                except Exception:
-                    # Fallback to ensure logout always succeeds even if a validation rule blocks it
-                    pass
-        return super().dispatch(request, *args, **kwargs)
+                clock_out(profile)
+                log_action(request, AuditAction.DUTY_CLOCKED_OUT,
+                           f"{profile} clocked out automatically on logout.")
+        return super().post(request, *args, **kwargs)
 
 
 urlpatterns = [
