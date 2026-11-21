@@ -1,0 +1,50 @@
+{% extends "base.html" %} {% block title %}Labour board - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap justify-between items-end gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Labour board</h1>
+            <p class="text-sm text-slate-500">Women currently in labour, with their bed and time since arrival.</p>
+        </div>
+        <a href="{% url 'maternity:index' %}" class="text-xs font-bold text-teal-700 hover:underline">Maternity home →</a>
+    </div>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Patient</th>
+                    <th class="p-3">Labour bed</th>
+                    <th class="p-3">Arrived</th>
+                    <th class="p-3">Time in labour</th>
+                    <th class="p-3">Status</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for stay in stays %}
+                    <tr>
+                        <td class="p-3 font-semibold">{{ stay.patient.last_name }}, {{ stay.patient.first_name }}</td>
+                        <td class="p-3 font-mono text-xs">{{ stay.labour_bed.code }}</td>
+                        <td class="p-3 text-xs">{{ stay.arrived_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3 text-xs">{{ stay.arrived_at|timesince }}</td>
+                        <td class="p-3 text-xs">
+                            {% if stay.delivered_before_arrival %}
+                                <span class="bg-amber-100 px-2 py-0.5 rounded">Delivered before arrival</span>
+                            {% else %}
+                                In labour
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-right">
+                            <a href="{% url 'maternity:labour_record' stay.id %}"
+                               class="min-h-10 inline-flex items-center px-4 rounded-xl bg-slate-900 text-white text-xs font-bold">Open</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="p-6 text-center text-slate-500 italic">No women in labour right now.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

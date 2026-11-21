@@ -65,6 +65,8 @@ class Patient(models.Model):
     id_type = models.CharField(max_length=20, choices=ID_TYPES, default="NONE")
     id_number = models.CharField(max_length=50, null=True, blank=True)
     is_provisional = models.BooleanField(default=False)
+    is_temporary_name = models.BooleanField(default=False, db_index=True,
+        help_text="Name is a placeholder until corrected with a second confirmation.")
     provisional_label = models.CharField(max_length=120, blank=True)
     merged_into = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="merged_from")
     phone = models.CharField(max_length=50, blank=True)

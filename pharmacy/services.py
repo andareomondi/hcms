@@ -119,6 +119,8 @@ def is_prepaid(order):
         return False
     if charge.encounter.encounter_type == "WARD_STAY":
         return True   # ward medicine is settled at discharge
+    if charge.encounter.encounter_type == "MATERNITY":
+        return True   # maternity medicines are paid after the stay and never block care
     return billing.charge_fully_paid(charge)
 
 

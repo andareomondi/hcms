@@ -1,0 +1,151 @@
+{% extends "base.html" %} {% block title %}Record birth - HCMS{% endblock %} {% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div>
+        <a href="{% url 'maternity:labour_record' stay.id %}" class="text-xs text-slate-500 hover:underline">← Labour record</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Record birth</h1>
+        <p class="text-sm text-slate-600">Mother: <strong>{{ patient.last_name }}, {{ patient.first_name }}</strong> · bed {{ stay.labour_bed.code }}</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <section class="bg-white rounded-2xl border p-5 space-y-4">
+            <p class="font-bold text-sm">Delivery</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Date and time of birth *</label>
+                    <input type="datetime-local" name="delivered_at" required value="{{ now_local }}"
+                           class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Delivery type *</label>
+                    <select name="delivery_type" required class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                        {% for code, label in delivery_types %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Complications</label>
+                <textarea name="complications" rows="2" class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+            </div>
+        </section>
+
+        <section class="space-y-4">
+            <div class="flex justify-between items-center">
+                <p class="font-bold text-sm">Babies</p>
+                <button type="button" id="add-baby"
+                        class="min-h-10 px-4 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-bold">+ Add another baby</button>
+            </div>
+            <div id="babies" class="space-y-4"></div>
+            <p class="text-xs text-slate-500">Twins or triplets: add one block per baby. Each baby gets their own record. Leave a first name blank to register a temporary name.</p>
+        </section>
+
+        <section class="bg-white rounded-2xl border p-5 space-y-4">
+            <p class="font-bold text-sm">Father (only with his consent)</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Father's first name</label>
+                    <input type="text" name="father_first_name" class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Father's last name</label>
+                    <input type="text" name="father_last_name" class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+                </div>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="father_consents" value="on" class="w-5 h-5" />
+                The father consents to his details being recorded and used for the baby's surname.
+            </label>
+        </section>
+
+        <button class="min-h-11 w-full rounded-xl bg-slate-900 text-white text-sm font-bold">Record birth</button>
+    </form>
+</div>
+
+<template id="baby-template">
+    <div class="baby-block bg-white rounded-2xl border p-5 space-y-4">
+        <div class="flex justify-between items-center">
+            <p class="font-bold text-sm baby-title">Baby</p>
+            <button type="button" class="remove-baby text-xs font-bold text-red-700">Remove</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Sex *</label>
+                <select name="baby_sex" required class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                    {% for code, label in sexes %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">First name</label>
+                <input type="text" name="baby_first_name" placeholder="Blank = temporary" class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Last name</label>
+                <input type="text" name="baby_last_name" placeholder="Suggested automatically" class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+            </div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Birth weight (g)</label>
+                <input type="number" name="birth_weight_g" min="200" max="8000" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Length (cm)</label>
+                <input type="number" step="0.1" name="birth_length_cm" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Head circumference (cm)</label>
+                <input type="number" step="0.1" name="head_circumference_cm" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">APGAR 1 min</label>
+                <input type="number" name="apgar_1" min="0" max="10" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">APGAR 5 min</label>
+                <input type="number" name="apgar_5" min="0" max="10" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Gestation (weeks)</label>
+                <input type="number" name="gestation_weeks" min="20" max="45" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+        </div>
+        <p class="text-xs font-bold uppercase text-slate-500">Vitals at birth</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div><label class="block text-xs text-slate-600 mb-1">Heart rate (bpm)</label>
+                <input type="number" name="heart_rate_bpm" min="40" max="250" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs text-slate-600 mb-1">Respiratory rate</label>
+                <input type="number" name="respiratory_rate" min="10" max="120" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs text-slate-600 mb-1">Temperature (°C)</label>
+                <input type="number" step="0.1" name="temperature_c" min="30" max="43" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs text-slate-600 mb-1">Oxygen saturation (%)</label>
+                <input type="number" name="spo2_percent" min="50" max="100" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs text-slate-600 mb-1">Systolic BP</label>
+                <input type="number" name="bp_systolic" min="30" max="200" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+            <div><label class="block text-xs text-slate-600 mb-1">Diastolic BP</label>
+                <input type="number" name="bp_diastolic" min="15" max="150" class="w-full min-h-11 border rounded-xl px-3 text-sm" /></div>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Notes</label>
+            <textarea name="notes" rows="2" class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+        </div>
+    </div>
+</template>
+
+<script>
+(function () {
+    var container = document.getElementById("babies");
+    var template = document.getElementById("baby-template");
+
+    function renumber() {
+        var blocks = container.querySelectorAll(".baby-block");
+        blocks.forEach(function (block, i) {
+            block.querySelector(".baby-title").textContent = blocks.length > 1 ? "Baby " + (i + 1) : "Baby";
+            var remove = block.querySelector(".remove-baby");
+            remove.style.display = blocks.length > 1 ? "" : "none";
+        });
+    }
+
+    function addBaby() {
+        container.appendChild(template.content.cloneNode(true));
+        renumber();
+    }
+
+    container.addEventListener("click", function (event) {
+        if (event.target.classList.contains("remove-baby")) {
+            event.target.closest(".baby-block").remove();
+            renumber();
+        }
+    });
+
+    document.getElementById("add-baby").addEventListener("click", addBaby);
+    addBaby();
+})();
+</script>
+{% endblock %}

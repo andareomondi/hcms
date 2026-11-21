@@ -1,0 +1,40 @@
+{% extends "base.html" %} {% block title %}Children with temporary names - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <a href="{% url 'maternity:index' %}" class="text-xs text-slate-500 hover:underline">← Maternity</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Children with temporary names</h1>
+        <p class="text-sm text-slate-500">These children have a placeholder name. A correction needs a second person (a doctor or system admin) to confirm it.</p>
+    </div>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Child</th>
+                    <th class="p-3">Mother</th>
+                    <th class="p-3">Born</th>
+                    <th class="p-3">Sex</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for child in children %}
+                    <tr>
+                        <td class="p-3">
+                            <a href="{% url 'maternity:child' child.pk %}" class="font-semibold text-teal-700">{{ child.first_name|default:"(no first name)" }} {{ child.last_name }}</a>
+                            <span class="text-xs bg-amber-100 px-1 rounded">TEMPORARY</span>
+                        </td>
+                        <td class="p-3">{{ child.birth_record.mother_encounter.patient }}</td>
+                        <td class="p-3 text-xs">{{ child.birth_record.delivered_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-3">{{ child.get_sex_display }}</td>
+                        <td class="p-3 text-right">
+                            <a href="{% url 'maternity:name_correction_request' child.pk %}" class="text-xs font-bold text-teal-700">Correct name →</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5" class="p-6 text-center text-slate-500 italic">No children with temporary names.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

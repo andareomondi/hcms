@@ -3,7 +3,6 @@ Ward rules: only a doctor admits, from a consultation, with a real reason and a 
 Discharge is requested by ward staff, approved by a doctor, needs a second confirmation
 from the admitting doctor, and is blocked while money is owed.
 """
-import unittest
 from decimal import Decimal
 
 from django.test import TestCase
@@ -110,9 +109,6 @@ class DischargeTests(WardBase):
         with self.assertRaises(wards.FlowError):
             wards.approve_discharge(admission=self.adm, doctor=self.doctor2)
 
-    @unittest.expectedFailure  # BUG: approve_discharge is @transaction.atomic, so the token
-    # saved before DischargeConfirmationRequired is raised is rolled back. The second
-    # confirmation can never match. See the report.
     def test_admitting_doctor_must_confirm_twice(self):
         wards.request_discharge(admission=self.adm, staff=self.nurse)
         self.adm.refresh_from_db()

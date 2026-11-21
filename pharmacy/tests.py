@@ -161,3 +161,25 @@ class WriteOffTests(PharmacyBase):
     def test_write_off_of_unknown_serial_is_refused(self):
         with self.assertRaises(ph.PharmacyError):
             ph.write_off(serial="NOPE", reason="Damaged", staff=self.pharmacist)
+
+
+class MaternityMedicineTests(PharmacyBase):
+    """Maternity medicines are paid after the stay and never block release."""
+
+    def test_unpaid_maternity_medicine_is_released(self):
+        from hospital_system.testing import make_encounter as _enc
+        self.stock(serials=("SN-1",), per_unit=10)
+        labour = _enc(self.patient, self.reception, encounter_type="MATERNITY")
+        ph.create_formulary_order(
+            encounter=labour, medication=self.med, doctor=self.doctor, route="ORAL",
+            frequency="TDS", dose_text="1 capsule", days=3, doses_total=2, override="",
+            staff=self.doctor)
+        order = labour.medication_orders.get()
+        ph.check_prepaid(order)  # must not raise: the bill is paid later
+
+    def test_unpaid_ordinary_medicine_is_still_blocked(self):
+        self.stock(serials=("SN-1",), per_unit=10)
+        self.prescribe(doses=2)
+        order = self.encounter.medication_orders.get()
+        with self.assertRaises(ph.PrepayError):
+            ph.check_prepaid(order)

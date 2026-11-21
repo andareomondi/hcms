@@ -2,7 +2,6 @@
 Patient record rules: allergy recording and status changes, consent (including
 emergency consent and withdrawal), merging duplicate records, and duplicate search.
 """
-import unittest
 import uuid
 from decimal import Decimal
 
@@ -85,15 +84,26 @@ class MergeTests(TestCase):
             merge_patients(survivor=self.survivor, duplicate=self.survivor,
                            reason="Duplicate", staff=self.reception)
 
+    def test_merge_points_the_duplicate_at_the_survivor_when_survivor_sorts_first(self):
+        # The other ordering must also keep the roles.
+        self.survivor.pk = uuid.UUID("00000000-0000-0000-0000-000000000001")
+        self.survivor.save()
+        self.duplicate.pk = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+        self.duplicate.save()
+        merge_patients(survivor=self.survivor, duplicate=self.duplicate,
+                       reason="Same patient registered twice", staff=self.reception)
+        self.duplicate.refresh_from_db()
+        self.survivor.refresh_from_db()
+        self.assertEqual(self.duplicate.merged_into, self.survivor)
+        self.assertIsNone(self.survivor.merged_into)
+
     def test_merge_needs_a_reason(self):
         with self.assertRaises(MergeError):
             merge_patients(survivor=self.survivor, duplicate=self.duplicate,
                            reason="", staff=self.reception)
 
-    @unittest.expectedFailure  # BUG: _lock_pair sorts by pk and the caller swaps the roles.
     def test_merge_points_the_duplicate_at_the_survivor(self):
-        # Fixed IDs so the survivor sorts after the duplicate, the ordering that exposes
-        # the swap in _lock_pair (see report).
+        # Survivor's ID sorts AFTER the duplicate's: the ordering that used to swap the roles.
         self.survivor.pk = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
         self.survivor.save()
         self.duplicate.pk = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -104,7 +114,6 @@ class MergeTests(TestCase):
         self.assertEqual(self.duplicate.merged_into, self.survivor)
 
     def test_already_merged_record_cannot_be_merged_again(self):
-        # Survivor sorts first so the first merge is not affected by the ordering bug.
         self.survivor.pk = uuid.UUID("00000000-0000-0000-0000-000000000001")
         self.survivor.save()
         self.duplicate.pk = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")

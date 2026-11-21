@@ -21,9 +21,13 @@ class MergeError(Exception):
 
 
 def _lock_pair(a, b):
-    first, second = sorted([a.pk, b.pk])
-    return (Patient.objects.select_for_update().get(pk=first),
-            Patient.objects.select_for_update().get(pk=second))
+    """
+    Lock both patient rows and return them in the SAME order they were passed in.
+    (Locking in pk order is for deadlock safety only; the caller's roles must not change.)
+    """
+    locked = {p.pk: p for p in
+              Patient.objects.select_for_update().filter(pk__in=[a.pk, b.pk]).order_by("pk")}
+    return locked[a.pk], locked[b.pk]
 
 
 def _move_allergies(duplicate, survivor):

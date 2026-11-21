@@ -179,17 +179,30 @@ def request_discharge(*, admission, staff):
     return adm
 
 
-@transaction.atomic
 def approve_discharge(*, admission, doctor, token=""):
     """
     A doctor approves the discharge.
     - If this doctor admitted the patient, the first call raises DischargeConfirmationRequired
       with a one-time token. The second call must send that token back within CONFIRM_MINUTES.
     - Otherwise the discharge goes through at once.
+
+    The token is committed in its own transaction BEFORE the exception is raised. If the
+    exception were raised inside the same transaction, it would roll the token back and the
+    confirmation could never succeed.
     """
     if doctor is None or doctor.role != "DOCTOR":
         raise FlowError("Only a doctor can approve a discharge.")
 
+    new_token = _check_or_issue_token(admission=admission, doctor=doctor, token=token)
+    if new_token:
+        raise DischargeConfirmationRequired(new_token)
+
+    return _complete_discharge(admission=admission, doctor=doctor)
+
+
+@transaction.atomic
+def _check_or_issue_token(*, admission, doctor, token):
+    """Returns a fresh token if confirmation is needed (and commits it); otherwise None."""
     adm = (Admission.objects.select_for_update()
            .select_related("encounter__patient", "bed__ward", "patient")
            .get(pk=admission.pk))
@@ -197,19 +210,34 @@ def approve_discharge(*, admission, doctor, token=""):
         raise FlowError("This patient has already been discharged.")
     if adm.discharge_state != "DISCHARGE_REQUESTED":
         raise FlowError("Ward staff must request the discharge first.")
+    if adm.admitted_by_id != doctor.id:
+        return None
 
+    now = timezone.now()
+    valid = bool(token and adm.discharge_confirm_token
+                 and token == adm.discharge_confirm_token
+                 and adm.discharge_confirm_expires
+                 and now <= adm.discharge_confirm_expires)
+    if valid:
+        return None
+    new_token = token_urlsafe(24)
+    adm.discharge_confirm_token = new_token
+    adm.discharge_confirm_expires = now + timedelta(minutes=CONFIRM_MINUTES)
+    adm.save(update_fields=["discharge_confirm_token", "discharge_confirm_expires"])
+    return new_token
+
+
+@transaction.atomic
+def _complete_discharge(*, admission, doctor):
+    adm = (Admission.objects.select_for_update()
+           .select_related("encounter__patient", "bed__ward", "patient")
+           .get(pk=admission.pk))
+    if adm.discharged_at is not None:
+        raise FlowError("This patient has already been discharged.")
+    if adm.discharge_state != "DISCHARGE_REQUESTED":
+        raise FlowError("Ward staff must request the discharge first.")
     if adm.admitted_by_id == doctor.id:
-        now = timezone.now()
-        valid = bool(token and adm.discharge_confirm_token
-                     and token == adm.discharge_confirm_token
-                     and adm.discharge_confirm_expires
-                     and now <= adm.discharge_confirm_expires)
-        if not valid:
-            new_token = token_urlsafe(24)
-            adm.discharge_confirm_token = new_token
-            adm.discharge_confirm_expires = now + timedelta(minutes=CONFIRM_MINUTES)
-            adm.save(update_fields=["discharge_confirm_token", "discharge_confirm_expires"])
-            raise DischargeConfirmationRequired(new_token)
+        # Confirmation was already verified in _check_or_issue_token; clear the token now.
         adm.discharge_confirm_token = ""
         adm.discharge_confirm_expires = None
 

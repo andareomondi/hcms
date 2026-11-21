@@ -48,6 +48,84 @@ class Pregnancy(models.Model):
         return f"Pregnancy of {self.patient} (due {self.edd:%Y-%m-%d})"
 
 
+class LabourBed(models.Model):
+    """
+    A labour and delivery bed. Separate from the ward beds. Created on demand when none is free.
+    """
+    STATUS = [("VACANT", "Vacant"), ("OCCUPIED", "Occupied"), ("CLEANING", "Being cleaned")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=20, unique=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="VACANT", db_index=True)
+
+    def __str__(self):
+        return f"Labour bed {self.code}"
+
+
+class LabourStay(models.Model):
+    """A woman in labour, from arrival until she moves to a ward or goes home."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="labour_stays")
+    encounter = models.OneToOneField(Encounter, on_delete=models.PROTECT, related_name="labour_stay")
+    labour_bed = models.ForeignKey(LabourBed, on_delete=models.PROTECT, related_name="stays")
+    arrived_at = models.DateTimeField(db_index=True)
+    delivered_before_arrival = models.BooleanField(default=False)
+    arrival_note = models.TextField(blank=True)
+    admitted_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    discharged_at = models.DateTimeField(null=True, blank=True)
+    moved_to_ward = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Labour of {self.patient} in {self.labour_bed.code}"
+
+
+class DeliveryEpisode(models.Model):
+    """
+    One childbirth event. Holds one or more Delivery rows (one per baby, so twins and
+    triplets share an episode). Signed off by a doctor only.
+    """
+    STATUS = [("PENDING", "Pending doctor sign-off"), ("SIGNED", "Signed off")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mother_encounter = models.ForeignKey(Encounter, on_delete=models.PROTECT, related_name="delivery_episodes")
+    labour_stay = models.ForeignKey(LabourStay, on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name="episodes")
+    delivered_before_arrival = models.BooleanField(default=False)
+    complications = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="PENDING", db_index=True)
+    recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    signed_off_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name="+")
+    signed_off_at = models.DateTimeField(null=True, blank=True)
+    signoff_note = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Delivery episode of {self.mother_encounter.patient} ({self.status})"
+
+
+class NameCorrection(models.Model):
+    """
+    Correction to a temporary name. Needs a second person (a doctor or a system admin)
+    to confirm it before it changes the patient record.
+    """
+    STATUS = [("PENDING", "Pending confirmation"), ("CONFIRMED", "Confirmed")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="name_corrections")
+    old_first_name = models.CharField(max_length=100, blank=True)
+    old_last_name = models.CharField(max_length=100)
+    new_first_name = models.CharField(max_length=100)
+    new_last_name = models.CharField(max_length=100)
+    reason = models.TextField()
+    status = models.CharField(max_length=10, choices=STATUS, default="PENDING", db_index=True)
+    requested_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    confirmed_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="+")
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+
 class Delivery(models.Model):
     """
     Append-only. One row per birth. Corrections are made in the baby's record or by a new note.
@@ -72,6 +150,17 @@ class Delivery(models.Model):
     apgar_5 = models.PositiveSmallIntegerField(null=True, blank=True)
     gestation_weeks = models.PositiveSmallIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    episode = models.ForeignKey(DeliveryEpisode, on_delete=models.PROTECT, null=True, blank=True,
+                                related_name="babies")
+    # Vitals at birth (all optional; each recorded value is range-checked in services)
+    heart_rate_bpm = models.PositiveSmallIntegerField(null=True, blank=True)
+    respiratory_rate = models.PositiveSmallIntegerField(null=True, blank=True)
+    temperature_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    spo2_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    bp_systolic = models.PositiveSmallIntegerField(null=True, blank=True)
+    bp_diastolic = models.PositiveSmallIntegerField(null=True, blank=True)
+    birth_length_cm = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    head_circumference_cm = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     recorded_by = models.ForeignKey(StaffProfile, on_delete=models.PROTECT, related_name="+")
     recorded_at = models.DateTimeField(auto_now_add=True)
 

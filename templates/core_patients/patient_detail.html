@@ -32,6 +32,16 @@
                    class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Family</a>
                 <a href="{% url 'maternity:child' patient.id %}"
                    class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Child health</a>
+                {% if "MATERNITY_RECORD" in caps and patient.sex == "F" %}
+                    <form method="post" action="{% url 'maternity:labour_admit' patient.id %}"
+                          class="inline-flex items-center gap-2 flex-wrap">
+                        {% csrf_token %}
+                        <label class="text-xs text-slate-600 inline-flex items-center gap-1">
+                            <input type="checkbox" name="delivered_before_arrival" value="1" class="w-4 h-4"> Delivered before arrival
+                        </label>
+                        <button class="bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-rose-800 transition">Admit to labour</button>
+                    </form>
+                {% endif %}
                 <a href="{% url 'core_patients:consent' patient.id %}"
                    class="bg-white border border-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition">Consent</a>
                 {% if "PATIENT_MERGE" in caps %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %} {% block title %}Move to ward - HCMS{% endblock %} {% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <a href="{% url 'maternity:labour_record' stay.id %}" class="text-xs text-slate-500 hover:underline">← Labour record</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">Move to ward</h1>
+        <p class="text-sm text-slate-600">{{ stay.patient.last_name }}, {{ stay.patient.first_name }} · labour bed {{ stay.labour_bed.code }} will be freed.</p>
+    </div>
+
+    {% if not is_doctor %}
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm">Only a doctor can move a patient to a ward.</div>
+    {% else %}
+    <form method="post" class="bg-white rounded-2xl border p-6 space-y-5">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Ward bed *</label>
+            <select name="bed_id" required class="w-full min-h-11 border rounded-xl px-3 text-sm bg-white">
+                <option value="">Choose a vacant bed</option>
+                {% for bed in beds %}
+                    <option value="{{ bed.pk }}">{{ bed.ward.name }} · {{ bed.code }} (KES {{ bed.ward.bed_day_rate }}/day)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Planned days *</label>
+            <input type="number" name="planned_days" min="1" max="365" value="2" required class="w-full min-h-11 border rounded-xl px-3 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Reason for admission to the ward * (at least 100 characters)</label>
+            <textarea name="reason" rows="4" required class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+        </div>
+        <button class="min-h-11 w-full rounded-xl bg-slate-900 text-white text-sm font-bold">Move to ward and bill the bed</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

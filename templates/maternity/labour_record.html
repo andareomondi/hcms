@@ -1,0 +1,82 @@
+{% extends "base.html" %} {% block title %}Labour - {{ stay.patient.last_name }} - HCMS{% endblock %} {% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div>
+        <a href="{% url 'maternity:labour_board' %}" class="text-xs text-slate-500 hover:underline">← Labour board</a>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">{{ stay.patient.last_name }}, {{ stay.patient.first_name }}</h1>
+        <p class="text-sm text-slate-600">
+            Labour bed <strong>{{ stay.labour_bed.code }}</strong> · arrived {{ stay.arrived_at|date:"Y-m-d H:i" }}
+            ({{ stay.arrived_at|timesince }} ago)
+            {% if stay.delivered_before_arrival %} · <span class="bg-amber-100 px-2 py-0.5 rounded text-xs">Delivered before arrival</span>{% endif %}
+        </p>
+        {% if stay.arrival_note %}<p class="text-sm text-slate-500 mt-1">{{ stay.arrival_note }}</p>{% endif %}
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+        {% if can_record %}
+            <a href="{% url 'maternity:labour_birth' stay.id %}"
+               class="min-h-11 inline-flex items-center px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Record birth</a>
+        {% endif %}
+        {% if is_doctor %}
+            <a href="{% url 'maternity:move_to_ward' stay.id %}"
+               class="min-h-11 inline-flex items-center px-4 rounded-xl bg-white border border-slate-300 text-slate-800 text-sm font-bold">Move to ward</a>
+        {% endif %}
+    </div>
+
+    {% for episode in episodes %}
+        <section class="bg-white rounded-2xl border p-5 space-y-3">
+            <div class="flex flex-wrap justify-between gap-2">
+                <p class="font-bold">
+                    Delivery · {{ episode.recorded_at|date:"Y-m-d H:i" }} · {{ episode.babies.count }} baby(ies)
+                </p>
+                <span class="text-xs px-2 py-1 rounded {% if episode.status == 'SIGNED' %}bg-emerald-100 text-emerald-800{% else %}bg-amber-100 text-amber-800{% endif %}">
+                    {{ episode.get_status_display }}
+                </span>
+            </div>
+            {% if episode.complications %}<p class="text-sm"><strong>Complications:</strong> {{ episode.complications }}</p>{% endif %}
+
+            <ul class="divide-y divide-slate-100">
+                {% for d in episode.babies.all %}
+                    <li class="py-2 flex flex-wrap justify-between gap-2 text-sm">
+                        <span>
+                            <a href="{% url 'maternity:child' d.baby.id %}" class="font-semibold text-teal-700">
+                                {{ d.baby.first_name|default:"Temporary name" }} {{ d.baby.last_name }}
+                            </a>
+                            {% if d.baby.is_temporary_name %}<span class="text-xs bg-amber-100 px-1 rounded">TEMPORARY</span>{% endif %}
+                            · {{ d.get_baby_sex_display }} · {{ d.birth_weight_g|default:"-" }} g
+                        </span>
+                        <span class="text-xs text-slate-500">
+                            APGAR {{ d.apgar_1|default:"-" }}/{{ d.apgar_5|default:"-" }} ·
+                            HR {{ d.heart_rate_bpm|default:"-" }} · RR {{ d.respiratory_rate|default:"-" }} ·
+                            Temp {{ d.temperature_c|default:"-" }} · SpO2 {{ d.spo2_percent|default:"-" }} ·
+                            BP {% if d.bp_systolic %}{{ d.bp_systolic }}/{{ d.bp_diastolic }}{% else %}-{% endif %}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <div class="flex flex-wrap gap-2 pt-2">
+                <a href="{% url 'maternity:after_birth_report' episode.id %}" target="_blank"
+                   class="min-h-10 inline-flex items-center px-4 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-bold">
+                    After-birth report (PDF)
+                </a>
+            </div>
+
+            {% if episode.status == "PENDING" and is_doctor %}
+                <form method="post" action="{% url 'maternity:episode_signoff' episode.id %}" class="space-y-2 pt-2 border-t">
+                    {% csrf_token %}
+                    <label class="block text-xs font-semibold uppercase text-slate-600">Doctor sign-off note *</label>
+                    <textarea name="signoff_note" rows="3" required class="w-full border rounded-xl px-3 py-2 text-sm"></textarea>
+                    <button class="min-h-11 px-5 rounded-xl bg-emerald-700 text-white text-sm font-bold">Sign off this delivery</button>
+                </form>
+            {% elif episode.status == "PENDING" %}
+                <p class="text-xs text-slate-500">Waiting for a doctor to sign off this delivery.</p>
+            {% else %}
+                <p class="text-sm"><strong>Signed off</strong> by {{ episode.signed_off_by }} at {{ episode.signed_off_at|date:"Y-m-d H:i" }}.
+                    <span class="text-slate-600">{{ episode.signoff_note }}</span></p>
+            {% endif %}
+        </section>
+    {% empty %}
+        <div class="bg-white rounded-2xl border p-6 text-sm text-slate-500 italic">No birth recorded yet for this labour.</div>
+    {% endfor %}
+</div>
+{% endblock %}

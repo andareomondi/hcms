@@ -1,0 +1,47 @@
+{% extends "base.html" %} {% block title %}Name corrections - HCMS{% endblock %} {% block content %}
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Name corrections awaiting confirmation</h1>
+        <p class="text-sm text-slate-500">A doctor or system admin confirms each correction. The requester cannot confirm their own.</p>
+    </div>
+    <section class="bg-white rounded-2xl border overflow-hidden">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100/70 text-slate-600 text-xs uppercase tracking-wider">
+                <tr>
+                    <th class="p-3">Child</th>
+                    <th class="p-3">Current</th>
+                    <th class="p-3">Proposed</th>
+                    <th class="p-3">Reason</th>
+                    <th class="p-3">Requested by</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for c in pending %}
+                    <tr>
+                        <td class="p-3"><a href="{% url 'maternity:child' c.patient.id %}" class="text-teal-700 font-semibold">{{ c.patient.last_name }}</a></td>
+                        <td class="p-3">{{ c.old_first_name|default:"(none)" }} {{ c.old_last_name }}</td>
+                        <td class="p-3 font-semibold">{{ c.new_first_name }} {{ c.new_last_name }}</td>
+                        <td class="p-3 text-xs">{{ c.reason }}</td>
+                        <td class="p-3 text-xs">{{ c.requested_by }}</td>
+                        <td class="p-3 text-right">
+                            {% if can_confirm_role and c.requested_by_id != my_profile_id %}
+                                <form method="post" action="{% url 'maternity:name_correction_confirm' c.id %}">
+                                    {% csrf_token %}
+                                    <button class="min-h-10 px-4 rounded-xl bg-emerald-700 text-white text-xs font-bold">Confirm</button>
+                                </form>
+                            {% elif c.requested_by_id == my_profile_id %}
+                                <span class="text-xs text-slate-500">Awaiting another person</span>
+                            {% else %}
+                                <span class="text-xs text-slate-500">Doctor or admin only</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6" class="p-6 text-center text-slate-500 italic">No corrections waiting.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}
