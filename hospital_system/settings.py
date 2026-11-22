@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "django_apscheduler",
 
     # HCMS Modular Monolith Apps
+    "access",
     "core_patients",
     "triage_queue",
     "doctors_portal",
@@ -104,6 +105,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "hospital_system.middleware.StaffProfileMiddleware",
+    "access.middleware.BrowserAuthorisationMiddleware",
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -195,3 +197,18 @@ EXPORT_MAX_WEB_ROWS = 500_000
 EXPORT_DIR = BASE_DIR / "private_exports"   # outside MEDIA_ROOT, never served
 EXPORT_MIN_PASSPHRASE = 12
 EXPORT_INCLUDE_FILES_DEFAULT = False
+
+
+# ---- Browser authorisation and OTP ----
+import sys as _sys
+# Enforced in normal running. Off during the test run, which uses its own tests to turn it on.
+BROWSER_AUTHORISATION_ENFORCED = "test" not in _sys.argv[1:2]
+# Set to True only when the app runs behind a proxy that sets X-Forwarded-For.
+TRUST_X_FORWARDED_FOR = os.environ.get("HCMS_TRUST_PROXY", "0") == "1"
+EMAIL_BACKEND = os.environ.get("HCMS_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.environ.get("HCMS_EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("HCMS_EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.environ.get("HCMS_EMAIL_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("HCMS_EMAIL_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("HCMS_EMAIL_TLS", "1") == "1"
+DEFAULT_FROM_EMAIL = os.environ.get("HCMS_FROM_EMAIL", "HCMS <no-reply@localhost>")

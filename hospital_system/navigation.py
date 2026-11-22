@@ -96,6 +96,8 @@ GROUPS = [
              "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Data manager", "url": "dashboard:crud_index", "icon": "🗂️",
              "caps": [Cap.ADMIN_CONFIG]},
+            {"label": "Browser access", "url": "access:browsers", "icon": "🔐",
+             "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Staff requests", "url": "core_patients:staff_requests", "icon": "📝",
              "caps": [Cap.ADMIN_CONFIG]},
             {"label": "Audit log", "url": "dashboard:audit_logs", "icon": "📜",

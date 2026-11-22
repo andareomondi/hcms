@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
 from django.shortcuts import redirect
+from access.views import EnforcedLoginView
 from django.urls import include, path
 
 from dashboard.audit_actions import AuditAction
@@ -36,7 +37,8 @@ class CustomLogoutView(auth_views.LogoutView):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html", redirect_authenticated_user=True), name="login"),
+    path("accounts/login/", EnforcedLoginView.as_view(), name="login"),
+    path("access/", include("access.urls")),
     path("accounts/logout/", CustomLogoutView.as_view(), name="logout"),
     
     # App inclusions

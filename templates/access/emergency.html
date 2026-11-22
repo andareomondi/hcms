@@ -1,0 +1,21 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HCMS - Emergency access</title><style>body{font-family:system-ui,sans-serif;background:#f1f5f9;margin:0;padding:16px;color:#0f172a}.card{max-width:520px;margin:40px auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px}label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;color:#334155;margin:12px 0 4px}input{width:100%;box-sizing:border-box;min-height:44px;border:1px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-size:16px}button{min-height:44px;width:100%;margin-top:16px;border:0;border-radius:12px;background:#0f172a;color:#fff;font-weight:700;font-size:15px}.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:10px;margin:12px 0;font-size:14px}.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:12px;padding:10px;margin:12px 0;font-size:14px}.code{font-family:monospace;font-size:20px;font-weight:700;background:#f8fafc;border:1px dashed #94a3b8;border-radius:12px;padding:12px;word-break:break-all;text-align:center}</style></head><body><div class="card"><h1 style="font-size:20px;margin:0 0 6px">Emergency access</h1>
+<p style="font-size:14px;color:#475569">For system administrators only. Each pass lasts 24 hours and works once on one browser.</p>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+{% if step == "password" %}
+<form method="post">{% csrf_token %}
+<label for="username">Admin username</label><input id="username" name="username" required>
+<label for="password">Password</label><input id="password" name="password" type="password" required>
+<button type="submit">Continue</button></form>
+{% elif step == "code" %}
+<p style="font-size:14px">A code has been emailed to you.</p>
+<form method="post">{% csrf_token %}
+<label for="code">Email code</label><input id="code" name="code" inputmode="numeric" required>
+<button type="submit">Issue emergency pass</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel"><button type="submit" style="background:#fff;color:#0f172a;border:1px solid #cbd5e1">Cancel</button></form>
+{% elif step == "issued" %}
+<div class="ok">Pass issued. Shown once. Valid for {{ hours }} hours.</div>
+<p style="font-size:14px">On the browser to authorise, open the code page and enter this pass. It works once.</p>
+<div class="code">{{ pass_code }}</div>
+<p style="font-size:13px;color:#475569">Open <strong>/access/redeem/</strong> on that browser and enter this code. Then sign in normally.</p>
+{% endif %}
+</div><script src="{% static 'js/hcms_proof.js' %}"></script></body></html>

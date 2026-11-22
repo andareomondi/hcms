@@ -1,0 +1,6 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HCMS - Your backup codes</title><style>body{font-family:system-ui,sans-serif;background:#f1f5f9;margin:0;padding:16px;color:#0f172a}.card{max-width:520px;margin:40px auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px}.codes{font-family:monospace;font-size:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:12px;padding:12px}a.btn{display:inline-block;min-height:44px;line-height:44px;margin-top:16px;padding:0 16px;border-radius:12px;background:#0f172a;color:#fff;font-weight:700;text-decoration:none}</style></head><body><div class="card">
+<h1 style="font-size:20px;margin:0 0 6px">Save these backup codes now</h1>
+<p style="font-size:14px;color:#475569">They are shown once. Store them somewhere safe. Each code works one time.</p>
+<div class="codes">{% for c in codes %}<div>{{ c }}</div>{% endfor %}</div>
+<a class="btn" href="{{ after }}">I have saved them</a>
+</div><script src="{% static 'js/hcms_proof.js' %}"></script></body></html>

@@ -8,8 +8,9 @@ permissions layer.
 The system is designed to run on a hospital's local network. Every change is audited, and money is
 never silently released.
 
-> **Status:** under active development. Several modules are complete in code but not yet covered by
-> an automated test run. The device gate is planned but not yet implemented. See
+> **Status:** under active development. Browser authorisation (approved browsers, a browser key,
+> email codes with backup codes, audit logging and admin alerts) is implemented and tested. Several
+> other modules are complete in code but not yet covered by an automated test run. See
 > [Known limitations](#known-limitations).
 
 ---
@@ -24,6 +25,7 @@ never silently released.
 - [Docker](#docker)
 - [Production setup](#production-setup)
 - [First run](#first-run)
+- [Browser authorisation and sign-in](#browser-authorisation-and-sign-in)
 - [Roles and permissions](#roles-and-permissions)
 - [Patient journey](#patient-journey)
 - [Modules](#modules)
@@ -56,25 +58,24 @@ never silently released.
    different person from the one who entered it.
 6. **Admission is a doctor's decision.** Only a doctor can admit a patient to a bed, from a
    consultation, with a written reason of at least 100 characters. Ward staff cannot assign beds.
-7. **Untrusted browsers see nothing** *(planned)*. A device gate will sit in front of every page.
-   It is not yet implemented.
+7. **Unapproved browsers see nothing.** Every page is refused for a browser an administrator has not approved, and a copied cookie is not enough (see [Browser authorisation and sign-in](#browser-authorisation-and-sign-in)).
 
 ---
 
 ## Architecture
 
-| Layer | Technology |
-|---|---|
-| Language and framework | Python, Django 5.2 (LTS) |
-| Database | PostgreSQL |
-| Front end | Django templates, Tailwind CSS, Alpine.js, htmx |
-| Charts | Chart.js (export and dashboard pages) |
-| Static files | WhiteNoise |
-| Password hashing | Argon2id (PBKDF2 as fallback) |
-| Second factor | `django-otp` installed; enforcement not yet enabled |
-| History | `django-simple-history` on selected models |
-| Export encryption | `pyzipper` (AES-256 zip) |
-| Application server | Gunicorn (production and container) |
+| Layer                  | Technology                                          |
+| ---------------------- | --------------------------------------------------- |
+| Language and framework | Python, Django 5.2 (LTS)                            |
+| Database               | PostgreSQL                                          |
+| Front end              | Django templates, Tailwind CSS, Alpine.js, htmx     |
+| Charts                 | Chart.js (export and dashboard pages)               |
+| Static files           | WhiteNoise                                          |
+| Password hashing       | Argon2id (PBKDF2 as fallback)                       |
+| Second factor          | `django-otp` installed; enforcement not yet enabled |
+| History                | `django-simple-history` on selected models          |
+| Export encryption      | `pyzipper` (AES-256 zip)                            |
+| Application server     | Gunicorn (production and container)                 |
 
 **Apps are modular.** Each clinical or administrative function is a Django app. Apps communicate
 through services and signals, not direct model access.
@@ -84,7 +85,7 @@ Apps are listed in `hospital_system/settings.py`:
 `core_patients`, `triage_queue`, `doctors_portal`, `pharmacy`, `radiology`, `lab`, `wards`,
 `billing`, `dashboard`, `duty`, `notifications`, `maternity`
 
-The `device_trust` app is planned and is not yet in `INSTALLED_APPS`.
+The `access` app (browser authorisation) is in `INSTALLED_APPS`, and its middleware runs after the staff-profile middleware.
 
 **Offline use.** The front-end libraries are meant to be served locally from `static/`. See
 [Static files](#static-files) for the current state.
@@ -155,18 +156,25 @@ python -c "import secrets; print(secrets.token_urlsafe(50))"   # generate DJANGO
 
 ### Environment variables
 
-| Variable | Required | Purpose | Example |
-|---|---|---|---|
-| `DJANGO_SECRET_KEY` | Yes | Cryptographic signing. Unique and private. | 50+ random characters |
-| `DJANGO_DEBUG` | No (default `False`) | `True` for local development only | `True` |
-| `DJANGO_ALLOWED_HOSTS` | Yes | Comma-separated hostnames the server answers to | `hcms.hospital.local,192.168.1.10` |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | If behind HTTPS or a tunnel | Comma-separated origins with scheme | `https://hcms.hospital.local` |
-| `ALLOW_STAFF_REGISTRATION` | No (default `False`) | Enables the public staff request form. Keep `False` on any reachable server. | `False` |
-| `DB_NAME` | Yes | PostgreSQL database name | `hospital_cms` |
-| `DB_USER` | Yes | PostgreSQL user | `hcms_app` |
-| `DB_PASSWORD` | Yes | PostgreSQL password | from your password manager |
-| `DB_HOST` | No (default `127.0.0.1`) | PostgreSQL host | `127.0.0.1` |
-| `DB_PORT` | No (default `5432`) | PostgreSQL port | `5432` |
+| Variable                                 | Required                     | Purpose                                                                                                | Example                                       |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `DJANGO_SECRET_KEY`                      | Yes                          | Cryptographic signing. Unique and private.                                                             | 50+ random characters                         |
+| `DJANGO_DEBUG`                           | No (default `False`)         | `True` for local development only                                                                      | `True`                                        |
+| `DJANGO_ALLOWED_HOSTS`                   | Yes                          | Comma-separated hostnames the server answers to                                                        | `hcms.hospital.local,192.168.1.10`            |
+| `DJANGO_CSRF_TRUSTED_ORIGINS`            | If behind HTTPS or a tunnel  | Comma-separated origins with scheme                                                                    | `https://hcms.hospital.local`                 |
+| `ALLOW_STAFF_REGISTRATION`               | No (default `False`)         | Enables the public staff request form. Keep `False` on any reachable server.                           | `False`                                       |
+| `DB_NAME`                                | Yes                          | PostgreSQL database name                                                                               | `hospital_cms`                                |
+| `DB_USER`                                | Yes                          | PostgreSQL user                                                                                        | `hcms_app`                                    |
+| `DB_PASSWORD`                            | Yes                          | PostgreSQL password                                                                                    | from your password manager                    |
+| `DB_HOST`                                | No (default `127.0.0.1`)     | PostgreSQL host                                                                                        | `127.0.0.1`                                   |
+| `DB_PORT`                                | No (default `5432`)          | PostgreSQL port                                                                                        | `5432`                                        |
+| `HCMS_EMAIL_BACKEND`                     | Yes in production            | Email backend for sign-in codes and admin alerts. Default prints to the console.                       | `django.core.mail.backends.smtp.EmailBackend` |
+| `HCMS_EMAIL_HOST`                        | Yes with SMTP                | Mail server                                                                                            | `smtp.hospital.local`                         |
+| `HCMS_EMAIL_PORT`                        | No (default `25`)            | Mail server port                                                                                       | `587`                                         |
+| `HCMS_EMAIL_USER`, `HCMS_EMAIL_PASSWORD` | If the server requires login | Mail account                                                                                           | from your password manager                    |
+| `HCMS_EMAIL_TLS`                         | No (default `1`)             | Use TLS to the mail server                                                                             | `1`                                           |
+| `HCMS_FROM_EMAIL`                        | No                           | Sender address                                                                                         | `HCMS <no-reply@hospital.local>`              |
+| `HCMS_TRUST_PROXY`                       | No (default `0`)             | Set to `1` only when a reverse proxy sets `X-Forwarded-For`. Otherwise client addresses can be forged. | `1`                                           |
 
 Write `.env` lines as `NAME=value`, with no spaces around `=`. A line such as
 `ALLOW_STAFF_REGISTRATION = False` is read under a different name and is ignored, so the default
@@ -178,11 +186,11 @@ A missing required variable stops Django at startup with a message that names th
 
 Set in `hospital_system/settings.py`:
 
-| Setting | Value | Purpose |
-|---|---|---|
-| `EXPORT_MAX_WEB_ROWS` | `500000` | Largest export allowed from the web page. Larger exports use the command. |
-| `EXPORT_DIR` | `BASE_DIR / "private_exports"` | Private folder for export files. Outside `MEDIA_ROOT`. |
-| `EXPORT_MIN_PASSPHRASE` | `12` | Minimum export passphrase length |
+| Setting                 | Value                          | Purpose                                                                   |
+| ----------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `EXPORT_MAX_WEB_ROWS`   | `500000`                       | Largest export allowed from the web page. Larger exports use the command. |
+| `EXPORT_DIR`            | `BASE_DIR / "private_exports"` | Private folder for export files. Outside `MEDIA_ROOT`.                    |
+| `EXPORT_MIN_PASSPHRASE` | `12`                           | Minimum export passphrase length                                          |
 
 Tariffs (consultation fee, registration fee, scan prices, bed-day rates) are set in
 `billing/prices.py` and the ward records. Laboratory test prices are in the laboratory catalogue,
@@ -192,12 +200,11 @@ set through `seed_db.py` or the data manager. All of these are placeholders for 
 
 These are not yet in `settings.py`. Add them before any server that real users reach:
 
-| Setting | Purpose |
-|---|---|
-| `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` | Cookies only over HTTPS. `True` in production. |
-| `SECURE_PROXY_SSL_HEADER` | Needed when behind a proxy or Render, so Django sees HTTPS |
-| `HCMS_PUBLIC_BASE_URL` | Public origin used to build device-enrolment links (once the device gate exists) |
-| `HCMS_DEVICE_GATE`, `DEVICE_LINK_HOURS`, `DEVICE_TRUST_DAYS`, `DEVICE_MAX_PER_USER` | Device gate controls (planned) |
+| Setting                                       | Purpose                                                                                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE` | Cookies only over HTTPS. `True` in production.                                                                                   |
+| `SECURE_PROXY_SSL_HEADER`                     | Needed when behind a proxy or Render, so Django sees HTTPS                                                                       |
+| `HTTPS` in front of the app                   | Required for browser authorisation. Browsers create their security key only on secure connections, so plain HTTP blocks sign-in. |
 
 ---
 
@@ -394,7 +401,119 @@ python manage.py createsuperuser
 Sign in with that account, then create the other staff accounts through **Staff requests**, or
 through the data manager.
 
-> **Device enrolment is not yet implemented.** Currently any browser can reach the system.
+**Authorise the first browser.** The system refuses every page until a browser is approved, so the
+first browser is approved from the server:
+
+```bash
+python manage.py approve_first_browser --username <administrator>
+```
+
+Open `/access/redeem/` in the browser you want to use, and enter the code the command printed. The
+code works once and expires after 30 minutes. See [Browser authorisation and sign-in](#browser-authorisation-and-sign-in).
+
+---
+
+## Browser authorisation and sign-in
+
+A person can use HCMS only from a browser an administrator has approved. The browser holds a random
+token in a cookie and a private key that never leaves it. Both are needed, so a copied cookie
+does not work in another browser.
+
+### What the user sees
+
+| Step                                                     | What happens                                                                                                                   |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Unapproved browser opens any page                        | A bare 403 with no page content. Curl and Postman get the same.                                                                |
+| Staff member opens `/access/enrol/`                      | Enters username and password. The reply is always "an administrator has been asked", so nothing is revealed.                   |
+| Administrator approves at `/access/browsers/`            | A one-time code is shown once, valid 30 minutes.                                                                               |
+| Staff member opens `/access/redeem/` and enters the code | The browser creates its key pair, stores the private part, and sends the public part. The browser is now approved for 90 days. |
+| Staff member signs in at `/accounts/login/`              | Password, then an email code (valid 2 minutes).                                                                                |
+| First sign-in only                                       | Confirming the email code finishes setup and shows 10 backup codes once. Save them.                                            |
+| Later sign-ins                                           | Email code again, unless the browser was verified in the last 12 hours.                                                        |
+| Email unavailable                                        | Enter a backup code instead. Each code works once.                                                                             |
+
+### Rules
+
+- **One account per browser.** A second person cannot sign in on a browser that is already in use
+  or approved for someone else. The form says so, and the attempt is audited.
+- **Shared workstations** are fine: several staff members can use one computer, each in their own
+  browser.
+- **Wrong codes.** Three wrong email codes lock the browser until an administrator unlocks it.
+  Administrators are alerted.
+- **Changed address.** If the browser's IP address changes, the 12-hour trust window ends and the
+  user enters a code again.
+- **Logging out** does not revoke the browser.
+- **Expiry.** Approval lasts 90 days, then the browser must be approved again.
+- **Cleared cookies** mean the browser is unknown. An administrator approves it again.
+- **Administrators cannot approve their own browser.** The first browser is the only exception, and
+  only through the command below.
+
+### Administrator tasks
+
+- **Approve a browser:** `/access/browsers/`, then Approve. Give the code to the person in person or
+  by phone. Do not send it by email.
+- **Revoke a browser:** Revoke. The browser is refused at once.
+- **Unlock a browser:** Unlock, after a lockout.
+- **Watch the audit log:** Dashboard, audit log. Browser and sign-in events are recorded there.
+- **Read alerts:** security alerts appear in the in-app notifications, and the same alerts are emailed to administrators.
+
+### Emergency access
+
+Use only when no other administrator can act.
+
+1. Open `/access/emergency/` on the browser to be authorised. This page does not need an approved
+   browser.
+2. Enter an administrator's username and password, then the code emailed to that administrator.
+3. A 24-hour pass is shown once. Open `/access/redeem/` on the browser to authorise and enter the pass.
+   It works once.
+4. Each cycle allows three passes. After that, a developer must run
+   `python manage.py reset_emergency_allowance`.
+5. Every start, issue and use is audited and alerted.
+
+### First browser (bootstrap)
+
+On a new installation, nobody has an approved browser yet. The developer runs, on the server:
+
+```bash
+python manage.py approve_first_browser --username <administrator>
+```
+
+The command prints a one-time code, valid 30 minutes. It refuses to run once any approved browser
+exists, and it works only for an active administrator. The code works once.
+
+### Script injection in the pages
+
+The browser check is a small script, `static/js/hcms_proof.js`. It is loaded in three places:
+
+| Where                                               | How                                                                    | Why                                                             |
+| --------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Every page that extends `templates/base.html`       | `<script src="{% static 'js/hcms_proof.js' %}" defer>` in the `<head>` | Keeps the browser's proof current while the page is open.       |
+| Standalone access pages (`templates/access/*.html`) | `{% load static %}` and the script before `</body>`                    | These pages do not extend the base layout.                      |
+| The browser-check page, served with the 403         | Inline HTML in `access/middleware.py` (`CHECK_PAGE`)                   | When the proof has expired, this page refreshes it and reloads. |
+
+What the script does:
+
+- **Ordinary pages:** loads the browser key from IndexedDB, signs a fresh challenge from
+  `/access/challenge/`, and posts it to `/access/proof/`. It repeats every 2 minutes and when the tab
+  becomes visible again. A proof cookie lasts 5 minutes.
+- **Check page:** refreshes and reloads, at most twice. If the refresh fails, it shows "This browser
+  could not be verified".
+- **Redeem page:** an inline script creates the key pair (non-exportable), stores the private key,
+  and sends only the public key with the code. The key is never sent to the server.
+
+The script stores nothing on the server and sends nothing else. Browsers without the key see the
+verification message.
+
+### Troubleshooting sign-in
+
+| Symptom                                                            | Likely cause                                                  | What to do                                           |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------- |
+| Bare 403 on every page                                             | Browser is not approved, was revoked, or its approval expired | Ask an administrator to approve it again.            |
+| "This browser could not be verified"                               | Cookie copied from another browser, or key missing            | Use the approved browser, or ask for a new approval. |
+| Code page says "could not be verified" immediately after redeeming | Browser cannot create keys (plain HTTP, or an old browser)    | Use HTTPS and a current browser.                     |
+| Email code never arrives                                           | Email settings not configured, or spam filter                 | Check `HCMS_EMAIL_*`. Use a backup code meanwhile.   |
+| "Browser is locked"                                                | Three wrong codes                                             | An administrator unlocks it at `/access/browsers/`.  |
+| "Another staff member is signed in"                                | A previous session is still open in this browser              | That person must sign out first.                     |
 
 ---
 
@@ -403,19 +522,19 @@ through the data manager.
 Each staff profile has one role. Each role maps to a set of capabilities in
 `hospital_system/permissions.py`.
 
-| Role | Main responsibilities | Cannot |
-|---|---|---|
-| Reception | Register patients, open visits, run the triage board, manage bed status (cleaning, isolation) | Clinical notes, prescriptions, admissions, payments |
-| Triage nurse | Record vitals and complaint, set priority, assign an on-duty doctor | Finance, consultations |
-| Doctor | Call patients, write notes, prescribe, order scans and lab tests, admit to a bed, complete visits, approve discharge | Finance, reception and triage work |
-| Nurse | Give injections and IV medicines, request and confirm ward discharge, manage bed status | Finance, consultations, admissions |
-| Pharmacist | Stock and formulary, dispense oral medicines | Clinical notes, finance |
-| Radiologist | Upload images, write reports | Finance, consultations |
-| Lab technician | Receive samples, enter results and the written report | Verify or release results |
-| Lab supervisor | Verify and release results, amend released results, manage tests | Verify a result they entered |
-| Billing officer | Post charges, take payments, approve credit exceptions, clear emergency bypasses | Clinical work |
-| Administrator (role) | Staff approvals, data manager, audit log | Consultations, reception, triage, pharmacy, nursing |
-| Superuser | All capabilities, data export, URL explorer in development | — |
+| Role                 | Main responsibilities                                                                                                | Cannot                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Reception            | Register patients, open visits, run the triage board, manage bed status (cleaning, isolation)                        | Clinical notes, prescriptions, admissions, payments |
+| Triage nurse         | Record vitals and complaint, set priority, assign an on-duty doctor                                                  | Finance, consultations                              |
+| Doctor               | Call patients, write notes, prescribe, order scans and lab tests, admit to a bed, complete visits, approve discharge | Finance, reception and triage work                  |
+| Nurse                | Give injections and IV medicines, request and confirm ward discharge, manage bed status                              | Finance, consultations, admissions                  |
+| Pharmacist           | Stock and formulary, dispense oral medicines                                                                         | Clinical notes, finance                             |
+| Radiologist          | Upload images, write reports                                                                                         | Finance, consultations                              |
+| Lab technician       | Receive samples, enter results and the written report                                                                | Verify or release results                           |
+| Lab supervisor       | Verify and release results, amend released results, manage tests                                                     | Verify a result they entered                        |
+| Billing officer      | Post charges, take payments, approve credit exceptions, clear emergency bypasses                                     | Clinical work                                       |
+| Administrator (role) | Staff approvals, data manager, audit log                                                                             | Consultations, reception, triage, pharmacy, nursing |
+| Superuser            | All capabilities, data export, URL explorer in development                                                           | —                                                   |
 
 Every role also sees the **Role guide** page in the sidebar.
 
@@ -464,12 +583,14 @@ recorded with a reason, appears in the billing bypass queue, and is cleared only
 ## Modules
 
 ### Core patients (`core_patients`)
+
 Patient registry and demographics, duplicate detection and merge, guardian and family links,
 consent records (including emergency consent with a reason), allergy management (required at
 registration, with explicit "none known" and "unknown" options), staff self-registration and approval,
 and the printable patient record.
 
 ### Triage and queue (`triage_queue`)
+
 Visit creation, triage vitals, priority (routine, urgent, resuscitation), the live waiting board,
 reassignment between on-duty doctors, and the queue states:
 `AWAITING_PAYMENT → WAITING → IN_CONSULTATION → AWAITING_RESULTS → IN_CONSULTATION → DISCHARGED`.
@@ -480,11 +601,13 @@ In-patient review (`INPATIENT`, only for an admitted patient), and Ward stay (`W
 by the system on admission, not at reception).
 
 ### Doctors' portal (`doctors_portal`)
+
 Doctor dashboard, consultation room (notes and diagnosis, prescriptions, scans, laboratory tests,
 admission, completion), formulary search, external prescriptions with an explicit acknowledgement
 of responsibility, and cancellation of unpaid scans.
 
 ### Pharmacy (`pharmacy`)
+
 Formulary and stock, serial-tracked stock units with batch and expiry, goods receipt, dispensing
 (oral) and nurse administration (injections and IV), allergy checks with documented overrides,
 stock adjustments and write-offs, and automatic expiry. Medicines are released only after payment,
@@ -492,11 +615,13 @@ or when billed to the ward stay. A scan that does not match the required dose is
 be corrected; an order is closed as stock-short only when the hospital has no usable stock left.
 
 ### Radiology (`radiology`)
+
 Scan worklist, image upload with SHA-256 file hashing, written reports, and report submission
 refused for unpaid scans. Images are served only to roles with radiology view access, and every
 view is audited.
 
 ### Laboratory (`lab`)
+
 A catalogue of tests with specimens, reference ranges, critical thresholds and prices. Doctors
 order tests from a modal in the consultation room. Each test is a line with its own charge.
 Workflow: order → sample received (paid lines only) → results entered (numeric, positive/negative
@@ -504,34 +629,42 @@ or text, with flags) → written report of at least 100 characters → second-pe
 release → printed report. Released results can be amended, with the original value kept.
 
 ### Wards (`wards`)
+
 Wards, beds and their statuses, admissions made by a doctor from a consultation, a 100-character
 reason on every admission, the discharge request and approval flow, a bed history log, and daily
 occupancy. Bed assignment is not done from the ward screen; it happens only through admission.
 
 ### Billing (`billing`)
+
 Provisional charges created at the point of service, posting by a billing officer (never by the
 person who created the charge), per-line payment allocation, manual and M-Pesa payments with
 reference checks, receipts, account statements, credit exceptions, and the emergency bypass queue.
 Ward stays are billed and settled as one account; an unpaid balance blocks discharge.
 
 ### Dashboard (`dashboard`)
+
 Overview cards built from live data, the audit log, the data manager (superuser), the admin panel,
 and the full data export with charts (superuser).
 
 ### Duty (`duty`)
+
 Clock-in and clock-out by room, on-duty lists used to assign doctors, and automatic clock-out at
 logout.
 
 ### Notifications (`notifications`)
+
 In-app notifications by role or by person, with a badge that polls the server.
 
 ### Maternity (`maternity`)
+
 Births and deliveries, child registration, guardian linking, and immunisation schedules. Vaccines
 are checked against recorded allergies before any dose is given.
 
-### Device trust (`device_trust`) *(planned)*
-Browser enrolment with single-use links bound to the browser that first opens them, trusted-browser
-management, revocation, and one account per browser. Not yet implemented.
+### Browser authorisation (`access`)
+
+Approved browsers, the browser key and proof, email and backup codes, emergency passes, the
+administrator's browser screen, and the audit and alert rules. See
+[Browser authorisation and sign-in](#browser-authorisation-and-sign-in).
 
 ---
 
@@ -566,7 +699,7 @@ is hardened (see [Security](#security)).
 **Full data export** (superuser only, from **Data export & charts**, or the command below):
 
 - Every model in every installed app, as one CSV per table inside a passphrase-protected AES-256 zip.
-- Secret fields (password hashes, OTP keys, device and token hashes, session data) are never exported.
+- Secret fields (password hashes, OTP codes, browser and backup-code hashes, session data) are never exported.
 - A `manifest.json` lists row counts and file hashes.
 - The admin re-enters their password and sets a passphrase. The passphrase is never stored.
 - Each export writes audit rows, including the zip's SHA-256.
@@ -579,17 +712,19 @@ Treat every export as patient data.
 
 ## Management commands
 
-| Command | Purpose |
-|---|---|
-| `python seed_db.py` | Creates or updates departments, allergen classes and allergens, wards and beds, and the laboratory catalogue. Safe to re-run. Creates no patients or staff. |
-| `python manage.py createsuperuser` | Creates an administrator account. |
-| `python manage.py migrate` | Applies database migrations. |
-| `python manage.py collectstatic --noinput` | Copies static files into `staticfiles/` for WhiteNoise. Run after deployment and after changing `static/`. |
-| `python manage.py check` | Validates configuration, URLs, templates and circular imports. Run after any change. |
-| `python manage.py check --deploy` | Checks production security settings. Run before going live. |
-| `python manage.py export_all_data --actor <username>` | Full audited export. See [Full data export](#full-data-export-export_all_data). |
-| `python manage.py expire_stock --actor <username>` | Writes off pharmacy units past their expiry date. |
-| `python manage.py reconcile_stock` | Checks that stock totals match serial-level doses. |
+| Command                                                     | Purpose                                                                                                                                                     |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python seed_db.py`                                         | Creates or updates departments, allergen classes and allergens, wards and beds, and the laboratory catalogue. Safe to re-run. Creates no patients or staff. |
+| `python manage.py createsuperuser`                          | Creates an administrator account.                                                                                                                           |
+| `python manage.py migrate`                                  | Applies database migrations.                                                                                                                                |
+| `python manage.py collectstatic --noinput`                  | Copies static files into `staticfiles/` for WhiteNoise. Run after deployment and after changing `static/`.                                                  |
+| `python manage.py check`                                    | Validates configuration, URLs, templates and circular imports. Run after any change.                                                                        |
+| `python manage.py check --deploy`                           | Checks production security settings. Run before going live.                                                                                                 |
+| `python manage.py export_all_data --actor <username>`       | Full audited export. See [Full data export](#full-data-export-export_all_data).                                                                             |
+| `python manage.py expire_stock --actor <username>`          | Writes off pharmacy units past their expiry date.                                                                                                           |
+| `python manage.py reconcile_stock`                          | Checks that stock totals match serial-level doses.                                                                                                          |
+| `python manage.py approve_first_browser --username <admin>` | Issues a one-time code to authorise the first browser. Works only while no approved browser exists.                                                         |
+| `python manage.py reset_emergency_allowance`                | Restarts the three emergency passes per cycle. Run by a developer, not by staff.                                                                            |
 
 ### Full data export: `export_all_data`
 
@@ -617,14 +752,27 @@ the passphrase with the file.
 
 ## Testing
 
-Tests live under `tests/` and per-app test packages. Run them with:
+Each app has its own tests. Run the whole suite with:
 
 ```bash
-python manage.py test
+python manage.py check
+python manage.py test --noinput
 ```
 
-Some test files were written alongside their feature packs and may not yet match the current code.
-Run the suite before relying on any module.
+`--noinput` avoids a prompt about deleting a leftover test database, which can otherwise hang the
+run. The suite runs on PostgreSQL, the same database as production.
+
+Expected result: **269 passed and 1 skipped**. The skipped test is the real-browser test, which
+needs Playwright and Chromium. To run it, install Playwright in the environment and point
+`HCMS_CHROMIUM` at a Chromium binary:
+
+```bash
+HCMS_CHROMIUM=/path/to/chrome python manage.py test access.test_browser_flow --noinput
+```
+
+Browser authorisation is switched on for the access tests and off for the rest of the suite. The
+switch is `BROWSER_AUTHORISATION_ENFORCED` in `hospital_system/settings.py`. It is off only during a
+`manage.py test` run.
 
 Coverage areas to build out:
 
@@ -636,13 +784,23 @@ Coverage areas to build out:
 - Laboratory: amend and verify rules, the 100-character report minimum, critical notification
 - Data export: secret fields absent, manifest counts equal file rows, admin-only access
 - Permissions: each role sees and does only what its capabilities allow
-- Device gate (once built): unenrolled requests, single-use and expired links, revocation
+- Browser authorisation: unapproved and copied cookies refused, proof and replay checks, email codes,
+  backup codes, lockout, trust window, IP change, one staff login per browser, emergency passes,
+  bootstrap command, audit entries and admin alerts (`access`)
+- Real browser (optional): approval, key creation, first-login enrolment and a copied cookie in a
+  second browser (`access/test_browser_flow.py`)
 
 ---
 
 ## Security
 
-- **Device gate** *(planned)*. Untrusted browsers will get a single "not enrolled" page.
+- **Browser authorisation.** Only approved browsers reach the system. Each approved browser holds a
+  non-exportable key, and a copied cookie is not enough. See
+  [Browser authorisation and sign-in](#browser-authorisation-and-sign-in).
+- **Sign-in codes and backup codes.** Email code at every login (outside the 12-hour trust window),
+  three wrong codes lock the browser, and backup codes are single-use.
+- **Audit and alerts.** Browser, sign-in, code, IP-change and emergency events are audited. Admins are
+  alerted in the app and by email.
 - **Secrets.** Read from `.env` or the environment, never from the code. `DJANGO_DEBUG` must be
   `False` on any server that real users reach.
 - **Sessions and cookies.** Secure, HTTP-only cookies; SameSite Lax. Enable
@@ -656,7 +814,8 @@ Coverage areas to build out:
 - **Honeypot and rate limits** on public staff self-registration.
 - **Client IP addresses.** Behind a reverse proxy, the IP must be read from `X-Forwarded-For` only
   from trusted proxies, or it can be spoofed.
-- **Planned, not yet enforced:** second factor (TOTP) for administrators and device-link issuers.
+- **Second factor.** Email codes with backup codes are enforced for every staff account. An
+  authenticator app (TOTP) is not implemented.
 - **URL explorer.** A development tool that exists only when `DEBUG=True`, and only for superusers.
 
 To report a vulnerability, do not open a public issue. Contact the maintainers privately.
@@ -708,19 +867,19 @@ Take a database backup before running `migrate`.
 
 ## Troubleshooting
 
-| Symptom | Likely cause and fix |
-|---|---|
-| `ImproperlyConfigured: Set DJANGO_SECRET_KEY in your .env file` | `.env` is missing, or the variable is blank. Copy `.env.example` and fill it in. |
-| Static files don't load with `DEBUG=False` | `collectstatic` hasn't been run. Run `collectstatic --noinput`. |
-| `DisallowedHost` error | The hostname isn't in `DJANGO_ALLOWED_HOSTS`. Add it and restart. |
-| `CSRF verification failed` over HTTPS or a tunnel | The `https://` origin isn't in `DJANGO_CSRF_TRUSTED_ORIGINS`. |
-| Staff registration form is open when it shouldn't be | `ALLOW_STAFF_REGISTRATION` was written with spaces around `=`, so it was ignored. Use `ALLOW_STAFF_REGISTRATION=False`. |
-| `ModuleNotFoundError: argon2` | Install `argon2-cffi`. |
-| `ModuleNotFoundError: PIL` | Install `Pillow`. |
-| Export fails with a passphrase error | Use a passphrase of at least 12 characters. |
-| `unzip` reports `unsupported compression method 99` | The export is AES-encrypted. Use `7z`. |
-| Docker build cannot find `Dockerfile` | The file must be named exactly `Dockerfile` (capital D, lowercase rest) at the project root. |
-| Docker `permission denied` on the socket | Your user isn't in the `docker` group. Run `sudo usermod -aG docker $USER`, then log in again. |
+| Symptom                                                         | Likely cause and fix                                                                                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `ImproperlyConfigured: Set DJANGO_SECRET_KEY in your .env file` | `.env` is missing, or the variable is blank. Copy `.env.example` and fill it in.                                        |
+| Static files don't load with `DEBUG=False`                      | `collectstatic` hasn't been run. Run `collectstatic --noinput`.                                                         |
+| `DisallowedHost` error                                          | The hostname isn't in `DJANGO_ALLOWED_HOSTS`. Add it and restart.                                                       |
+| `CSRF verification failed` over HTTPS or a tunnel               | The `https://` origin isn't in `DJANGO_CSRF_TRUSTED_ORIGINS`.                                                           |
+| Staff registration form is open when it shouldn't be            | `ALLOW_STAFF_REGISTRATION` was written with spaces around `=`, so it was ignored. Use `ALLOW_STAFF_REGISTRATION=False`. |
+| `ModuleNotFoundError: argon2`                                   | Install `argon2-cffi`.                                                                                                  |
+| `ModuleNotFoundError: PIL`                                      | Install `Pillow`.                                                                                                       |
+| Export fails with a passphrase error                            | Use a passphrase of at least 12 characters.                                                                             |
+| `unzip` reports `unsupported compression method 99`             | The export is AES-encrypted. Use `7z`.                                                                                  |
+| Docker build cannot find `Dockerfile`                           | The file must be named exactly `Dockerfile` (capital D, lowercase rest) at the project root.                            |
+| Docker `permission denied` on the socket                        | Your user isn't in the `docker` group. Run `sudo usermod -aG docker $USER`, then log in again.                          |
 
 ---
 
@@ -740,9 +899,9 @@ dashboard/            overview, audit log, data manager, export and charts
 duty/                 clock-in, rooms, on-duty lists
 notifications/        in-app notifications
 maternity/            births, children, immunisation
-device_trust/         browser enrolment (planned)
+access/               browser authorisation, browser key, email codes, backup codes, emergency access
 templates/            shared and per-app templates
-static/               static source files (served through staticfiles/ with WhiteNoise)
+static/               static source files, including js/hcms_proof.js (browser check)
 staticfiles/          collected static files (generated; not committed)
 private_exports/      encrypted data exports (generated; not committed)
 tests/                automated tests
@@ -764,8 +923,12 @@ Dockerfile            container build (project root)
 - Automatic cancellation of unpaid scans and tests after a time window is planned, not implemented.
 - Vaccine dosing with a recorded allergy has no override path yet; the dose is refused.
 - Nurse vitals on a ward stay are recorded on the review visit, not on a single ward chart.
-- The device gate is not implemented; any browser that can reach the server can sign in.
-- Administrator second-factor enforcement is not enabled.
+- An authenticator app (TOTP) is not implemented; sign-in uses email codes and backup codes.
+- A stolen proof cookie and token cookie together work in another browser for up to 5 minutes. The
+  browser key blocks longer use.
+- Refusals of requests from unapproved browsers are not logged one by one, to avoid flooding the log.
+- The real-browser test is optional and needs Playwright, which is not in `requirements.txt`.
+- Browser keys need HTTPS. Over plain HTTP the key cannot be created, so no browser can be approved.
 - Client IP addresses in the audit log need hardening before they are used as evidence.
 - Reference ranges, prices, bed-day tariffs and the immunisation schedule are placeholders for hospital review.
 - Some test files have not been run against the current code.

@@ -1,0 +1,6 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HCMS - Backup codes</title><style>body{font-family:system-ui,sans-serif;background:#f1f5f9;margin:0;padding:16px;color:#0f172a}.card{max-width:520px;margin:40px auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px}button{min-height:44px;margin-top:12px;border:0;border-radius:12px;background:#0f172a;color:#fff;font-weight:700;padding:0 16px}</style></head><body><div class="card">
+<h1 style="font-size:20px;margin:0 0 6px">Backup codes</h1>
+<p style="font-size:14px;color:#475569">You have <strong>{{ remaining }}</strong> unused backup code(s). Each works once, instead of an emailed code, if you cannot receive email.</p>
+<form method="post">{% csrf_token %}<button type="submit">Generate new backup codes</button></form>
+<p style="font-size:13px;color:#475569">Generating new codes makes every older code stop working.</p>
+</div><script src="{% static 'js/hcms_proof.js' %}"></script></body></html>

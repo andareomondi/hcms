@@ -1,0 +1,27 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HCMS - Enter approval code</title><style>body{font-family:system-ui,sans-serif;background:#f1f5f9;margin:0;padding:16px;color:#0f172a}.card{max-width:520px;margin:40px auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;padding:24px}label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;color:#334155;margin:12px 0 4px}input{width:100%;box-sizing:border-box;min-height:44px;border:1px solid #cbd5e1;border-radius:12px;padding:8px 12px;font-size:16px}button{min-height:44px;width:100%;margin-top:16px;border:0;border-radius:12px;background:#0f172a;color:#fff;font-weight:700;font-size:15px}.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:10px;margin:12px 0;font-size:14px}.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:12px;padding:10px;margin:12px 0;font-size:14px}.code{font-family:monospace;font-size:20px;font-weight:700;background:#f8fafc;border:1px dashed #94a3b8;border-radius:12px;padding:12px;word-break:break-all;text-align:center}</style></head><body><div class="card"><h1 style="font-size:20px;margin:0 0 6px">Enter your approval code</h1>
+<p style="font-size:14px;color:#475569">The administrator gives you this code. It works once and expires after 30 minutes.</p>
+<form method="post" id="redeem-form">{% csrf_token %}
+{% if form.non_field_errors %}<div class="err">{{ form.non_field_errors }}</div>{% endif %}
+<label for="id_code">Code</label>{{ form.code }}
+<input type="hidden" name="public_key" value="">
+<button type="submit">Authorise this browser</button></form>
+</div><script src="{% static 'js/hcms_proof.js' %}"></script><script>
+(function () {
+  var form = document.getElementById("redeem-form");
+  form.addEventListener("submit", async function (e) {
+    if (form.dataset.ready === "1") { return; }
+    e.preventDefault();
+    try {
+      // The private key is created non-exportable and stored in this browser only. Only the public key is sent.
+      var pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
+      var jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+      await HCMSProof.storeKey(pair.privateKey);
+      form.querySelector("input[name=public_key]").value = JSON.stringify({ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y });
+      form.dataset.ready = "1";
+      form.submit();
+    } catch (err) {
+      alert("This browser cannot create its security key. Use a current version of Chrome, Edge, Firefox or Safari.");
+    }
+  });
+})();
+</script></body></html>

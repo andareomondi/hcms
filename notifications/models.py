@@ -14,6 +14,7 @@ class Notification(models.Model):
         ("DOCTOR_CALLED_PATIENT", "Doctor called a patient"),
         ("PATIENT_ASSIGNED", "Patient assigned to you"),
         ("SYSTEM", "System"),
+        ("SECURITY_ALERT", "Security alert"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     recipient = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name="notifications")
