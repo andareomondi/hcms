@@ -400,7 +400,14 @@ def patient_register_view(request):
         last_name = request.POST.get("last_name", "").strip()
         first_name = request.POST.get("first_name", "").strip()
         dob_raw = request.POST.get("date_of_birth") or None
-        dob = date.fromisoformat(dob_raw) if dob_raw else None
+        dob = None
+        if dob_raw:
+            from hospital_system import validation as v
+            try:
+                dob = v.birth_date(dob_raw)
+            except v.ValidationError as exc:
+                return render(request, "core_patients/register.html",
+                              _register_context(error=str(exc), **_form_state(request)))
         id_number = (request.POST.get("id_number") or "").strip() or None
  
         if not is_provisional and not last_name:

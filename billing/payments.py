@@ -8,6 +8,8 @@ from core_patients.models import Patient, PatientRelationship
 from triage_queue.models import Encounter
 from triage_queue.services import activate_visit
 
+from hospital_system import validation as v
+
 from . import services as billing
 from .models import Payment
 
@@ -82,11 +84,9 @@ def take_payment(*, encounter, method, amount_raw, reference, payer_phone, staff
     if method not in ("MANUAL", "MPESA"):
         raise PaymentError("Choose Manual or M-Pesa.")
     try:
-        amount = Decimal(str(amount_raw)).quantize(Decimal("0.01"))
-    except (InvalidOperation, TypeError):
-        raise PaymentError("Enter a valid amount.")
-    if amount <= 0:
-        raise PaymentError("The amount must be greater than zero.")
+        amount = v.money(amount_raw, "Amount")
+    except v.ValidationError as exc:
+        raise PaymentError(str(exc))
 
     reference = (reference or "").strip().upper()
     if method == "MPESA":

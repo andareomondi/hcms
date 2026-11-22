@@ -8,6 +8,7 @@ from django.utils import timezone
 from billing import services as billing
 from core_patients.allergy_services import conflicts_for
 from core_patients.models import Patient, PatientRelationship
+from hospital_system import validation as v
 from pharmacy import services as pharmacy
 from pharmacy.models import Medication
 from triage_queue.models import Encounter
@@ -22,6 +23,10 @@ PREGNANCY_DAYS = 280
 
 class MaternityError(Exception):
     """A rule staff must see. Shown as-is."""
+
+
+MAX_PREGNANCY_DAYS = 300   # a pregnancy is about 280 days from the last period; allow for dating error
+MAX_OVERDUE_DAYS = 60
 
 
 def _newborn_identifier(delivered_at):
@@ -57,8 +62,19 @@ def open_pregnancy(*, patient, lmp, edd, edd_override_reason, staff):
     today = timezone.localdate()
     if lmp is None and edd is None:
         raise MaternityError("Enter the last menstrual period or the due date.")
-    if lmp is not None and lmp > today:
-        raise MaternityError("The last menstrual period cannot be in the future.")
+    try:
+        if lmp is not None:
+            lmp = v.past_date(lmp, "Last menstrual period")
+            if lmp < today - timedelta(days=MAX_PREGNANCY_DAYS):
+                raise v.ValidationError("Last menstrual period: more than 300 days ago. "
+                                        "Check the date.")
+        if edd is not None:
+            if edd < today - timedelta(days=MAX_OVERDUE_DAYS):
+                raise v.ValidationError("Estimated due date: more than 60 days in the past. Check the date.")
+            if edd > today + timedelta(days=MAX_PREGNANCY_DAYS):
+                raise v.ValidationError("Estimated due date: more than 300 days away. Check the date.")
+    except v.ValidationError as exc:
+        raise MaternityError(str(exc))
     if Pregnancy.objects.filter(patient=patient, status="ONGOING").exists():
         raise MaternityError("This patient already has an ongoing pregnancy.")
 

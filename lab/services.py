@@ -5,10 +5,19 @@ from django.urls import reverse
 from django.utils import timezone
 
 from billing import services as billing
+from hospital_system import validation as v
 from notifications.services import notify, notify_on_duty
 from triage_queue.services import notify_results_ready
 
 from .models import LabOrder, LabOrderLine, LabResultAmendment, LabTest
+
+
+def _result_text(value, label):
+    """A written result is stored in a 255-character column. Too long is refused, not cut short."""
+    try:
+        return v.text(value, label, max_length=255)
+    except v.ValidationError as exc:
+        raise LabError(str(exc))
 
 REPORT_MIN_CHARS = 100
 
@@ -148,9 +157,9 @@ def enter_result(*, line, staff, value_raw):
     flag = ""
     if test.result_type == "NUMERIC":
         try:
-            number = Decimal(value_raw)
-        except Exception:
-            raise LabError(f"{test.name}: enter a number.")
+            number = v.parse_decimal(value_raw, test.name, maximum=Decimal("999999999"), places=3)
+        except v.ValidationError as exc:
+            raise LabError(str(exc))
         line.value_number = number
         line.value_text = ""
         flag = compute_flag(test, number)
@@ -164,7 +173,7 @@ def enter_result(*, line, staff, value_raw):
         if not value_raw:
             raise LabError(f"{test.name}: enter a result.")
         line.value_number = None
-        line.value_text = value_raw[:255]
+        line.value_text = _result_text(value_raw, test.name)
         flag = "NORMAL" if not test.reference_text else (
             "NORMAL" if value_raw.lower() == test.reference_text.lower() else "ABNORMAL")
 
@@ -292,12 +301,12 @@ def amend_result(*, line, supervisor, value_raw, reason):
     test = line.test
     if test.result_type == "NUMERIC":
         try:
-            new_number = Decimal(value_raw)
-        except Exception:
-            raise LabError("Enter a number.")
+            new_number = v.parse_decimal(value_raw, test.name, maximum=Decimal("999999999"), places=3)
+        except v.ValidationError as exc:
+            raise LabError(str(exc))
         new_text, new_flag = "", compute_flag(test, new_number)
     else:
-        new_number, new_text = None, value_raw[:255]
+        new_number, new_text = None, _result_text(value_raw, test.name)
         new_flag = value_raw.upper() if test.result_type == "POSITIVE_NEGATIVE" else ""
 
     LabResultAmendment.objects.create(

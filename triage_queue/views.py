@@ -59,9 +59,9 @@ def triage_visit_view(request, encounter_id):
     doctors = on_duty_staff(role="DOCTOR").select_related("user").order_by("user__last_name")
 
     if request.method == "POST":
-        def _num(name, cast=str):
-            raw = request.POST.get(name, "").strip()
-            return cast(raw) if raw else None
+        def _num(name):
+            # Raw text on purpose: triage_encounter validates range and type and reports a message.
+            return request.POST.get(name, "").strip() or None
 
         try:
             priority = int(request.POST.get("priority", 1))
@@ -74,11 +74,11 @@ def triage_visit_view(request, encounter_id):
 
         vitals = dict(
             temperature_c=_num("temperature_c"),
-            pulse_bpm=_num("pulse_bpm", int),
-            systolic_mmhg=_num("systolic_mmhg", int),
-            diastolic_mmhg=_num("diastolic_mmhg", int),
-            respiratory_rate=_num("respiratory_rate", int),
-            spo2_percent=_num("spo2_percent", int),
+            pulse_bpm=_num("pulse_bpm"),
+            systolic_mmhg=_num("systolic_mmhg"),
+            diastolic_mmhg=_num("diastolic_mmhg"),
+            respiratory_rate=_num("respiratory_rate"),
+            spo2_percent=_num("spo2_percent"),
             weight_kg=_num("weight_kg"),
             notes=request.POST.get("triage_notes", "").strip(),
         )

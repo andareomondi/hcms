@@ -7,7 +7,7 @@ import os
 import zipfile
 from pathlib import Path
 
-EXCLUDED_DIRS = {"__pycache__", ".git"}
+EXCLUDED_DIRS = {"__pycache__", ".git", "media", "staticfiles", "venv"}
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT.parent / f"{ROOT.name}.zip"

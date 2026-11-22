@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core_patients.models import Patient
+from hospital_system.validation import ValidationError as _VE
 from notifications.services import notify
 from wards.models import Admission
 
@@ -27,6 +28,40 @@ from .services import (
 
 PRIORITIES = (1, 2, 3)
 PAY_WALL_EXEMPT_TYPES = ("DELIVERY", "CHILD_HEALTH", "INPATIENT")
+
+TRIAGE_VITAL_RULES = {
+    "temperature_c": ("Temperature (°C)", dict(low=30, high=44, dec=True)),
+    "pulse_bpm": ("Pulse (beats per minute)", dict(low=20, high=260)),
+    "systolic_mmhg": ("Systolic blood pressure", dict(low=40, high=260)),
+    "diastolic_mmhg": ("Diastolic blood pressure", dict(low=20, high=200)),
+    "respiratory_rate": ("Respiratory rate", dict(low=4, high=80)),
+    "spo2_percent": ("Oxygen saturation (%)", dict(low=40, high=100)),
+    "weight_kg": ("Weight (kg)", dict(low=0.5, high=400, dec=True)),
+}
+
+
+def validate_triage_vitals(vitals):
+    """Range-check every vital that was given. Blank means not measured, which is allowed."""
+    from hospital_system import validation as v
+    clean = {}
+    for field, value in vitals.items():
+        if field == "notes":
+            clean[field] = (value or "").strip()[:2000]
+            continue
+        if field not in TRIAGE_VITAL_RULES or value is None or value == "":
+            clean[field] = None
+            continue
+        label, rule = TRIAGE_VITAL_RULES[field]
+        if rule.get("dec"):
+            number = v.parse_decimal(value, label, places=1 if field == "temperature_c" else 2)
+        else:
+            number = v.parse_int(value, label)
+        clean[field] = v.in_range(number, label, rule["low"], rule["high"])
+    sys_, dia = clean.get("systolic_mmhg"), clean.get("diastolic_mmhg")
+    if sys_ is not None and dia is not None and dia >= sys_:
+        raise _VE("Diastolic blood pressure must be lower than systolic. Check the entry.")
+    return clean
+
 PREGNANCY_TYPES = ("ANC", "DELIVERY", "MATERNITY")
 STAY_TYPE = "WARD_STAY"
 REVIEW_TYPE = "INPATIENT"
@@ -124,7 +159,11 @@ def triage_encounter(*, encounter, staff, doctor, priority, vitals, chief_compla
     enc.save(update_fields=["chief_complaint", "prepay_bypassed", "prepay_bypass_reason",
                             "prepay_bypass_by", "prepay_bypass_at"])
 
-    TriageVitals.objects.create(encounter=enc, recorded_by=staff, **vitals)
+    try:
+        clean = validate_triage_vitals(vitals)
+    except _VE as exc:
+        raise FlowError(str(exc))
+    TriageVitals.objects.create(encounter=enc, recorded_by=staff, **clean)
 
     entry = QueueEntry.objects.create(
         encounter=enc,

@@ -69,8 +69,9 @@ def family_view(request, patient_id):
 def register_child_action(request, patient_id):
     parent = get_object_or_404(Patient, pk=patient_id)
     try:
+        from hospital_system import validation as v
         dob_raw = request.POST.get("date_of_birth", "").strip()
-        dob = date.fromisoformat(dob_raw) if dob_raw else None
+        dob = v.birth_date(dob_raw) if dob_raw else None
         child = register_child(
             parent=parent,
             first_name=request.POST.get("first_name", ""),

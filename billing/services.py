@@ -57,9 +57,12 @@ def add_charge(*, encounter, source_type, description, unit_price, staff,
         if existing:
             return existing
 
-    unit_price = Decimal(unit_price).quantize(CENT)
-    quantity = Decimal(quantity)
+    from hospital_system import validation as v
+    unit_price = v.money(unit_price, "Price", allow_zero=True).quantize(CENT)
+    quantity = v.quantity(quantity, "Quantity").quantize(Decimal("0.001"))
     amount = (unit_price * quantity).quantize(CENT)
+    if amount > v.MAX_MONEY:
+        raise ValueError(f"The line total cannot exceed {v.MAX_MONEY}.")
     patient = encounter.patient
     return Charge.objects.create(
         encounter=encounter,

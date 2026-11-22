@@ -174,7 +174,7 @@ def prescribe_medication_action(request, encounter_id):
     frequency = request.POST.get("frequency", "OD")
     dose_text = request.POST.get("dose_text", "").strip()
     try:
-        days = max(1, int(request.POST.get("duration_days", "5")))
+        days = min(365, max(1, int(request.POST.get("duration_days", "5"))))
     except ValueError:
         days = 5
     per_day = {"OD": 1, "BID": 2, "TID": 3, "QID": 4, "STAT": 1}.get(frequency, 1)

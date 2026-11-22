@@ -3,7 +3,7 @@ Pharmacy rules: medicines are released only once paid (or billed to a ward stay)
 stock is never oversold, serials must match the medicine, and expired or
 out-of-scope items are refused.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -183,3 +183,25 @@ class MaternityMedicineTests(PharmacyBase):
         order = self.encounter.medication_orders.get()
         with self.assertRaises(ph.PrepayError):
             ph.check_prepaid(order)
+
+
+class ReceiveValidationTests(PharmacyBase):
+    """Server-side refusals for stock receiving (the service is the authority, not the form)."""
+
+    def test_expiry_more_than_ten_years_away_is_refused(self):
+        with self.assertRaises(ph.PharmacyError):
+            ph.receive_batch(medication=self.med, batch_number="FAR", expiry_date=date(9999, 1, 1),
+                             serials=["SN-FAR"], doses_per_unit=10, staff=self.pharmacist)
+
+    def test_absurd_doses_per_unit_is_refused(self):
+        with self.assertRaises(ph.PharmacyError):
+            ph.receive_batch(medication=self.med, batch_number="DPU", expiry_date=_future(),
+                             serials=["SN-DPU"], doses_per_unit=-3, staff=self.pharmacist)
+        with self.assertRaises(ph.PharmacyError):
+            ph.receive_batch(medication=self.med, batch_number="DPU2", expiry_date=_future(),
+                             serials=["SN-DPU2"], doses_per_unit=50000, staff=self.pharmacist)
+
+    def test_overlong_batch_number_is_refused(self):
+        with self.assertRaises(ph.PharmacyError):
+            ph.receive_batch(medication=self.med, batch_number="X" * 41, expiry_date=_future(),
+                             serials=["SN-LONG"], doses_per_unit=10, staff=self.pharmacist)

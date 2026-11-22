@@ -6,6 +6,8 @@ from django.utils import timezone
 
 from notifications.services import notify_on_duty
 
+from hospital_system import validation as v
+
 from . import services as billing
 from .models import Charge, Refund
 
@@ -17,6 +19,7 @@ class RefundError(Exception):
 
 
 def _request_refund(*, encounter, anchor, amount, reason, staff):
+    amount = v.money(amount, "Refund amount")
     refund = Refund.objects.create(
         charge=anchor,
         encounter=encounter,

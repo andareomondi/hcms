@@ -204,18 +204,30 @@ def create_formulary_order(*, encounter, medication, doctor, route, frequency, d
 
 # ---------- receiving ----------
 
+MAX_SHELF_LIFE_DAYS = 3650
+MAX_SERIALS_PER_RECEIPT = 5000
+MAX_DOSES_PER_UNIT = 1000
+
+
 @transaction.atomic
 def receive_batch(*, medication, batch_number, expiry_date, serials, doses_per_unit, staff):
-    batch_number = (batch_number or "").strip().upper()
-    if not batch_number:
-        raise PharmacyError("Enter the batch number from the box or vial label.")
-    if expiry_date is None or expiry_date <= timezone.localdate():
-        raise PharmacyError("The expiry date must be in the future.")
-    if not serials:
-        raise PharmacyError("Scan at least one serial.")
-    per_unit = doses_per_unit or medication.doses_per_unit
-    if per_unit < 1:
-        raise PharmacyError("Doses per unit must be at least 1.")
+    from hospital_system import validation as v
+    try:
+        batch_number = v.text(batch_number, "Batch number", max_length=40, required=True).upper()
+        if expiry_date is None or expiry_date <= timezone.localdate():
+            raise v.ValidationError("The expiry date must be in the future.")
+        if expiry_date > timezone.localdate() + timedelta(days=MAX_SHELF_LIFE_DAYS):
+            raise v.ValidationError("The expiry date is more than 10 years away. Check the label.")
+        if not serials:
+            raise v.ValidationError("Scan at least one serial.")
+        if len(serials) > MAX_SERIALS_PER_RECEIPT:
+            raise v.ValidationError(f"Receive at most {MAX_SERIALS_PER_RECEIPT} units at a time.")
+        for s in serials:
+            v.text(s, "Serial", max_length=64, required=True)
+        per_unit = v.parse_int(doses_per_unit or medication.doses_per_unit, "Doses per unit",
+                               minimum=1, maximum=MAX_DOSES_PER_UNIT)
+    except v.ValidationError as exc:
+        raise PharmacyError(str(exc))
     if StockBatch.objects.filter(medication=medication, batch_number=batch_number).exists():
         raise PharmacyError(f"Batch {batch_number} is already received for {medication.brand_name}.")
 
