@@ -53,6 +53,7 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("maternity/", include("maternity.urls")),
     path("lab/", include("lab.urls")),
+    path("surgery/", include("surgery.urls")),
     path("sw.js", service_worker, name="service_worker"),
     
     # Root dashboard app

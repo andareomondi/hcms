@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Theatre stock - HCMS{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <a href="{% url 'surgery:list' %}" class="text-xs text-slate-500 hover:underline">← Surgery</a>
+    <h1 class="text-2xl font-bold text-slate-900 mt-1">Theatre stock</h1>
+    <p class="text-sm text-slate-500">Kept apart from the pharmacy. Used stock is taken from the batch that expires first.</p>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <form method="post" class="bg-white rounded-2xl border p-5 space-y-3">
+      {% csrf_token %}<input type="hidden" name="action" value="item">
+      <h2 class="font-bold">Add an item</h2>
+      <input name="name" placeholder="Item name" required class="w-full border rounded-lg p-2">
+      <input name="unit" placeholder="Unit (e.g. each, pack)" class="w-full border rounded-lg p-2">
+      <button class="bg-slate-800 text-white rounded-lg px-4 py-2 text-sm">Add item</button>
+    </form>
+    <form method="post" class="bg-white rounded-2xl border p-5 space-y-3">
+      {% csrf_token %}<input type="hidden" name="action" value="receive">
+      <h2 class="font-bold">Receive a batch</h2>
+      <select name="item" required class="w-full border rounded-lg p-2">
+        {% for i in items %}<option value="{{ i.pk }}">{{ i.name }}</option>{% endfor %}
+      </select>
+      <input name="batch_number" placeholder="Batch number" required class="w-full border rounded-lg p-2">
+      <input type="date" name="expiry_date" required class="w-full border rounded-lg p-2">
+      <input type="number" name="quantity" min="1" placeholder="Quantity" required class="w-full border rounded-lg p-2">
+      <button class="bg-teal-700 text-white rounded-lg px-4 py-2 text-sm">Receive</button>
+    </form>
+  </div>
+  <section class="bg-white rounded-2xl border overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+        <tr><th class="p-3">Item</th><th class="p-3">Batch</th><th class="p-3">Expires</th><th class="p-3">On hand</th></tr>
+      </thead>
+      <tbody>
+      {% for b in batches %}
+        <tr class="border-t"><td class="p-3">{{ b.item.name }}</td><td class="p-3">{{ b.batch_number }}</td>
+          <td class="p-3">{{ b.expiry_date|date:"d M Y" }}</td><td class="p-3">{{ b.quantity_on_hand }} {{ b.item.unit }}</td></tr>
+      {% empty %}
+        <tr><td class="p-6 text-center text-slate-500" colspan="4">No stock on hand.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

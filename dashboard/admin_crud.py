@@ -58,8 +58,12 @@ MANAGED = {
     "billing.Payment": {"editable": False, "deletable": False},
     "duty.Room": {},
     "duty.DutySession": {"editable": False, "deletable": False},
-    "notifications.Notification": {"editable": False, "deletable": True},
+    "notifications.Notification": {"editable": False, "deletable": False},
     "dashboard.AuditLog": {"editable": False, "deletable": False},
+    "lab.LabTest": {},
+    "lab.LabOrder": {"editable": False, "deletable": False},
+    "lab.LabOrderLine": {"editable": True, "deletable": False},
+    "lab.LabResultAmendment": {"editable": False, "deletable": False},
 }
 
 _LOOKUP = {k.lower(): k for k in MANAGED}

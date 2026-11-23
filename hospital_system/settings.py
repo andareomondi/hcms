@@ -83,6 +83,7 @@ INSTALLED_APPS = [
 
     # HCMS Modular Monolith Apps
     "access",
+    "surgery",
     "core_patients",
     "triage_queue",
     "doctors_portal",

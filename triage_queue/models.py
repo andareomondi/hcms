@@ -14,6 +14,7 @@ class Encounter(models.Model):
         ("ANC", "Antenatal visit"),
         ("DELIVERY", "Delivery"),
         ("CHILD_HEALTH", "Child health visit"),
+        ("SURGERY", "Surgical case (billing container)"),
     ]
     PAYER_CHOICES = [("SELF_PAY", "Self-pay"), ("INSURANCE", "Insurance (placeholder)")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

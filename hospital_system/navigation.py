@@ -37,6 +37,8 @@ GROUPS = [
              "caps": [Cap.VIEW_RADIOLOGY]},
             {"label": "Laboratory", "url": "lab:dashboard", "icon": "🧪",
              "caps": [Cap.LAB_VIEW]},
+            {"label": "Surgery", "url": "surgery:list", "icon": "🔪",
+             "caps": [Cap.SURGERY_VIEW]},
         ],
     },
     {

@@ -7,5 +7,4 @@ media/
 private_exports/
 data_backups/
 staticfiles/
-codes.txt
 *.sqlite3

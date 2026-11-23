@@ -83,7 +83,7 @@ def _refuse_pregnancy_visit_for_male(patient, encounter_type):
 def awaiting_triage():
     """Open visits with no queue entry, oldest first. Ward stays are not triage visits."""
     return (Encounter.objects.filter(status="OPEN", queue_entries__isnull=True)
-            .exclude(encounter_type=STAY_TYPE)
+            .exclude(encounter_type__in=[STAY_TYPE, "SURGERY"])
             .select_related("patient")
             .order_by("opened_at"))
 
@@ -93,6 +93,8 @@ def open_visit(*, patient, encounter_type, payer_type, staff):
     valid_types = dict(Encounter.TYPE_CHOICES)
     if encounter_type not in valid_types or encounter_type == STAY_TYPE:
         raise FlowError("Choose a valid visit type.")
+    if encounter_type == "SURGERY":
+        raise FlowError("Surgery is booked through the theatre, not opened as a visit.")
 
     Patient.objects.select_for_update().get(pk=patient.pk)
 

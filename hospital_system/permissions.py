@@ -42,6 +42,11 @@ class Cap:
     LAB_VERIFY = "LAB_VERIFY"                # verify and release
     LAB_AMEND = "LAB_AMEND"                  # amend released results
     LAB_CATALOGUE = "LAB_CATALOGUE"          # manage tests and prices
+    SURGERY_BOOK = "SURGERY_BOOK"            # book a surgical case
+    SURGERY_VIEW = "SURGERY_VIEW"            # read surgical cases and the theatre record
+    SURGERY_CLINICAL = "SURGERY_CLINICAL"    # pre-op, consent, team, theatre checkpoints, recovery
+    SURGERY_SIGN_OFF = "SURGERY_SIGN_OFF"    # surgeon and anaesthetist sign-off
+    SURGERY_STOCK = "SURGERY_STOCK"          # receive and use theatre stock
 
 
 # Collect every single capability defined in the Cap class
@@ -58,6 +63,7 @@ ADMIN_CAPS = ALL_CAPS - {
     Cap.DISPENSE,
     Cap.RADIOLOGY_REPORT,
     Cap.LAB_VIEW,
+    Cap.SURGERY_CLINICAL, Cap.SURGERY_SIGN_OFF, Cap.SURGERY_BOOK, Cap.SURGERY_STOCK,
 }
 
 ROLE_CAPS = {
@@ -99,6 +105,10 @@ ROLE_CAPS = {
         Cap.LAB_VERIFY, Cap.LAB_AMEND, Cap.LAB_CATALOGUE,
     },
 }
+ROLE_CAPS["DOCTOR"] |= {Cap.SURGERY_BOOK, Cap.SURGERY_VIEW, Cap.SURGERY_CLINICAL, Cap.SURGERY_SIGN_OFF}
+ROLE_CAPS["NURSE"] |= {Cap.SURGERY_VIEW, Cap.SURGERY_CLINICAL, Cap.SURGERY_STOCK}
+ROLE_CAPS["PHARMACIST"] |= {Cap.SURGERY_STOCK}
+ROLE_CAPS["BILLING"] |= {Cap.SURGERY_VIEW}
 
 
 def caps_for(user):

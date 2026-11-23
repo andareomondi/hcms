@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Surgery: {{ case.procedure.name }} - HCMS{% endblock %}
+{% block content %}
+{% comment %}Each block is one step of the theatre record, in the order it has to happen.{% endcomment %}
+<div class="space-y-6">
+  <div>
+    <a href="{% url 'surgery:list' %}" class="text-xs text-slate-500 hover:underline">← Surgery</a>
+    <h1 class="text-2xl font-bold text-slate-900 mt-1">{{ case.procedure.name }} · {{ case.patient }}</h1>
+    <p class="text-sm text-slate-500">
+      {{ case.get_category_display }} · {{ case.get_status_display }} · age {{ age|default:"unknown" }}
+      · Outstanding KES {{ owed|floatformat:2 }}
+    </p>
+  </div>
+
+  {% if case.status == "CANCELLED" %}
+    <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm">Cancelled: {{ case.cancel_reason }}</div>
+  {% endif %}
+  {% if case.status == "COMPLETED" %}
+    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm">Completed. Both sign-offs are recorded.</div>
+  {% endif %}
+
+  <section class="bg-white rounded-2xl border p-5 space-y-2">
+    <h2 class="font-bold">1. Team</h2>
+    <ul class="text-sm space-y-1">
+      {% for label, member in team_rows %}
+        <li>{{ label }}: {% if member %}{{ member.staff }}{% else %}<span class="text-amber-700">not named</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% if case.status == "BOOKED" and can_clinical %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'team' %}" class="flex flex-wrap gap-2 pt-2">
+      {% csrf_token %}
+      <select name="role" class="border rounded-lg p-2 text-sm">
+        {% for value, label in team_roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <select name="staff" class="border rounded-lg p-2 text-sm">
+        {% for s in staff_options %}<option value="{{ s.pk }}">{{ s }} ({{ s.get_role_display }})</option>{% endfor %}
+      </select>
+      <button class="bg-slate-800 text-white rounded-lg px-3 py-2 text-sm">Add to team</button>
+    </form>
+    {% endif %}
+  </section>
+
+  {% if case.status == "BOOKED" and can_clinical %}
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">2. Pre-operative check</h2>
+    {% if pre_op %}
+      <p class="text-sm">Recorded: fasting {{ pre_op.fasting_hours }} h, pulse {{ pre_op.vitals.pulse_bpm|default:"-" }}, BP {{ pre_op.vitals.systolic_mmhg|default:"-" }}/{{ pre_op.vitals.diastolic_mmhg|default:"-" }}.</p>
+    {% else %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'pre_op' %}" class="grid md:grid-cols-3 gap-2 text-sm">
+      {% csrf_token %}
+      <label>Fasting (hours)<input name="fasting_hours" type="number" step="0.1" required class="w-full border rounded-lg p-2"></label>
+      <label>Pulse (bpm)<input name="pulse_bpm" type="number" required class="w-full border rounded-lg p-2"></label>
+      <label>Systolic<input name="systolic_mmhg" type="number" required class="w-full border rounded-lg p-2"></label>
+      <label>Diastolic<input name="diastolic_mmhg" type="number" class="w-full border rounded-lg p-2"></label>
+      <label>Temperature (°C)<input name="temperature_c" type="text" class="w-full border rounded-lg p-2"></label>
+      <label>SpO₂ (%)<input name="spo2_percent" type="number" class="w-full border rounded-lg p-2"></label>
+      <button class="bg-teal-700 text-white rounded-lg px-3 py-2 md:col-span-3">Record pre-op check</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">3. Consent</h2>
+    {% if consent %}
+      <p class="text-sm">Signed by {{ consent.signer_name }} ({{ consent.get_relationship_display }}{% if consent.is_guardian %}, guardian{% endif %}), typed signature “{{ consent.typed_signature }}”.</p>
+      <p class="text-xs text-slate-500">{{ consent.statement }}</p>
+    {% else %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'consent' %}" class="grid md:grid-cols-2 gap-2 text-sm">
+      {% csrf_token %}
+      <label>Name of person signing<input name="signer_name" required class="w-full border rounded-lg p-2"></label>
+      <label>Relationship to patient
+        <select name="relationship" class="w-full border rounded-lg p-2">
+          {% for value, label in consent_relationships %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select></label>
+      <label class="flex items-center gap-2"><input type="checkbox" name="is_guardian"> The signer is the legal guardian</label>
+      <label>Type the signer's full name to sign<input name="typed_signature" required class="w-full border rounded-lg p-2"></label>
+      <p class="md:col-span-2 text-xs text-slate-500">Minors and procedures that need a guardian must be signed by a parent or legal guardian marked as guardian.</p>
+      <button class="bg-teal-700 text-white rounded-lg px-3 py-2 md:col-span-2">Record consent</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">4. Theatre record</h2>
+    {% if not theatre %}
+      <p class="text-sm text-slate-600">Not signed in yet.</p>
+      {% if case.status == "BOOKED" and can_clinical %}
+      <form method="post" action="{% url 'surgery:action' case.pk 'sign_in' %}" class="space-y-2 text-sm">
+        {% csrf_token %}
+        {% if owed > 0 and case.category == "EMERGENCY" %}
+          <p class="text-amber-700">Payment of KES {{ owed|floatformat:2 }} is outstanding. An emergency can start only with a reason.</p>
+          <textarea name="emergency_reason" rows="2" class="w-full border rounded-lg p-2" placeholder="Why must this start before payment? At least 20 characters."></textarea>
+        {% elif owed > 0 %}
+          <p class="text-red-700">Payment of KES {{ owed|floatformat:2 }} is outstanding. The operation cannot start until it is paid.</p>
+        {% endif %}
+        <button class="bg-slate-800 text-white rounded-lg px-3 py-2">Sign in patient</button>
+      </form>
+      {% endif %}
+    {% else %}
+      <ul class="text-sm space-y-1">
+        <li>Sign-in: {{ theatre.sign_in_at|date:"d M Y H:i" }}{% if theatre.emergency_start_reason %} · emergency start: {{ theatre.emergency_start_reason }}{% endif %}</li>
+        <li>Time-out: {% if theatre.time_out_at %}{{ theatre.time_out_at|date:"H:i" }} — {{ theatre.time_out_note }}{% else %}pending{% endif %}</li>
+        <li>Incision: {{ theatre.incision_at|date:"H:i"|default:"pending" }}</li>
+        <li>Closure: {{ theatre.closure_at|date:"H:i"|default:"pending" }}</li>
+        <li>Sign-out: {% if theatre.sign_out_at %}{{ theatre.sign_out_at|date:"H:i" }} — {{ theatre.sign_out_note }}{% else %}pending{% endif %}</li>
+      </ul>
+      {% if case.status == "BOOKED" and can_clinical %}
+      <div class="flex flex-wrap gap-2 text-sm">
+        {% if not theatre.time_out_at %}
+        <form method="post" action="{% url 'surgery:action' case.pk 'time_out' %}" class="flex gap-2">
+          {% csrf_token %}<input name="note" placeholder="Time-out confirmation (identity, procedure, site, allergies)" class="border rounded-lg p-2 w-96">
+          <button class="bg-slate-800 text-white rounded-lg px-3 py-2">Time-out</button></form>
+        {% elif not theatre.incision_at %}
+        <form method="post" action="{% url 'surgery:action' case.pk 'incision' %}">{% csrf_token %}<button class="bg-slate-800 text-white rounded-lg px-3 py-2">Record incision</button></form>
+        {% elif not theatre.closure_at %}
+        <form method="post" action="{% url 'surgery:action' case.pk 'closure' %}">{% csrf_token %}<button class="bg-slate-800 text-white rounded-lg px-3 py-2">Record closure</button></form>
+        {% elif not theatre.sign_out_at %}
+        <form method="post" action="{% url 'surgery:action' case.pk 'sign_out' %}" class="flex gap-2">
+          {% csrf_token %}<input name="note" placeholder="Sign-out: instrument, swab and sharps counts" class="border rounded-lg p-2 w-96">
+          <button class="bg-slate-800 text-white rounded-lg px-3 py-2">Sign-out</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  {% if theatre %}
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">5. Anaesthesia record</h2>
+    <ul class="text-sm space-y-1">
+      {% for e in anaesthetic_events %}<li>{{ e.given_at|date:"H:i" }} · {{ e.agent }} {{ e.dose }} ({{ e.route }})</li>{% empty %}<li class="text-slate-500">No lines yet.</li>{% endfor %}
+    </ul>
+    {% if case.status == "BOOKED" and can_clinical and not theatre.sign_out_at %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'anaesthetic' %}" class="grid md:grid-cols-5 gap-2 text-sm">
+      {% csrf_token %}
+      <input type="datetime-local" name="given_at" required class="border rounded-lg p-2">
+      <input name="agent" placeholder="Agent" required class="border rounded-lg p-2">
+      <input name="dose" placeholder="Dose" required class="border rounded-lg p-2">
+      <input name="route" placeholder="Route" required class="border rounded-lg p-2">
+      <button class="bg-teal-700 text-white rounded-lg px-3 py-2">Add line</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">6. Theatre stock used</h2>
+    <ul class="text-sm space-y-1">
+      {% for u in stock_used %}<li>{{ u.used_at|date:"H:i" }} · {{ u.quantity }} × {{ u.batch.item.name }} (batch {{ u.batch.batch_number }})</li>{% empty %}<li class="text-slate-500">None recorded.</li>{% endfor %}
+    </ul>
+    {% if can_stock and case.status == "BOOKED" and not theatre.sign_out_at %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'use_stock' %}" class="flex gap-2 text-sm">
+      {% csrf_token %}
+      <select name="item" class="border rounded-lg p-2">{% for i in stock_items %}<option value="{{ i.pk }}">{{ i.name }}</option>{% endfor %}</select>
+      <input type="number" name="quantity" min="1" required class="border rounded-lg p-2 w-24">
+      <button class="bg-slate-800 text-white rounded-lg px-3 py-2">Use</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">7. Recovery observations</h2>
+    <ul class="text-sm space-y-1">
+      {% for r in recovery %}<li>{{ r.observed_at|date:"d M H:i" }} · pulse {{ r.vitals.pulse_bpm|default:"-" }}, BP {{ r.vitals.systolic_mmhg|default:"-" }}/{{ r.vitals.diastolic_mmhg|default:"-" }}, SpO₂ {{ r.vitals.spo2_percent|default:"-" }}, pain {{ r.pain_score|default:"-" }} {{ r.notes }}</li>{% empty %}<li class="text-slate-500">None yet.</li>{% endfor %}
+    </ul>
+    {% if case.status == "BOOKED" and can_clinical and theatre.sign_out_at %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'recovery' %}" class="grid md:grid-cols-4 gap-2 text-sm">
+      {% csrf_token %}
+      <input type="datetime-local" name="observed_at" required class="border rounded-lg p-2">
+      <input type="number" name="pulse_bpm" placeholder="Pulse" class="border rounded-lg p-2">
+      <input type="number" name="systolic_mmhg" placeholder="Systolic" class="border rounded-lg p-2">
+      <input type="number" name="diastolic_mmhg" placeholder="Diastolic" class="border rounded-lg p-2">
+      <input type="number" name="spo2_percent" placeholder="SpO₂" class="border rounded-lg p-2">
+      <input type="number" name="pain_score" min="0" max="10" placeholder="Pain 0-10" class="border rounded-lg p-2">
+      <input name="notes" placeholder="Notes" class="border rounded-lg p-2 md:col-span-2">
+      <button class="bg-teal-700 text-white rounded-lg px-3 py-2 md:col-span-4">Add observation</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">8. Complications</h2>
+    <ul class="text-sm space-y-1">
+      {% for c in complications %}<li>{{ c.occurred_at|date:"d M H:i" }} · <strong>{{ c.get_severity_display }}</strong>: {{ c.description }}</li>{% empty %}<li class="text-slate-500">None recorded.</li>{% endfor %}
+    </ul>
+    {% if case.status == "BOOKED" and can_clinical %}
+    <form method="post" action="{% url 'surgery:action' case.pk 'complication' %}" class="grid md:grid-cols-4 gap-2 text-sm">
+      {% csrf_token %}
+      <input type="datetime-local" name="occurred_at" required class="border rounded-lg p-2">
+      <select name="severity" class="border rounded-lg p-2">{% for v, l in severity_choices %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+      <input name="description" placeholder="Describe what happened" required class="border rounded-lg p-2 md:col-span-2">
+      <button class="bg-amber-600 text-white rounded-lg px-3 py-2 md:col-span-4">Record complication</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-2xl border p-5 space-y-3">
+    <h2 class="font-bold">9. Sign-off</h2>
+    <p class="text-sm">Surgeon: {% if sign_off.surgeon_signed_at %}signed by {{ sign_off.surgeon_signed_by }} at {{ sign_off.surgeon_signed_at|date:"d M H:i" }}{% else %}not signed{% endif %}</p>
+    <p class="text-sm">Anaesthetist: {% if sign_off.anaesthetist_signed_at %}signed by {{ sign_off.anaesthetist_signed_by }} at {{ sign_off.anaesthetist_signed_at|date:"d M H:i" }}{% else %}not signed{% endif %}</p>
+    {% if case.status == "BOOKED" and can_sign and theatre.sign_out_at %}
+    <div class="flex gap-2 text-sm">
+      {% if not sign_off.surgeon_signed_at %}<form method="post" action="{% url 'surgery:action' case.pk 'sign_surgeon' %}">{% csrf_token %}<button class="bg-slate-800 text-white rounded-lg px-3 py-2">Surgeon signs</button></form>{% endif %}
+      {% if not sign_off.anaesthetist_signed_at %}<form method="post" action="{% url 'surgery:action' case.pk 'sign_anaesthetist' %}">{% csrf_token %}<button class="bg-slate-800 text-white rounded-lg px-3 py-2">Anaesthetist countersigns</button></form>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if case.status == "BOOKED" and can_book %}
+  <section class="bg-white rounded-2xl border p-5">
+    <form method="post" action="{% url 'surgery:action' case.pk 'cancel' %}" class="flex gap-2 text-sm">
+      {% csrf_token %}
+      <input name="reason" placeholder="Reason for cancelling (at least 20 characters)" class="border rounded-lg p-2 w-full">
+      <button class="bg-red-600 text-white rounded-lg px-3 py-2">Cancel case</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

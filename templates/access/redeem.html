@@ -11,16 +11,29 @@
   form.addEventListener("submit", async function (e) {
     if (form.dataset.ready === "1") { return; }
     e.preventDefault();
+    var step = "checking this browser";
     try {
+      if (!window.isSecureContext || !window.crypto || !window.crypto.subtle) {
+        throw new Error("not a secure address");
+      }
       // The private key is created non-exportable and stored in this browser only. Only the public key is sent.
+      step = "creating the key";
       var pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
       var jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+      step = "saving the key in this browser";
+      if (!window.HCMSProof) { throw new Error("the browser check script did not load"); }
       await HCMSProof.storeKey(pair.privateKey);
       form.querySelector("input[name=public_key]").value = JSON.stringify({ kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y });
       form.dataset.ready = "1";
       form.submit();
     } catch (err) {
-      alert("This browser cannot create its security key. Use a current version of Chrome, Edge, Firefox or Safari.");
+      var detail = (err && (err.name || err.message)) || "unknown error";
+      if (!window.isSecureContext || !window.crypto || !window.crypto.subtle) {
+        alert("This page is not on a secure address. Open it as https:// (the ngrok address) or as http://127.0.0.1:8000 on the same computer.");
+      } else {
+        alert("This browser could not finish " + step + " (" + detail + "). Use a current Chrome, Edge, Firefox or Safari, " +
+              "turn off private browsing, and allow this site to store data.");
+      }
     }
   });
 })();
