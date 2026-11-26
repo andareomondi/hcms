@@ -523,3 +523,31 @@ class SurgeryViewTests(TheatreBase):
         self.assertEqual(self.client_doc.get(f"/surgery/book/{self.patient.pk}/").status_code, 200)
         self.assertEqual(self.client_nurse.get("/surgery/stock/").status_code, 200)
         self.assertEqual(self.client_billing.get("/surgery/stock/").status_code, 403)
+
+
+class PatientFileEntryTests(TheatreBase):
+    """The patient file links to booking, and the booking page explains when a visit is missing."""
+
+    def test_doctor_sees_book_surgery_on_patient_file(self):
+        from django.test import Client
+        c = Client()
+        c.force_login(self.doctor.user)
+        resp = c.get(f"/patients/{self.patient.pk}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, f"/surgery/book/{self.patient.pk}/")
+
+    def test_nurse_does_not_see_book_surgery(self):
+        from django.test import Client
+        c = Client()
+        c.force_login(make_staff("NURSE").user)
+        resp = c.get(f"/patients/{self.patient.pk}/")
+        self.assertNotContains(resp, f"/surgery/book/{self.patient.pk}/")
+
+    def test_booking_page_warns_when_no_visit(self):
+        from django.test import Client
+        fresh = make_patient(self.doctor, sex="M")
+        c = Client()
+        c.force_login(self.doctor.user)
+        resp = c.get(f"/surgery/book/{fresh.pk}/")
+        self.assertContains(resp, "has no visit yet")
+        self.assertContains(resp, f"/triage/encounter/new/{fresh.pk}/")

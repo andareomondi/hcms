@@ -19,11 +19,19 @@
         {% for value, label in categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
       </select>
     </label>
-    <label class="block text-sm font-semibold">Indication: the consultation or admission that decided on it
+    <label class="block text-sm font-semibold">Indication: the visit or admission where the operation was decided
       <select name="indication" class="mt-1 w-full border rounded-lg p-2">
         <option value="">None (emergency only)</option>
-        {% for e in indications %}<option value="{{ e.pk }}">{{ e.opened_at|date:"d M Y" }} · {{ e.get_encounter_type_display }}</option>{% endfor %}
+        {% for e in indications %}<option value="{{ e.pk }}">{{ e.opened_at|date:"d M Y H:i" }} · {{ e.get_encounter_type_display }} · {{ e.get_status_display }}</option>{% endfor %}
       </select>
+      {% if not indications %}
+        <span class="block mt-2 text-xs font-normal text-amber-700">
+          This patient has no visit yet. An elective operation needs one.
+          <a class="underline" href="{% url 'triage_queue:encounter_create' patient.id %}">Open a visit first</a>.
+        </span>
+      {% else %}
+        <span class="block mt-1 text-xs font-normal text-slate-500">Elective operations must choose a visit. Emergencies may choose none.</span>
+      {% endif %}
     </label>
     <label class="block text-sm font-semibold">Scheduled time (optional)
       <input type="datetime-local" name="scheduled_for" class="mt-1 w-full border rounded-lg p-2">

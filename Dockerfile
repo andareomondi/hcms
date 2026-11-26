@@ -14,7 +14,7 @@ COPY . .
 
 # Build-time only: collectstatic imports settings, which requires these variables.
 # They are placeholders, never used at runtime, and not stored in the image.
-RUN DJANGO_SECRET_KEY=build-only DB_NAME=build DB_USER=build DB_PASSWORD=build DB_HOST=build DB_PORT=build \
+RUN DJANGO_SECRET_KEY=build-only DB_NAME=build DB_USER=build DB_PASSWORD=build \
     python manage.py collectstatic --noinput
 
 RUN useradd --create-home --uid 10001 appuser \
