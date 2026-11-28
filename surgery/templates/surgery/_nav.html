@@ -1,0 +1,12 @@
+{% comment %}Surgery's own navigation. Shown at the top of every surgery page.{% endcomment %}
+<nav class="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 text-sm" aria-label="Surgery">
+  <span class="font-bold text-slate-900 mr-2">🔪 Surgery</span>
+  <a href="{% url 'surgery:dashboard' %}" class="px-3 py-1.5 rounded-lg font-semibold {% if request.resolver_match.url_name == 'dashboard' %}bg-teal-700 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Dashboard</a>
+  <a href="{% url 'surgery:list' %}" class="px-3 py-1.5 rounded-lg font-semibold {% if request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'case' %}bg-teal-700 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Cases</a>
+  {% if "SURGERY_STOCK" in caps %}
+  <a href="{% url 'surgery:stock' %}" class="px-3 py-1.5 rounded-lg font-semibold {% if request.resolver_match.url_name == 'stock' %}bg-teal-700 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Theatre stock</a>
+  {% endif %}
+  {% if "ADMIN_CONFIG" in caps %}
+  <a href="{% url 'dashboard:admin_master' %}?tab=surgery" class="px-3 py-1.5 rounded-lg font-semibold text-slate-600 hover:bg-slate-100">Procedures</a>
+  {% endif %}
+</nav>

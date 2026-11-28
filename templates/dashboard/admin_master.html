@@ -31,6 +31,9 @@
             <button @click="activeTab = 'rooms'"
                     :class="activeTab === 'rooms' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
                     class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🚪 Rooms &amp; Duty</button>
+            <button @click="activeTab = 'surgery'"
+                    :class="activeTab === 'surgery' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🔪 Surgery</button>
             <button @click="activeTab = 'audit'"
                     :class="activeTab === 'audit' ? 'border-teal-600 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
                     class="pb-3 border-b-2 font-bold text-sm transition whitespace-nowrap cursor-pointer">🛡️ Audit Log</button>
@@ -45,6 +48,10 @@
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                     <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Visits today</p>
                     <p class="text-2xl font-bold text-slate-900 mt-1">{{ kpis.visits_today }}</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                    <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Surgeries this month</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1">{{ surgery_summary.cases_month }}</p>
                 </div>
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                     <p class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Beds vacant</p>
@@ -91,6 +98,17 @@
                             <canvas id="c-staff"></canvas>
                         </div>
                     </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h2 class="text-sm font-bold text-slate-800">Surgery: cases booked per day, last 30 days</h2>
+                    <p class="text-xs text-slate-500 mb-3">By status. See the Surgery tab for procedures and stock.</p>
+                    <div class="h-64"><canvas id="c-surgery-daily"></canvas></div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h2 class="text-sm font-bold text-slate-800">Complications by severity, 30 days</h2>
+                    <div class="h-64"><canvas id="c-surgery-severity"></canvas></div>
                 </div>
             </div>
         </div>
@@ -225,6 +243,10 @@
         <div x-show="activeTab === 'rooms'"
              class="space-y-6"
              style="display: none">{% include "dashboard/_admin_rooms_tab.html" %}</div>
+        <!-- TAB: SURGERY -->
+        <div x-show="activeTab === 'surgery'"
+             class="space-y-6"
+             style="display: none">{% include "dashboard/_admin_surgery_tab.html" %}</div>
         <!-- TAB: AUDIT -->
         <div x-show="activeTab === 'audit'"
              class="space-y-6"
@@ -419,4 +441,26 @@
     });
 })();
     </script>
+{{ surgery_chart|json_script:"surgery-admin-data" }}
+<script>
+(function () {
+    const d = JSON.parse(document.getElementById('surgery-admin-data').textContent);
+    const colours = ['#0d9488', '#2563eb', '#64748b'];
+    const daily = document.getElementById('c-surgery-daily');
+    if (daily) new Chart(daily, {
+        type: 'bar',
+        data: { labels: d.daily.labels, datasets: d.daily.series.map(function (s, i) {
+            return { label: s.label, data: s.data, backgroundColor: colours[i] }; }) },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+    const sev = document.getElementById('c-surgery-severity');
+    if (sev) new Chart(sev, {
+        type: 'bar',
+        data: { labels: d.severity.map(function (r) { return r.label; }),
+          datasets: [{ label: 'Complications', data: d.severity.map(function (r) { return r.n; }),
+                       backgroundColor: ['#0d9488', '#d97706', '#dc2626', '#7f1d1d'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+})();
+</script>
 {% endblock %}

@@ -40,6 +40,11 @@ TEAM_ROLE_STAFF = {
 }
 
 
+def _json_vitals(clean):
+    """Validated vitals as plain JSON values. Decimals are stored as text so no precision is lost."""
+    return {k: (str(v) if isinstance(v, Decimal) else v) for k, v in clean.items()}
+
+
 def _case(case):
     return SurgicalCase.objects.select_for_update().get(pk=case.pk)
 
@@ -87,7 +92,7 @@ def record_pre_op(*, case, staff, fasting_hours, vitals, ip=None):
     clean = validate_triage_vitals(vitals)
     if clean.get("pulse_bpm") is None or clean.get("systolic_mmhg") is None:
         raise SurgeryError("Pulse and systolic blood pressure are required before surgery.")
-    check = PreOpCheck.objects.create(case=case, fasting_hours=fasting, vitals=clean, recorded_by=staff)
+    check = PreOpCheck.objects.create(case=case, fasting_hours=fasting, vitals=_json_vitals(clean), recorded_by=staff)
     create_audit_entry(actor=staff.user, action_type=AuditAction.SURGERY_PRE_OP,
                        description=f"Pre-op check recorded for {case.procedure.name}.", ip_address=ip)
     return check
@@ -287,7 +292,7 @@ def record_recovery(*, case, staff, observed_at, vitals, pain_score=None, notes=
     clean = validate_triage_vitals(vitals)
     pain = v.optional_int(pain_score, "Pain score", minimum=0, maximum=10)
     obs = RecoveryObservation.objects.create(
-        case=case, observed_at=observed_at, vitals=clean, pain_score=pain,
+        case=case, observed_at=observed_at, vitals=_json_vitals(clean), pain_score=pain,
         notes=v.text(notes, "Notes", max_length=2000), recorded_by=staff)
     create_audit_entry(actor=staff.user, action_type=AuditAction.SURGERY_RECOVERY,
                        description=f"Recovery observation for {case.procedure.name}.", ip_address=ip)

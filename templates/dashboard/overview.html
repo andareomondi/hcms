@@ -66,6 +66,18 @@
                 <p class="text-xs text-slate-500 text-center mt-3">Vacant beds are shown in green.</p>
             </div>
         </div>
+        {% if chart_data.surgery_daily %}
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-4">
+                <div>
+                    <h2 class="font-bold text-slate-900 text-lg">Surgery</h2>
+                    <p class="text-xs text-slate-500">Cases booked per day, last 14 days, by status</p>
+                </div>
+                <a href="{% url 'surgery:dashboard' %}" class="text-xs font-semibold text-teal-700 hover:underline">Surgery dashboard →</a>
+            </div>
+            <div class="h-64"><canvas id="c-surgery"></canvas></div>
+        </div>
+        {% endif %}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {% if show_waiting_list %}
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
@@ -199,6 +211,22 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
     </div>
     {{ chart_data|json_script:"overview-data" }}
+    {% if chart_data.surgery_daily %}
+    <script>
+(function () {
+    const d = JSON.parse(document.getElementById('overview-data').textContent);
+    const el = document.getElementById('c-surgery');
+    if (!el || typeof Chart === 'undefined') return;
+    const colours = ['#0d9488', '#2563eb', '#64748b'];
+    new Chart(el, {
+        type: 'bar',
+        data: { labels: d.surgery_daily.labels, datasets: d.surgery_daily.series.map(function (s, i) {
+            return { label: s.label, data: s.data, backgroundColor: colours[i] }; }) },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+})();
+    </script>
+    {% endif %}
     <script>
 (function () {
     const d = JSON.parse(document.getElementById('overview-data').textContent);

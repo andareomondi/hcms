@@ -6,6 +6,7 @@ from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
+from django import forms
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -17,6 +18,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from billing.models import Charge, Payment
+from surgery import analytics as surgery_analytics
+from surgery.models import SurgicalProcedure
 from core_patients.models import Patient, StaffProfile
 from duty.models import DutySession, Room
 from triage_queue.models import Encounter
@@ -119,6 +122,32 @@ def _patient_context(request):
     }
 
 
+SURGERY_PROCEDURE_FIELDS = ["name", "category", "price", "requires_guardian_consent", "is_active"]
+
+
+class _ProcedureForm(_StyledForm):
+    def clean_price(self):
+        price = self.cleaned_data.get("price")
+        if price is not None and price < 0:
+            raise forms.ValidationError("The fee cannot be negative.")
+        return price
+
+
+def _procedure_form():
+    return modelform_factory(SurgicalProcedure, form=_ProcedureForm, fields=SURGERY_PROCEDURE_FIELDS)
+
+
+def _surgery_context(today):
+    procedures = SurgicalProcedure.objects.annotate(case_count=Count("cases")).order_by("name")
+    return {
+        "surgery_procedures": procedures,
+        "surgery_form": _procedure_form()(),
+        "surgery_summary": surgery_analytics.summary(today),
+        "surgery_chart": surgery_analytics.chart_series(today, WINDOW_DAYS),
+        "surgery_top": surgery_analytics.top_procedures(today.replace(day=1)),
+    }
+
+
 @superuser_required
 def admin_master_view(request):
     # Search-as-you-type asks only for the patient results block.
@@ -152,6 +181,7 @@ def admin_master_view(request):
     }
     context.update(_rooms_context())
     context.update(_patient_context(request))
+    context.update(_surgery_context(today))
     return render(request, "dashboard/admin_master.html", context)
 
 
@@ -237,3 +267,46 @@ def admin_toggle_staff_action(request, staff_id):
                    f"(user {staff.user.username}).")
         messages.success(request, f"Staff profile {state}.")
     return redirect(f"{reverse('dashboard:admin_master')}?tab=staff")
+
+
+@superuser_required
+@require_POST
+def admin_surgery_procedure_create_action(request):
+    form = _procedure_form()(request.POST)
+    if form.is_valid():
+        with transaction.atomic():
+            obj = form.save()
+            log_action(request, AuditAction.CREATE,
+                       f"Admin added surgical procedure {obj.name} ({obj.get_category_display()}).")
+        messages.success(request, f"{obj.name} added to the procedures the hospital offers.")
+    else:
+        problems = "; ".join(e for errs in form.errors.values() for e in errs)
+        messages.error(request, f"The procedure was not saved. {problems}")
+    return redirect(f"{reverse('dashboard:admin_master')}?tab=surgery")
+
+
+@superuser_required
+@require_POST
+def admin_surgery_procedure_toggle_action(request, procedure_id):
+    procedure = _get_obj(SurgicalProcedure, procedure_id)
+    procedure.is_active = not procedure.is_active
+    procedure.save(update_fields=["is_active"])
+    state = "offered again" if procedure.is_active else "withdrawn from booking"
+    log_action(request, AuditAction.UPDATE, f"Admin changed {procedure.name}: {state}.")
+    messages.success(request, f"{procedure.name} is {state}.")
+    return redirect(f"{reverse('dashboard:admin_master')}?tab=surgery")
+
+
+@superuser_required
+@require_POST
+def admin_surgery_procedure_delete_action(request, procedure_id):
+    procedure = _get_obj(SurgicalProcedure, procedure_id)
+    name = procedure.name
+    if procedure.cases.exists():
+        messages.error(request, f"{name} has cases on record, so it cannot be deleted. Withdraw it from booking instead.")
+    else:
+        with transaction.atomic():
+            procedure.delete()
+            log_action(request, AuditAction.DELETE, f"Admin deleted surgical procedure {name}.")
+        messages.success(request, f"{name} deleted.")
+    return redirect(f"{reverse('dashboard:admin_master')}?tab=surgery")

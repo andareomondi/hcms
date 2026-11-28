@@ -10,6 +10,8 @@ from core_patients.models import StaffProfile
 from duty.models import DutySession, Room
 from wards.models import Bed
 
+from surgery import analytics as surgery_analytics
+
 from .export import finance_daily, metrics_daily
 
 WINDOW_DAYS = 14
@@ -60,6 +62,9 @@ def build_overview_charts(caps, today, waiting_list):
         "duty_roles": _duty_by_role(),
         "show_finance": "VIEW_FINANCE" in caps,
     }
+
+    if "SURGERY_VIEW" in caps:
+        data["surgery_daily"] = surgery_analytics.cases_daily(start, today)
 
     if data["show_finance"]:
         fin = finance_daily(start, today)

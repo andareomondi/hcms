@@ -37,8 +37,19 @@ GROUPS = [
              "caps": [Cap.VIEW_RADIOLOGY]},
             {"label": "Laboratory", "url": "lab:dashboard", "icon": "🧪",
              "caps": [Cap.LAB_VIEW]},
-            {"label": "Surgery", "url": "surgery:list", "icon": "🔪",
+        ],
+    },
+    {
+        "label": "Surgery",
+        "items": [
+            {"label": "Surgery dashboard", "url": "surgery:dashboard", "icon": "📈",
              "caps": [Cap.SURGERY_VIEW]},
+            {"label": "Cases", "url": "surgery:list", "icon": "🔪",
+             "caps": [Cap.SURGERY_VIEW]},
+            {"label": "Theatre stock", "url": "surgery:stock", "icon": "📦",
+             "caps": [Cap.SURGERY_STOCK]},
+            {"label": "Procedures", "url": "dashboard:admin_master", "query": "?tab=surgery", "icon": "🧾",
+             "caps": ["ADMIN_CONFIG"]},
         ],
     },
     {
@@ -125,7 +136,7 @@ def build_nav(request, caps):
                 continue
             if item.get("caps") and not any(c in caps for c in item["caps"]):
                 continue
-            url = reverse(item["url"])
+            url = reverse(item["url"]) + item.get("query", "")
             active = path == url or (url != "/" and path.startswith(url))
             items.append({**item, "href": url, "active": active})
 

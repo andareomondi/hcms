@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Surgery dashboard - HCMS{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  {% include "surgery/_nav.html" %}
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Surgery dashboard</h1>
+    <p class="text-sm text-slate-500">Live figures from the theatre records.</p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Booked this month</p><p class="text-2xl font-bold">{{ summary.cases_month }}</p></div>
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Completed this month</p><p class="text-2xl font-bold text-emerald-600">{{ summary.completed_month }}</p></div>
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">In theatre now</p><p class="text-2xl font-bold">{{ summary.in_theatre }}</p></div>
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Upcoming</p><p class="text-2xl font-bold">{{ summary.upcoming }}</p></div>
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Complications, 30 days</p><p class="text-2xl font-bold text-amber-600">{{ summary.complications_30d }}</p></div>
+    <div class="bg-white rounded-2xl border p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Stock expiring, 60 days</p><p class="text-2xl font-bold text-red-600">{{ summary.stock_expiring }}</p></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="lg:col-span-2 bg-white rounded-2xl border p-5">
+      <h2 class="font-bold">Cases booked per day, last 30 days</h2>
+      <p class="text-xs text-slate-500 mb-3">Completed, still open and cancelled, by the day the case was booked.</p>
+      <div class="h-72"><canvas id="s-daily"></canvas></div>
+    </section>
+    <section class="bg-white rounded-2xl border p-5">
+      <h2 class="font-bold">Complications by severity, 30 days</h2>
+      <p class="text-xs text-slate-500 mb-3">Every complication recorded in the window.</p>
+      <div class="h-72"><canvas id="s-severity"></canvas></div>
+    </section>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="bg-white rounded-2xl border p-5">
+      <h2 class="font-bold">Most booked this month</h2>
+      <div class="h-64 mt-3"><canvas id="s-top"></canvas></div>
+    </section>
+    <section class="bg-white rounded-2xl border p-5">
+      <h2 class="font-bold">In theatre now</h2>
+      <ul class="text-sm space-y-2 mt-3">
+        {% for r in in_theatre %}<li><a class="text-teal-700 hover:underline" href="{% url 'surgery:case' r.case.pk %}">{{ r.case.patient }}</a> · {{ r.case.procedure.name }} <span class="text-slate-500">since {{ r.sign_in_at|date:"H:i" }}</span></li>{% empty %}<li class="text-slate-500">Nobody is in theatre.</li>{% endfor %}
+      </ul>
+    </section>
+    <section class="bg-white rounded-2xl border p-5">
+      <h2 class="font-bold">Upcoming operations</h2>
+      <ul class="text-sm space-y-2 mt-3">
+        {% for c in upcoming %}<li><a class="text-teal-700 hover:underline" href="{% url 'surgery:case' c.pk %}">{{ c.patient }}</a> · {{ c.procedure.name }} <span class="text-slate-500">{{ c.scheduled_for|date:"d M H:i" }}</span></li>{% empty %}<li class="text-slate-500">Nothing scheduled.</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+
+  <section class="bg-white rounded-2xl border p-5">
+    <h2 class="font-bold">Theatre stock expiring within 60 days</h2>
+    <ul class="text-sm space-y-1 mt-3">
+      {% for b in expiring %}<li>{{ b.item.name }} · batch {{ b.batch_number }} · {{ b.quantity_on_hand }} {{ b.item.unit }} · expires {{ b.expiry_date|date:"d M Y" }}</li>{% empty %}<li class="text-slate-500">Nothing expiring soon.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+{{ chart_data|json_script:"surgery-data" }}
+<script>
+(function () {
+  const d = JSON.parse(document.getElementById('surgery-data').textContent);
+  const TEAL = '#0d9488', AMBER = '#d97706', SLATE = '#64748b', RED = '#dc2626', BLUE = '#2563eb';
+  const colours = [TEAL, BLUE, SLATE];
+  new Chart(document.getElementById('s-daily'), {
+    type: 'bar',
+    data: { labels: d.daily.labels, datasets: d.daily.series.map(function (s, i) {
+      return { label: s.label, data: s.data, backgroundColor: colours[i] }; }) },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } },
+  });
+  new Chart(document.getElementById('s-severity'), {
+    type: 'bar',
+    data: { labels: d.severity.map(function (r) { return r.label; }),
+      datasets: [{ label: 'Complications', data: d.severity.map(function (r) { return r.n; }),
+                   backgroundColor: [TEAL, AMBER, RED, '#7f1d1d'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+  new Chart(document.getElementById('s-top'), {
+    type: 'bar',
+    data: { labels: d.top.map(function (r) { return r.label; }),
+      datasets: [{ label: 'Cases', data: d.top.map(function (r) { return r.n; }), backgroundColor: BLUE }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+})();
+</script>
+{% endblock %}
